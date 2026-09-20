@@ -1,10 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using SocAiChat.Localization;
-using SocAiChat.Services;
+using SocLucia.Localization;
+using SocLucia.Services;
 
-namespace SocAiChat;
+namespace SocLucia;
 
 /// <summary>Los dialogos pequeños —una linea de texto, una confirmacion y un aviso— con el aspecto de la aplicacion (constitucion 6.2).</summary>
 public sealed class PromptWindow : Window

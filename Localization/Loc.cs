@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Windows.Markup;
 
-namespace SocAiChat.Localization;
+namespace SocLucia.Localization;
 
 /// <summary>
 /// Textos de la aplicacion en español e ingles (constitucion, seccion 7). Ningun texto va en el
@@ -11,7 +11,7 @@ public static class Loc
 {
     private static readonly Dictionary<string, string> English = new()
     {
-        ["AppTitle"] = "sOC AI Chat",
+        ["AppTitle"] = "sOC Lucia",
         ["AboutTitle"] = "About",
         ["AboutTooltip"] = "About",
         ["AboutDescription"] = "A private AI that runs on this PC. Ask anything: the answer is generated here, and nothing leaves your computer.",
@@ -94,8 +94,8 @@ public static class Loc
         ["DoorNewToken"] = "New token",
         ["DoorListening"] = "Listening.",
         ["DoorStopped"] = "Stopped.",
-        ["DoorHow"] = "In VS Code: install the extension from the release (\"sOC AI Chat Code\", .vsix) and paste the token in its settings; or point Continue, Cline or any OpenAI-compatible client at this address and token.",
-        ["DoorBadToken"] = "Missing or wrong token. Copy it from sOC AI Chat > Settings > Code editors.",
+        ["DoorHow"] = "In VS Code: install the extension from the release (\"sOC Lucia Code\", .vsix) and paste the token in its settings; or point Continue, Cline or any OpenAI-compatible client at this address and token.",
+        ["DoorBadToken"] = "Missing or wrong token. Copy it from sOC Lucia > Settings > Code editors.",
         ["DiagnosticsTitle"] = "Diagnostics",
         ["OpenEngineLog"] = "Open the engine log",
         ["OpenDataFolder"] = "Open the data folder",
@@ -128,6 +128,21 @@ public static class Loc
         ["ModelsFolderMovingFile"] = "Moving {0}… {1}",
         ["ModelsFolderMoved"] = "Moved.",
         ["ModelsFolderInside"] = "The new folder cannot be inside the current one.",
+        ["ModelsInstalled"] = "Installed on this PC",
+        ["ModelActive"] = "In use",
+        ["ModelUse"] = "Use this AI",
+        ["ModelDelete"] = "Delete this AI",
+        ["ModelDeleteConfirm"] = "Delete {0} from the disk? You can download it again later.",
+        ["EditQuestion"] = "Edit (copies it to the composer)",
+        ["ResendQuestion"] = "Send again",
+        ["PcWithGpu"] = "This PC: {0} ({1} threads), {2} of RAM, {3} with {4} of video memory.",
+        ["PcNoGpu"] = "This PC: {0} ({1} threads), {2} of RAM, no dedicated graphics card: the AI runs on the processor.",
+        ["PcStarHint"] = "★ = optimal for this PC: fast and dependable. Only the AIs that fit in memory are listed.",
+        ["FitOptimalGpu"] = "★ Optimal here: fits entirely in the graphics card.",
+        ["FitOptimalCpu"] = "★ Optimal here: light enough to be fast on the processor.",
+        ["FitOkGpu"] = "Works, but slower: part of it stays outside the graphics card.",
+        ["FitOkCpu"] = "Works, but slower on the processor.",
+        ["FitSlow"] = "Slow on this PC: it fits in memory, but answers will take a while.",
         ["Save"] = "Save",
         ["Saved"] = "Saved",
         ["Ok"] = "OK",
@@ -139,7 +154,7 @@ public static class Loc
 
     private static readonly Dictionary<string, string> Spanish = new()
     {
-        ["AppTitle"] = "sOC AI Chat",
+        ["AppTitle"] = "sOC Lucia",
         ["AboutTitle"] = "Acerca de",
         ["AboutTooltip"] = "Acerca de",
         ["AboutDescription"] = "Una IA privada que se ejecuta en este PC. Pregunta lo que quieras: la respuesta se genera aquí y nada sale de tu ordenador.",
@@ -221,8 +236,8 @@ public static class Loc
         ["DoorNewToken"] = "Nuevo token",
         ["DoorListening"] = "Escuchando.",
         ["DoorStopped"] = "Parada.",
-        ["DoorHow"] = "En VS Code: instala la extensión de la release («sOC AI Chat Code», .vsix) y pega el token en sus ajustes; o configura Continue, Cline o cualquier cliente compatible con OpenAI con esta dirección y este token.",
-        ["DoorBadToken"] = "Falta el token o no es el correcto. Cópialo de sOC AI Chat › Ajustes › Editores de código.",
+        ["DoorHow"] = "En VS Code: instala la extensión de la release («sOC Lucia Code», .vsix) y pega el token en sus ajustes; o configura Continue, Cline o cualquier cliente compatible con OpenAI con esta dirección y este token.",
+        ["DoorBadToken"] = "Falta el token o no es el correcto. Cópialo de sOC Lucia › Ajustes › Editores de código.",
         ["DiagnosticsTitle"] = "Diagnóstico",
         ["OpenEngineLog"] = "Abrir el registro del motor",
         ["OpenDataFolder"] = "Abrir la carpeta de datos",
@@ -255,6 +270,21 @@ public static class Loc
         ["ModelsFolderMovingFile"] = "Moviendo {0}… {1}",
         ["ModelsFolderMoved"] = "Movidos.",
         ["ModelsFolderInside"] = "La carpeta nueva no puede estar dentro de la actual.",
+        ["ModelsInstalled"] = "Instaladas en este PC",
+        ["ModelActive"] = "En uso",
+        ["ModelUse"] = "Usar esta IA",
+        ["ModelDelete"] = "Borrar esta IA",
+        ["ModelDeleteConfirm"] = "\u00bfBorrar {0} del disco? Se puede volver a descargar.",
+        ["EditQuestion"] = "Editar (la copia al redactor)",
+        ["ResendQuestion"] = "Volver a enviar",
+        ["PcWithGpu"] = "Este PC: {0} ({1} hilos), {2} de RAM, {3} con {4} de memoria de v\u00eddeo.",
+        ["PcNoGpu"] = "Este PC: {0} ({1} hilos), {2} de RAM, sin gr\u00e1fica dedicada: la IA va en el procesador.",
+        ["PcStarHint"] = "\u2605 = \u00f3ptima para este PC: r\u00e1pida y fiable. Solo se muestran las IA que caben en memoria.",
+        ["FitOptimalGpu"] = "\u2605 \u00d3ptima aqu\u00ed: cabe entera en la gr\u00e1fica.",
+        ["FitOptimalCpu"] = "\u2605 \u00d3ptima aqu\u00ed: ligera, r\u00e1pida en el procesador.",
+        ["FitOkGpu"] = "Funciona, pero m\u00e1s lenta: parte se queda fuera de la gr\u00e1fica.",
+        ["FitOkCpu"] = "Funciona, pero m\u00e1s lenta en el procesador.",
+        ["FitSlow"] = "Lenta en este PC: cabe en memoria, pero las respuestas tardar\u00e1n.",
         ["Save"] = "Guardar",
         ["Saved"] = "Guardado",
         ["Ok"] = "Aceptar",

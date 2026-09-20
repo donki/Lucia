@@ -3,23 +3,24 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using SocAiChat.Engine;
-using SocAiChat.Localization;
-using SocAiChat.Services;
+using SocLucia.Engine;
+using SocLucia.Localization;
+using SocLucia.Services;
 
-namespace SocAiChat;
+namespace SocLucia;
 
 public partial class SettingsWindow : Window
 {
-    private CancellationTokenSource? _download;
-
     public SettingsWindow()
     {
         InitializeComponent();
         SourceInitialized += (_, _) => ThemeManager.ApplyToWindow(this);
         Loc.LanguageChanged += ApplyTexts;
-        Closed += (_, _) => { Loc.LanguageChanged -= ApplyTexts; _download?.Cancel(); };
+        ModelDownloads.Changed += PaintDownload;
+        ModelDownloads.Finished += OnDownloadFinished;
+        Closed += (_, _) => { Loc.LanguageChanged -= ApplyTexts; ModelDownloads.Changed -= PaintDownload; ModelDownloads.Finished -= OnDownloadFinished; };
         ApplyTexts();
+        PaintDownload();
     }
 
     private void ApplyTexts()
@@ -36,6 +37,7 @@ public partial class SettingsWindow : Window
         ModelsFolderButton.ToolTip = Loc.Get("ModelsFolderPick");
         ModelsFolderHint.Text = Loc.Get("ModelsFolderHint");
         CancelDownloadButton.ToolTip = Loc.Get("ModelCancel");
+        InstalledLabel.Text = Loc.Get("ModelsInstalled");
         InstructionsTitle.Text = Loc.Get("InstructionsTitle");
         InstructionsHint.Text = Loc.Get("InstructionsHint");
         InstructionsBox.Text = s.Instructions;
@@ -91,80 +93,160 @@ public partial class SettingsWindow : Window
             ModelCurrent.Text = Loc.Get("ModelNone");
             ModelDetail.Text = string.Empty;
         }
-        var ram = ModelCatalog.TotalRamBytes();
-        ModelRam.Text = Loc.Format("ModelRam", Human(ram));
+        var pc = _pc ??= PcProfile.Detect(App.Engine.Accelerator);
+        ModelRam.Text = (pc.HasUsableGpu
+            ? Loc.Format("PcWithGpu", pc.Cpu, pc.Cores, Human(pc.RamBytes), pc.Gpu, Human(pc.VramBytes))
+            : Loc.Format("PcNoGpu", pc.Cpu, pc.Cores, Human(pc.RamBytes)))
+            + Environment.NewLine + Loc.Get("PcStarHint");
         CatalogList.Children.Clear();
-        var recommended = ModelCatalog.Recommended(ram);
-        foreach (var model in ModelCatalog.Fitting(ram))
-            CatalogList.Children.Add(CatalogRow(model, model == recommended, s.ModelName == model.Name));
+        var installed = ModelCatalog.InstalledFiles();
+        var recommended = ModelCatalog.Recommended(pc);
+        foreach (var model in ModelCatalog.Fitting(pc.RamBytes))
+            CatalogList.Children.Add(CatalogRow(model, ModelCatalog.FitOf(model, pc), model == recommended, s.ModelName == model.Name || installed.Any(i => i.Name == model.Name)));
+        InstalledList.Children.Clear();
+        InstalledLabel.Visibility = installed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var model in installed)
+            InstalledList.Children.Add(InstalledRow(model, string.Equals(s.ModelPath, model.Path, StringComparison.OrdinalIgnoreCase)));
     }
 
-    private UIElement CatalogRow(CatalogModel model, bool recommended, bool installed)
+    /// <summary>Una IA que ya esta en la carpeta: se puede poner en uso o borrar (los GGUF pesan gigas).</summary>
+    private UIElement InstalledRow(InstalledModel model, bool active)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var text = new StackPanel();
+        var title = new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold };
+        title.Inlines.Add(model.Name);
+        if (active)
+            title.Inlines.Add(new System.Windows.Documents.Run("  " + Loc.Get("ModelActive")) { Foreground = (Brush)FindResource("Success"), FontWeight = FontWeights.Normal, FontSize = 11 });
+        text.Children.Add(title);
+        long size = 0;
+        try { size = new FileInfo(model.Path).Length; } catch (Exception) { }
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{Path.GetFileName(model.Path)} · {Human(size)}" + (model.License is { Length: > 0 } l ? " · " + l : string.Empty), TextTrimming = TextTrimming.CharacterEllipsis });
+        grid.Children.Add(text);
+        var use = new Button
+        {
+            Style = (Style)FindResource("GhostIconButton"),
+            Content = "\uE73E",
+            ToolTip = Loc.Get("ModelUse"),
+            IsEnabled = !active,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        use.Click += (_, _) => { Activate(model.Path, model.Name, model.License); PaintModel(); };
+        Grid.SetColumn(use, 1);
+        grid.Children.Add(use);
+        var delete = new Button
+        {
+            Style = (Style)FindResource("DangerIconButton"),
+            Content = "\uE74D",
+            ToolTip = Loc.Get("ModelDelete"),
+            IsEnabled = !ModelDownloads.Busy,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        delete.Click += (_, _) => DeleteModel(model);
+        Grid.SetColumn(delete, 2);
+        grid.Children.Add(delete);
+        return grid;
+    }
+
+    private void DeleteModel(InstalledModel model)
+    {
+        if (!PromptWindow.Confirm(this, Loc.Get("ModelDelete"), Loc.Format("ModelDeleteConfirm", model.Name)))
+            return;
+        try
+        {
+            ModelCatalog.Delete(model);
+            (Owner as MainWindow)?.ModelChanged();
+        }
+        catch (Exception ex)
+        {
+            PromptWindow.Alert(this, Loc.Get("Error"), ex.Message);
+        }
+        PaintModel();
+    }
+
+    private PcProfile? _pc;
+
+    private UIElement CatalogRow(CatalogModel model, ModelFit fit, bool recommended, bool installed)
     {
         var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var text = new StackPanel();
         var title = new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold };
+        if (fit == ModelFit.Optimal)
+            title.Inlines.Add(new System.Windows.Documents.Run("★ ") { Foreground = (Brush)FindResource("Star") });
         title.Inlines.Add(model.Name);
         if (recommended)
             title.Inlines.Add(new System.Windows.Documents.Run("  " + Loc.Get("ModelRecommended")) { Foreground = (Brush)FindResource("Success"), FontWeight = FontWeights.Normal, FontSize = 11 });
         text.Children.Add(title);
-        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{Loc.Get(model.Blurb)} · {Loc.Format("ModelSize", Human(model.ApproxBytes))} · {model.License}" });
+        var fitText = fit switch
+        {
+            ModelFit.Optimal => Loc.Get(_pc!.HasUsableGpu ? "FitOptimalGpu" : "FitOptimalCpu"),
+            ModelFit.Ok => Loc.Get(_pc!.HasUsableGpu ? "FitOkGpu" : "FitOkCpu"),
+            _ => Loc.Get("FitSlow"),
+        };
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{Loc.Get(model.Blurb)} · {Loc.Format("ModelSize", Human(model.ApproxBytes))} · {model.License}", TextWrapping = TextWrapping.Wrap });
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = fitText, Foreground = fit == ModelFit.Slow ? (Brush)FindResource("Danger") : fit == ModelFit.Optimal ? (Brush)FindResource("Success") : (Brush)FindResource("TextSecondary"), TextWrapping = TextWrapping.Wrap });
         grid.Children.Add(text);
         var button = new Button
         {
             Style = (Style)FindResource(installed ? "GhostIconButton" : "IconButton"),
             Content = installed ? "" : "",
             ToolTip = installed ? Loc.Get("ModelInstalled") : Loc.Get("ModelInstall"),
-            IsEnabled = !installed && _download is null,
+            IsEnabled = !installed && !ModelDownloads.Busy,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        button.Click += async (_, _) => await InstallAsync(model);
+        button.Click += (_, _) => { ModelDownloads.Start(model); PaintModel(); };
         Grid.SetColumn(button, 1);
         grid.Children.Add(button);
         return grid;
     }
 
-    private async Task InstallAsync(CatalogModel model)
+    /// <summary>La descarga vive en ModelDownloads (sigue con esta ventana cerrada); aqui solo se pinta.</summary>
+    private void PaintDownload()
     {
-        _download = new CancellationTokenSource();
+        var download = ModelDownloads.Current;
+        if (download is null)
+        {
+            if (DownloadBox.Visibility == Visibility.Visible && !_downloadJustFinished)
+                DownloadBox.Visibility = Visibility.Collapsed;
+            return;
+        }
+        _downloadJustFinished = false;
         DownloadBox.Visibility = Visibility.Visible;
-        DownloadBar.IsIndeterminate = true;
-        DownloadText.Text = Loc.Format("ModelInstalling", model.Name, "…");
-        PaintModel();
-        try
-        {
-            var file = await ModelCatalog.PickFileAsync(model, _download.Token);
-            var progress = new Progress<Downloader.Progress>(p =>
-            {
-                DownloadBar.IsIndeterminate = p.Fraction is null;
-                DownloadBar.Value = (p.Fraction ?? 0) * 100;
-                DownloadText.Text = Loc.Format("ModelInstalling", model.Name, p.Total is { } t ? $"{Human(p.Received)} / {Human(t)}" : Human(p.Received));
-            });
-            var path = await ModelCatalog.DownloadAsync(model, file, progress, _download.Token);
-            Activate(path, model.Name, model.License);
-            DownloadText.Text = Loc.Get("ModelInstalled");
-        }
-        catch (OperationCanceledException)
-        {
-            DownloadBox.Visibility = Visibility.Collapsed;
-        }
-        catch (Exception ex)
-        {
-            DownloadBox.Visibility = Visibility.Collapsed;
-            PromptWindow.Alert(this, Loc.Get("Error"), ex.Message);
-        }
-        finally
-        {
-            _download?.Dispose();
-            _download = null;
-            DownloadBar.IsIndeterminate = false;
-            PaintModel();
-        }
+        CancelDownloadButton.Visibility = Visibility.Visible;
+        DownloadBar.Visibility = Visibility.Visible;
+        DownloadBar.IsIndeterminate = download.Fraction is null;
+        DownloadBar.Value = (download.Fraction ?? 0) * 100;
+        DownloadText.Text = Loc.Format("ModelInstalling", download.Model.Name, download.Total is { } t ? $"{Human(download.Received)} / {Human(t)}" : Human(download.Received));
     }
 
-    private void OnCancelDownload(object sender, RoutedEventArgs e) => _download?.Cancel();
+    private bool _downloadJustFinished;
+
+    private void OnDownloadFinished(CatalogModel model, Exception? error)
+    {
+        DownloadBar.IsIndeterminate = false;
+        if (error is null)
+        {
+            _downloadJustFinished = true;
+            DownloadBox.Visibility = Visibility.Visible;
+            DownloadBar.Visibility = Visibility.Collapsed;
+            CancelDownloadButton.Visibility = Visibility.Collapsed;
+            DownloadText.Text = Loc.Get("ModelInstalled");
+        }
+        else
+        {
+            DownloadBox.Visibility = Visibility.Collapsed;
+            if (error is not OperationCanceledException)
+                PromptWindow.Alert(this, Loc.Get("Error"), error.Message);
+        }
+        PaintModel();
+    }
+
+    private void OnCancelDownload(object sender, RoutedEventArgs e) => ModelDownloads.Cancel();
 
     /// <summary>Cambiar la carpeta de modelos: se elige, se mueven los GGUF que haya y se apunta el activo a su nueva ruta.</summary>
     private async void OnPickModelsFolder(object sender, RoutedEventArgs e)
@@ -207,7 +289,10 @@ public partial class SettingsWindow : Window
         var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "GGUF (*.gguf)|*.gguf", CheckFileExists = true };
         if (dialog.ShowDialog(this) != true)
             return;
-        Activate(dialog.FileName, ModelCatalog.NameFromFile(dialog.FileName), null);
+        var name = ModelCatalog.NameFromFile(dialog.FileName);
+        if (string.Equals(Path.GetDirectoryName(Path.GetFullPath(dialog.FileName)), Path.GetFullPath(Paths.Models).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+            AppSettings.Current.Remember(new InstalledModel { Name = name, Path = dialog.FileName });
+        Activate(dialog.FileName, name, null);
         PaintModel();
     }
 

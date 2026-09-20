@@ -2,7 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace SocAiChat.Services;
+namespace SocLucia.Services;
 
 /// <summary>Ajustes de la aplicacion, en <c>settings.json</c>. Sin secretos: el token de la puerta de editores es local.</summary>
 public sealed class AppSettings
@@ -46,6 +46,19 @@ public sealed class AppSettings
     /// <summary>Al minimizar, esconderse en el area de notificacion.</summary>
     public bool TrayOnMinimize { get; set; } = true;
 
+    /// <summary>IAs descargadas o importadas, con su nombre visible: los GGUF por si solos no dicen como se llaman.</summary>
+    public List<InstalledModel> Installed { get; set; } = [];
+
+    /// <summary>Apunta (o reemplaza) la ficha de un GGUF instalado.</summary>
+    public void Remember(InstalledModel model)
+    {
+        Installed.RemoveAll(i => string.Equals(i.Path, model.Path, StringComparison.OrdinalIgnoreCase));
+        Installed.Add(model);
+    }
+
+    /// <summary>Olvida la ficha de un GGUF (borrado o desaparecido).</summary>
+    public void Forget(string path) => Installed.RemoveAll(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase));
+
     public static AppSettings Current { get; private set; } = new();
 
     public static void Load()
@@ -87,4 +100,12 @@ public sealed class EditorDoorSettings
     public string Token { get; set; } = string.Empty;
 
     public static string NewToken() => Guid.NewGuid().ToString("N");
+}
+
+/// <summary>Ficha de un GGUF instalado: nombre visible, ruta y licencia (si se conoce).</summary>
+public sealed class InstalledModel
+{
+    public string Name { get; set; } = string.Empty;
+    public string Path { get; set; } = string.Empty;
+    public string? License { get; set; }
 }

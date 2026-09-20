@@ -1,13 +1,13 @@
-// sOC AI Chat Code — VS Code client for the private AI running in sOC AI Chat on this computer.
+// sOC Lucia Code — VS Code client for the private AI running in sOC Lucia on this computer.
 // Talks to the local door the app opens in Settings > Code editors (OpenAI-compatible, token-protected).
 // Nothing leaves the PC: the address is loopback and the model runs in the app.
 const vscode = require("vscode");
 
-const VENDOR = "socaichat";
-const APP = "sOC AI Chat";
+const VENDOR = "soclucia";
+const APP = "sOC Lucia";
 
 function config() {
-  const c = vscode.workspace.getConfiguration("socAiChat");
+  const c = vscode.workspace.getConfiguration("socLucia");
   return {
     baseUrl: String(c.get("baseUrl") || "http://127.0.0.1:41417/v1").replace(/\/+$/, ""),
     token: String(c.get("token") || ""),
@@ -37,7 +37,7 @@ async function describeError(r) {
   } catch {
     text = await r.text().catch(() => "");
   }
-  if (r.status === 401) return `${APP} rejected the token. Copy it from ${APP} > Settings > Code editors into the setting socAiChat.token.`;
+  if (r.status === 401) return `${APP} rejected the token. Copy it from ${APP} > Settings > Code editors into the setting socLucia.token.`;
   if (r.status === 503) return text || `${APP} has no AI installed or could not start it.`;
   return `${r.status} ${text}`.trim();
 }
@@ -95,7 +95,7 @@ let inflight = null;
 
 function openChat(context, initialPrompt) {
   if (!panel) {
-    panel = vscode.window.createWebviewPanel("socAiChat", APP, vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
+    panel = vscode.window.createWebviewPanel("socLucia", APP, vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
     panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "icon.png");
     panel.webview.html = chatHtml();
     panel.onDidDispose(() => (panel = null));
@@ -220,7 +220,7 @@ async function checkConnection() {
     vscode.window.showInformationMessage(`${APP} is reachable. AI: ${names}.`);
   } catch (e) {
     const pick = await vscode.window.showErrorMessage(`${APP}: ${e.message}`, "Open settings");
-    if (pick) vscode.commands.executeCommand("workbench.action.openSettings", "socAiChat");
+    if (pick) vscode.commands.executeCommand("workbench.action.openSettings", "socLucia");
   }
 }
 
@@ -270,18 +270,18 @@ function registerLanguageModelProvider(context) {
 
 function activate(context) {
   context.subscriptions.push(
-    vscode.commands.registerCommand("socAiChat.openChat", () => openChat(context)),
-    vscode.commands.registerCommand("socAiChat.ask", () => askCommand(context)),
-    vscode.commands.registerCommand("socAiChat.explain", selectionCommand(context, "Explain what this code does, step by step, and point out anything risky.")),
-    vscode.commands.registerCommand("socAiChat.improve", selectionCommand(context, "Improve this code (readability, correctness, performance). Return the full improved code in one block, then a short list of what changed.")),
-    vscode.commands.registerCommand("socAiChat.tests", selectionCommand(context, "Write unit tests for this code using the usual test framework of the language. Return only the test code in one block.")),
-    vscode.commands.registerCommand("socAiChat.checkConnection", checkConnection),
+    vscode.commands.registerCommand("socLucia.openChat", () => openChat(context)),
+    vscode.commands.registerCommand("socLucia.ask", () => askCommand(context)),
+    vscode.commands.registerCommand("socLucia.explain", selectionCommand(context, "Explain what this code does, step by step, and point out anything risky.")),
+    vscode.commands.registerCommand("socLucia.improve", selectionCommand(context, "Improve this code (readability, correctness, performance). Return the full improved code in one block, then a short list of what changed.")),
+    vscode.commands.registerCommand("socLucia.tests", selectionCommand(context, "Write unit tests for this code using the usual test framework of the language. Return only the test code in one block.")),
+    vscode.commands.registerCommand("socLucia.checkConnection", checkConnection),
   );
   registerLanguageModelProvider(context);
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
   item.text = "$(hubot) sOC AI";
   item.tooltip = `${APP}: open chat`;
-  item.command = "socAiChat.openChat";
+  item.command = "socLucia.openChat";
   item.show();
   context.subscriptions.push(item);
 }

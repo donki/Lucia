@@ -2,7 +2,7 @@ using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
 
-namespace SocAiChat.Engine;
+namespace SocLucia.Engine;
 
 /// <summary>Descargas grandes (motor y modelos) con progreso, cancelacion y comprobacion opcional del SHA-256.</summary>
 public static class Downloader
@@ -10,7 +10,7 @@ public static class Downloader
     public static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = true })
     {
         Timeout = Timeout.InfiniteTimeSpan,
-        DefaultRequestHeaders = { { "User-Agent", "sOCAIChat/1.0 (+https://github.com/donki/AIChat)" } },
+        DefaultRequestHeaders = { { "User-Agent", "sOCLucia/1.0 (+https://github.com/donki/Lucia)" } },
     };
 
     public sealed record Progress(long Received, long? Total)

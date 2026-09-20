@@ -2,9 +2,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Text.Json.Nodes;
-using SocAiChat.Services;
+using SocLucia.Services;
 
-namespace SocAiChat.Agent;
+namespace SocLucia.Agent;
 
 /// <summary>
 /// La herramienta que la IA puede usar en «modo trabajo»: ejecutar una linea de ordenes de

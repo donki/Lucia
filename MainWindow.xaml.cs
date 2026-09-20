@@ -4,13 +4,13 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Text.Json.Nodes;
-using SocAiChat.Agent;
-using SocAiChat.Chat;
-using SocAiChat.Engine;
-using SocAiChat.Localization;
-using SocAiChat.Services;
+using SocLucia.Agent;
+using SocLucia.Chat;
+using SocLucia.Engine;
+using SocLucia.Localization;
+using SocLucia.Services;
 
-namespace SocAiChat;
+namespace SocLucia;
 
 public partial class MainWindow : Window
 {
@@ -34,6 +34,8 @@ public partial class MainWindow : Window
         ApplyTexts();
         Loc.LanguageChanged += ApplyTexts;
         App.Engine.StateChanged += () => Dispatcher.BeginInvoke(PaintEngineStatus);
+        ModelDownloads.Changed += PaintEngineStatus;
+        ModelDownloads.Finished += (_, error) => { if (error is null) ModelChanged(); else PaintEngineStatus(); };
         RefreshThreadList();
         if (_threads.Count > 0)
             ThreadList.SelectedIndex = 0;
@@ -57,8 +59,7 @@ public partial class MainWindow : Window
         NewChatButton.ToolTip = Loc.Get("NewChat");
         SettingsButton.ToolTip = Loc.Get("Settings");
         AboutButton.ToolTip = Loc.Get("AboutTooltip");
-        RenameMenu.Header = Loc.Get("RenameChat");
-        DeleteMenu.Header = Loc.Get("DeleteChat");
+        if (IsLoaded) RefreshThreadList();   // los avisos de renombrar/borrar de cada fila
         SendButton.ToolTip = Loc.Get("Send");
         StopButton.ToolTip = Loc.Get("Stop");
         WorkModeButton.ToolTip = Loc.Get("WorkMode");
@@ -92,6 +93,15 @@ public partial class MainWindow : Window
         var engine = App.Engine;
         var settings = AppSettings.Current;
         var model = settings.ModelName is { Length: > 0 } name ? name : null;
+        if (ModelDownloads.Current is { } download)
+        {
+            // Una IA bajando en segundo plano: se ve aqui aunque Ajustes este cerrado.
+            EngineStatus.Text = Loc.Format("ModelInstalling", download.Model.Name, download.Total is { } t ? $"{Human(download.Received)} / {Human(t)}" : Human(download.Received));
+            EngineProgress.Visibility = Visibility.Visible;
+            EngineProgress.IsIndeterminate = download.Fraction is null;
+            EngineProgress.Value = (download.Fraction ?? 0) * 100;
+            return;
+        }
         EngineStatus.Text = engine.State switch
         {
             EngineState.NoModel => Loc.Get("EngineNoModel"),
@@ -109,8 +119,16 @@ public partial class MainWindow : Window
     public void ModelChanged()
     {
         PaintEngineStatus();
-        _ = WarmUpAsync();
+        if (AppSettings.Current.HasModel)
+            _ = WarmUpAsync();
     }
+
+    private static string Human(long bytes) => bytes switch
+    {
+        >= 1L << 30 => $"{bytes / (double)(1L << 30):0.0} GB",
+        >= 1L << 20 => $"{bytes / (double)(1L << 20):0} MB",
+        _ => $"{bytes / 1024.0:0} KB",
+    };
 
     // ------------------------------------------------------------------ conversaciones
 
@@ -125,7 +143,10 @@ public partial class MainWindow : Window
 
     private sealed record ThreadRow(ChatThread Thread)
     {
-        public override string ToString() => Thread.Title.Length > 0 ? Thread.Title : "…";
+        public string Title => Thread.Title.Length > 0 ? Thread.Title : "…";
+        public string RenameTip => Loc.Get("RenameChat");
+        public string DeleteTip => Loc.Get("DeleteChat");
+        public override string ToString() => Title;
     }
 
     private void OnThreadSelected(object sender, SelectionChangedEventArgs e)
@@ -177,7 +198,7 @@ public partial class MainWindow : Window
 
     private async void OnRenameThread(object sender, RoutedEventArgs e)
     {
-        if (ThreadList.SelectedItem is not ThreadRow row) return;
+        if ((sender as FrameworkElement)?.DataContext is not ThreadRow row) return;
         var title = PromptWindow.Ask(this, Loc.Get("RenameChat"), Loc.Get("RenamePrompt"), row.Thread.Title);
         if (string.IsNullOrWhiteSpace(title)) return;
         row.Thread.Title = title.Trim();
@@ -188,14 +209,16 @@ public partial class MainWindow : Window
 
     private void OnDeleteThread(object sender, RoutedEventArgs e)
     {
-        if (ThreadList.SelectedItem is not ThreadRow row) return;
+        if ((sender as FrameworkElement)?.DataContext is not ThreadRow row) return;
         if (!PromptWindow.Confirm(this, Loc.Get("DeleteChat"), Loc.Get("DeleteChatConfirm"))) return;
         if (row.Thread == _current)
             _answering?.Cancel();
         ThreadStore.Delete(row.Thread);
         _threads.Remove(row.Thread);
+        var wasCurrent = row.Thread == _current;
         RefreshThreadList();
-        ShowThread(null);
+        if (wasCurrent)
+            ShowThread(null);
     }
 
     // ------------------------------------------------------------------ enviar y responder
@@ -298,6 +321,7 @@ public partial class MainWindow : Window
             var content = new System.Text.StringBuilder();
             var reasoning = new System.Text.StringBuilder();
             IReadOnlyList<ToolCall>? calls = null;
+            string? finish = null;
             var lastPaint = DateTime.UtcNow;
             try
             {
@@ -306,6 +330,7 @@ public partial class MainWindow : Window
                     if (delta.Content is not null) content.Append(delta.Content);
                     if (delta.Reasoning is not null) reasoning.Append(delta.Reasoning);
                     if (delta.ToolCalls is not null) calls = delta.ToolCalls;
+                    if (delta.FinishReason is not null) finish = delta.FinishReason;
                     if ((DateTime.UtcNow - lastPaint).TotalMilliseconds > 120)
                     {
                         RepaintBubble(bubble, content.ToString(), reasoning.Length > 0 ? reasoning.ToString() : null, streaming: true);
@@ -322,6 +347,24 @@ public partial class MainWindow : Window
             }
             answer.Content = content.ToString().Trim();
             answer.Reasoning = reasoning.Length > 0 ? reasoning.ToString().Trim() : null;
+            if (answer.Content.Length == 0 && answer.Reasoning is not null && calls is null)
+            {
+                // Se ha gastado el tope razonando y no ha llegado a contestar: otra vuelta sin pensar,
+                // para que responda directo. El razonamiento se conserva plegado.
+                Log($"respuesta vacia tras razonar (fin: {finish}); se repite sin pensamiento");
+                RepaintBubble(bubble, string.Empty, answer.Reasoning, streaming: true);
+                await foreach (var delta in ChatClient.StreamAsync(baseUrl, messages, false, settings.MaxAnswerTokens, tools, cancel))
+                {
+                    if (delta.Content is not null) content.Append(delta.Content);
+                    if (delta.ToolCalls is not null) calls = delta.ToolCalls;
+                    if ((DateTime.UtcNow - lastPaint).TotalMilliseconds > 120)
+                    {
+                        RepaintBubble(bubble, content.ToString(), answer.Reasoning, streaming: true);
+                        lastPaint = DateTime.UtcNow;
+                    }
+                }
+                answer.Content = content.ToString().Trim();
+            }
             if (calls is { Count: > 0 })
             {
                 answer.ToolCalls = new JsonArray(calls.Select(c => (JsonNode)c.ToJson()).ToArray()).ToJsonString();
@@ -481,7 +524,15 @@ public partial class MainWindow : Window
             panel.Children.Add(expander);
         }
         if (user)
+        {
             panel.Children.Add(new TextBlock { Text = content, TextWrapping = TextWrapping.Wrap, FontSize = fontSize, Foreground = foreground });
+            // Lo que preguntaste se puede copiar, retocar en el redactor o volver a enviar tal cual.
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, -6, -4) };
+            actions.Children.Add(UserAction("\uE8C8", Loc.Get("Copy"), () => { try { Clipboard.SetText(content); } catch (Exception) { } }));
+            actions.Children.Add(UserAction("\uE70F", Loc.Get("EditQuestion"), () => { Composer.Text = content; Composer.CaretIndex = content.Length; Composer.Focus(); }));
+            actions.Children.Add(UserAction("\uE72C", Loc.Get("ResendQuestion"), () => { if (_answering is null) { Composer.Text = content; OnSend(this, new RoutedEventArgs()); } }));
+            panel.Children.Add(actions);
+        }
         else if (content.Length == 0 && streaming)
             panel.Children.Add(new TextBlock { Text = "…", FontSize = fontSize, Foreground = foreground });
         else
@@ -496,6 +547,15 @@ public partial class MainWindow : Window
         if (streaming)
             ScrollToEnd();
     }
+
+    private Button UserAction(string glyph, string tooltip, Action action)
+    {
+        var button = new Button { Content = glyph, ToolTip = tooltip, Style = (Style)FindResource("GhostIconButton"), Width = 28, Height = 28, FontSize = 13, Foreground = (Brush)FindResource("OnPrimary"), Opacity = 0.85 };
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    private static void Log(string line) => EngineHost.Log(line);
 
     private void ScrollToEnd() => Dispatcher.BeginInvoke(() => MessagesScroll.ScrollToEnd(), System.Windows.Threading.DispatcherPriority.Background);
 

@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Construye el paquete MSIX de sOC AI Chat para la Microsoft Store.
+    Construye el paquete MSIX de sOC Lucia para la Microsoft Store.
 
 .DESCRIPTION
     Publica el ejecutable autocontenido, monta la carpeta del paquete con el manifiesto y los
@@ -31,23 +31,23 @@ param(
     # Valores de Partner Center (Product management > Product identity). El Publisher es el de la
     # cuenta sOCratic (comun a todas las apps); el nombre de identidad y el DisplayName hay que
     # confirmarlos al reservar el nombre en Partner Center (aun no esta reservado, 2026-09-16).
-    [string] $IdentityName = "sOCratic.sOCAIChat",
+    [string] $IdentityName = "sOCratic.sOCLucia",
     [string] $Publisher = "CN=2FC3763A-58D5-473A-840E-D47726B23FE3",
     [string] $PublisherDisplayName = "sOCratic",
 
     # Tiene que ser uno de los nombres RESERVADOS de la aplicacion en Partner Center, no el que nos
     # guste: la Store lo comprueba contra su lista y rechaza el envio si no esta.
-    [string] $DisplayName = "sOC AI Chat",
+    [string] $DisplayName = "sOC Lucia",
     [string] $Version,
     [switch] $Autofirmar
 )
 
 $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $PSScriptRoot
-$proyecto = Join-Path $raiz "sOCAIChat.csproj"
+$proyecto = Join-Path $raiz "sOCLucia.csproj"
 $origenPaquete = Join-Path $raiz "Package"
 $trabajo = Join-Path $raiz "bin\msix"
-$salida = Join-Path $raiz "bin\sOCAIChat.msix"
+$salida = Join-Path $raiz "bin\sOCLucia.msix"
 
 # --- La version sale del csproj si no se pasa. MSIX exige cuatro numeros y el ultimo debe ser 0.
 if (-not $Version) {
@@ -73,7 +73,7 @@ $publicado = Join-Path $raiz "bin\Release\net10.0-windows\win-x64\publish"
 if (Test-Path $trabajo) { Remove-Item $trabajo -Recurse -Force }
 New-Item -ItemType Directory -Path $trabajo | Out-Null
 
-Copy-Item (Join-Path $publicado "sOCAIChat.exe") $trabajo
+Copy-Item (Join-Path $publicado "sOCLucia.exe") $trabajo
 Copy-Item (Join-Path $origenPaquete "Images") $trabajo -Recurse
 
 $manifiesto = Get-Content (Join-Path $origenPaquete "AppxManifest.xml") -Raw

@@ -1,7 +1,7 @@
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace SocAiChat.Engine;
+namespace SocLucia.Engine;
 
 /// <summary>
 /// El motor es <c>llama-server</c> de llama.cpp (MIT), en la version fijada aqui: se descarga de

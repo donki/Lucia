@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 
-namespace SocAiChat.Services;
+namespace SocLucia.Services;
 
 /// <summary>
 /// Icono en el area de notificacion: al minimizar (si el ajuste lo dice) la ventana se esconde y
@@ -167,14 +167,23 @@ public sealed class TrayIcon : IDisposable
 public static class WindowsStartup
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "sOCAIChat";
+    private const string ValueName = "sOCLucia";
+    /// <summary>Nombre de la entrada hasta 2026.9.20.3 (sOC AI Chat); apuntaba a un exe que ya no existe.</summary>
+    private const string OldValueName = "sOCAIChat";
 
     public static bool IsEnabled()
     {
         try
         {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey);
-            return key?.GetValue(ValueName) is string s && s.Length > 0;
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            if (key is null) return false;
+            if (key.GetValue(OldValueName) is string)
+            {
+                key.DeleteValue(OldValueName, throwOnMissingValue: false);
+                Set(true);
+                return true;
+            }
+            return key.GetValue(ValueName) is string s && s.Length > 0;
         }
         catch (Exception) { return false; }
     }

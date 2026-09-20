@@ -2,9 +2,9 @@ using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using SocAiChat.Services;
+using SocLucia.Services;
 
-namespace SocAiChat.Engine;
+namespace SocLucia.Engine;
 
 /// <summary>Un modelo del catalogo: repositorio GGUF de Hugging Face, tamaño aproximado del cuantizado recomendado y memoria que pide.</summary>
 public sealed record CatalogModel(string Name, string Repo, long ApproxBytes, string License, string Blurb)
@@ -42,7 +42,28 @@ public static class ModelCatalog
 
     public static IEnumerable<CatalogModel> Fitting(long ramBytes) => All.Where(m => m.MinRamBytes <= ramBytes);
 
-    public static CatalogModel? Recommended(long ramBytes) => Fitting(ramBytes).FirstOrDefault();
+    /// <summary>
+    /// Como ira cada IA en este PC. Con grafica: optima si cabe entera en su memoria (pesos, contexto
+    /// y un margen); si sobresale poco, va; si sobresale mucho, lenta. Sin grafica manda el ancho de
+    /// banda de la RAM: optimas las ligeras (hasta ~3 GB), lentas las que pasan de 6 GB.
+    /// </summary>
+    public static ModelFit FitOf(CatalogModel model, PcProfile pc)
+    {
+        if (model.MinRamBytes > pc.RamBytes)
+            return ModelFit.TooBig;
+        if (pc.HasUsableGpu)
+        {
+            var needed = (long)(model.ApproxBytes * 1.25) + 512 * MiB;
+            if (needed <= pc.VramBytes) return ModelFit.Optimal;
+            return model.ApproxBytes <= pc.VramBytes * 3 / 2 ? ModelFit.Ok : ModelFit.Slow;
+        }
+        if (model.ApproxBytes <= 3200 * MiB) return ModelFit.Optimal;
+        return model.ApproxBytes <= 6144 * MiB ? ModelFit.Ok : ModelFit.Slow;
+    }
+
+    /// <summary>La mejor para este PC: la mayor de las optimas; si ninguna lo es, la mayor que cabe.</summary>
+    public static CatalogModel? Recommended(PcProfile pc)
+        => All.FirstOrDefault(m => FitOf(m, pc) == ModelFit.Optimal) ?? Fitting(pc.RamBytes).FirstOrDefault();
 
     /// <summary>Cuantizados en orden de preferencia: Q4_K_M es el equilibrio habitual entre tamaño y calidad.</summary>
     private static readonly string[] QuantPreference = ["Q4_K_M", "Q4_K_XL", "Q4_K_S", "IQ4_XS", "Q5_K_M", "Q4_0", "Q5_0", "Q6_K", "Q8_0"];
@@ -84,6 +105,44 @@ public static class ModelCatalog
         var url = $"https://huggingface.co/{model.Repo}/resolve/main/{file.Name}?download=true";
         await Downloader.DownloadAsync(url, destination, null, progress, cancel);
         return destination;
+    }
+
+    /// <summary>Los GGUF que hay en la carpeta de modelos, con el nombre de su ficha (o uno sacado del fichero).</summary>
+    public static List<InstalledModel> InstalledFiles()
+    {
+        var settings = AppSettings.Current;
+        var result = new List<InstalledModel>();
+        if (!Directory.Exists(Paths.Models))
+            return result;
+        foreach (var file in Directory.GetFiles(Paths.Models, "*.gguf").OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+        {
+            var known = settings.Installed.FirstOrDefault(i => string.Equals(i.Path, file, StringComparison.OrdinalIgnoreCase));
+            if (known is null)
+            {
+                // Sin ficha (copiado a mano): si el nombre del fichero es el de un repositorio del catalogo, se toma su ficha.
+                var name = Path.GetFileName(file);
+                var fromCatalog = All.FirstOrDefault(m => name.StartsWith(m.Repo[(m.Repo.IndexOf('/') + 1)..].Replace("-GGUF", string.Empty), StringComparison.OrdinalIgnoreCase));
+                known = fromCatalog is null ? new InstalledModel { Name = NameFromFile(file), Path = file } : new InstalledModel { Name = fromCatalog.Name, Path = file, License = fromCatalog.License };
+            }
+            result.Add(known);
+        }
+        return result;
+    }
+
+    /// <summary>Borra un GGUF descargado. Si era el activo, se para el motor y la aplicacion se queda sin IA hasta elegir otra.</summary>
+    public static void Delete(InstalledModel model)
+    {
+        var settings = AppSettings.Current;
+        if (string.Equals(settings.ModelPath, model.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            App.Engine.Stop();
+            settings.ModelPath = null;
+            settings.ModelName = null;
+            settings.ModelLicense = null;
+        }
+        File.Delete(model.Path);
+        settings.Forget(model.Path);
+        settings.Save();
     }
 
     /// <summary>Nombre visible a partir de un fichero GGUF importado a mano: «Qwen3.5-4B-Q4_K_M.gguf» → «Qwen3.5 4B».</summary>

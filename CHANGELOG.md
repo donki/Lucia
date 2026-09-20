@@ -1,11 +1,30 @@
-# Changelog — sOC AI Chat
+# Changelog — sOC Lucia
+
+## 2026.9.20.4 — Ahora se llama Lucia
+
+- La aplicación pasa a llamarse **sOC Lucia** (antes sOC AI Chat): exe `sOCLucia.exe`, repositorio
+  `donki/Lucia`, extensión «sOC Lucia Code». Los datos se trasladan solos de `%LOCALAPPDATA%\sOCAIChat`
+  a `%LOCALAPPDATA%\sOCLucia` al primer arranque (con la versión vieja cerrada) y la entrada de
+  «Arrancar con Windows» se renueva.
+- **Análisis del PC** en Ajustes › La IA: procesador, RAM y gráfica con su memoria de vídeo. Las IA
+  del catálogo llevan **★ si son óptimas para este PC** (caben enteras en la gráfica o son ligeras
+  para el procesador) y se avisa de las que irán más lentas; la recomendada es la mayor de las óptimas.
+- **Descargas en segundo plano**: la descarga de una IA sigue con Ajustes cerrado; el progreso se ve
+  en la barra de estado y al acabar queda activa.
+- **Borrar IA descargadas**: lista «Instaladas en este PC» con poner en uso y borrar (los GGUF pesan gigas).
+- Las **preguntas** de la conversación se pueden **copiar, editar** (vuelven al redactor) **y reenviar**.
+- En la lista de conversaciones, **renombrar y borrar** son botones a la derecha de cada fila (sin menú contextual).
+- Idiomas con **banderas dibujadas** (Windows no pinta los emoji de bandera: salían «ES» y «US»).
+- Arreglo: con el pensamiento activado a veces salía el razonamiento **sin respuesta** (se agotaba el
+  tope de tokens razonando). Ahora el razonamiento tiene el triple de sitio y, si aun así no llega a
+  contestar, se repite la vuelta sin pensamiento y la respuesta sale igualmente.
 
 ## 2026.9.20.3 — Carpeta de modelos en otro sitio
 
 - En Ajustes › La IA, **la carpeta de los modelos se puede cambiar** (por ejemplo, a otro disco con
   espacio). Al cambiarla se **mueven los GGUF que ya hay** con progreso (renombrado en el mismo
   disco; copia y borrado entre discos, sin dejar nada a medias), el modelo activo pasa a su nueva
-  ruta y el motor se para mientras tanto. Por defecto sigue en `%LOCALAPPDATA%\sOCAIChat\models`.
+  ruta y el motor se para mientras tanto. Por defecto sigue en `%LOCALAPPDATA%\sOCLucia\models`.
 
 ## 2026.9.20.2 — Modo trabajo, bandeja y arranque con Windows
 
@@ -39,7 +58,7 @@
   tamaño de letra, español/inglés, diagnóstico (registro del motor, carpeta de datos).
 - **Editores de código (VS Code)**: puerta local `http://127.0.0.1:41417/v1` compatible con la
   API de OpenAI, con token, que reenvía al motor (streaming incluido) y arranca la IA si hace
-  falta. Extensión **sOC AI Chat Code** para VS Code (chat lateral con «Insertar», acciones sobre
+  falta. Extensión **sOC Lucia Code** para VS Code (chat lateral con «Insertar», acciones sobre
   la selección, proveedor de modelo para Copilot Chat); también sirve para Continue, Cline y
   cualquier cliente compatible.
 - «Acerca de» del catálogo: contacto, idioma, privacidad, licencia MIT y aviso legal.

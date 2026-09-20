@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace SocAiChat.Engine;
+namespace SocLucia.Engine;
 
 /// <summary>
 /// Un «job» de Windows con KILL_ON_JOB_CLOSE: los procesos que se le asignan mueren cuando muere

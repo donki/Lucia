@@ -1,4 +1,6 @@
-# sOC AI Chat
+# sOC Lucia
+
+> Hasta la versión 2026.9.20.3 se llamó **sOC AI Chat**; los datos se trasladan solos al primer arranque.
 
 IA privada para Windows: un modelo de lenguaje que se ejecuta en tu PC y con el que hablas desde
 una ventana de chat. Nada de lo que escribes sale del ordenador. Con una **puerta local para
@@ -7,7 +9,7 @@ esa misma IA.
 
 ## Dónde conseguirla
 
-- **Releases de GitHub** (EXE autocontenido, MSIX y la extensión de VS Code): https://github.com/donki/AIChat/releases
+- **Releases de GitHub** (EXE autocontenido, MSIX y la extensión de VS Code): https://github.com/donki/Lucia/releases
 - No está en la Microsoft Store.
 
 ## Qué hace
@@ -17,13 +19,17 @@ esa misma IA.
   arranca como proceso hijo en `127.0.0.1` y un puerto libre. Con GPU NVIDIA usa la versión CUDA
   (y si no arranca, cae a Vulkan); en cualquier otra x64, Vulkan; en Windows ARM, CPU.
 - **Elegir la IA.** Un catálogo corto de modelos con licencia abierta (GGUF publicados en Hugging
-  Face); solo se enseñan los que caben en la memoria del PC y se recomienda el mayor. También se
-  puede **importar un GGUF** que ya tengas (se usa donde está, sin copiarlo). Cada modelo muestra su
-  licencia antes de descargarse. La **carpeta de los modelos** se puede cambiar de sitio (otro
-  disco): al cambiarla se mueven los que ya hay y el activo se apunta a su nueva ruta.
-- **Conversaciones** guardadas en el PC (`%LOCALAPPDATA%\sOCAIChat\threads`), con renombrar y
-  borrar. Respuestas en streaming, Markdown (títulos, listas, negrita, bloques de código con botón
-  de copiar), botón de parar.
+  Face). La aplicación **analiza el PC** (procesador, RAM, gráfica y su memoria de vídeo): solo se
+  enseñan los que caben, llevan **★ los óptimos** (caben enteros en la gráfica, o son ligeros para
+  el procesador), se avisa de los que irán lentos y se recomienda el mayor de los óptimos. La
+  **descarga sigue en segundo plano** con Ajustes cerrado. Las IA **instaladas se pueden poner en
+  uso o borrar**. También se puede **importar un GGUF** que ya tengas (se usa donde está, sin
+  copiarlo). Cada modelo muestra su licencia antes de descargarse. La **carpeta de los modelos** se
+  puede cambiar de sitio (otro disco): al cambiarla se mueven los que ya hay y el activo se apunta
+  a su nueva ruta.
+- **Conversaciones** guardadas en el PC (`%LOCALAPPDATA%\sOCLucia\threads`), con renombrar y
+  borrar en cada fila. Respuestas en streaming, Markdown (títulos, listas, negrita, bloques de
+  código con botón de copiar), botón de parar; cada pregunta se puede copiar, editar y reenviar.
 - **Instrucciones fijas** (el «system prompt»), opción de dejar que el modelo **razone** antes de
   responder (el razonamiento sale plegado), tamaño de letra, español/inglés, tema claro/oscuro
   siguiendo a Windows.
@@ -39,7 +45,7 @@ esa misma IA.
   con la API de OpenAI, protegida con un token y solo en loopback, que reenvía al motor
   (`/v1/models`, `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, con streaming; la
   primera petición arranca la IA). Sin indicación del cliente, el «pensamiento» del modelo va
-  apagado, para que no se gaste la respuesta razonando. La extensión **sOC AI Chat Code**
+  apagado, para que no se gaste la respuesta razonando. La extensión **sOC Lucia Code**
   (`vscode/`, `.vsix` en cada release) añade a VS Code un chat lateral con «Insertar», acciones
   sobre la selección (preguntar, explicar, mejorar, tests) y un proveedor de modelo para el
   *Manage models…* de Copilot Chat. Continue, Cline y similares funcionan con la misma dirección y
@@ -75,7 +81,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 .\tools\entregar.ps1 -Version 2026.9.20.0 -Mensaje "…"                                 # todo lo anterior + OneDrive + release
 ```
 
-Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `sOCAIChat.exe --ask "pregunta"` envía esa pregunta al abrir, `--work` (y `--auto`) activa el modo trabajo (sin confirmaciones), `--move-models <carpeta>` mueve la carpeta de modelos y `--settings` abre Ajustes (para probar y capturar; no existe en Release). `--tray` existe también en Release: arranca escondida en la bandeja.
+Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `sOCLucia.exe --ask "pregunta"` envía esa pregunta al abrir, `--work` (y `--auto`) activa el modo trabajo (sin confirmaciones), `--move-models <carpeta>` mueve la carpeta de modelos y `--settings` abre Ajustes (para probar y capturar; no existe en Release). `--tray` existe también en Release: arranca escondida en la bandeja.
 
 ## Licencia
 

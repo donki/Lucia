@@ -5,10 +5,10 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using SocAiChat.Engine;
-using SocAiChat.Services;
+using SocLucia.Engine;
+using SocLucia.Services;
 
-namespace SocAiChat.Editor;
+namespace SocLucia.Editor;
 
 /// <summary>
 /// Puerta local para editores de codigo (VS Code y cualquier cliente que hable la API de chat de
@@ -104,7 +104,7 @@ public sealed class EditorDoor : IDisposable
                         ["id"] = ModelId(settings.ModelName ?? "local"),
                         ["object"] = "model",
                         ["created"] = 0,
-                        ["owned_by"] = "soc-ai-chat",
+                        ["owned_by"] = "soc-lucia",
                         ["name"] = settings.ModelName,
                         ["file"] = Path.GetFileName(settings.ModelPath),
                     });
@@ -199,7 +199,7 @@ public sealed class EditorDoor : IDisposable
     }
 
     private static Task ErrorAsync(HttpListenerResponse response, int status, string message) =>
-        WriteJsonAsync(response, status, new JsonObject { ["error"] = new JsonObject { ["message"] = message, ["type"] = "soc_ai_chat_error", ["code"] = status } });
+        WriteJsonAsync(response, status, new JsonObject { ["error"] = new JsonObject { ["message"] = message, ["type"] = "soc_lucia_error", ["code"] = status } });
 
     private static async Task WriteJsonAsync(HttpListenerResponse response, int status, JsonNode body)
     {

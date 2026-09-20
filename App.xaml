@@ -1,4 +1,4 @@
-﻿<Application x:Class="SocAiChat.App"
+﻿<Application x:Class="SocLucia.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnMainWindowClose"
@@ -26,6 +26,59 @@
             <SolidColorBrush x:Key="Danger" Color="#BA1A1A" />
             <SolidColorBrush x:Key="MirrorBackground" Color="#1B1B22" />
             <SolidColorBrush x:Key="WarningSurface" Color="#FFF4E5" />
+            <SolidColorBrush x:Key="Star" Color="#E5A100" />
+
+            <!-- ============================ Banderas ============================ -->
+            <!-- Windows no dibuja los emoji de bandera (salen «ES» y «US»): se dibujan a mano, 3:2. -->
+            <DrawingImage x:Key="FlagEs">
+                <DrawingImage.Drawing>
+                    <DrawingGroup>
+                        <GeometryDrawing Brush="#AA151B"><GeometryDrawing.Geometry><RectangleGeometry Rect="0,0,30,20" /></GeometryDrawing.Geometry></GeometryDrawing>
+                        <GeometryDrawing Brush="#F1BF00"><GeometryDrawing.Geometry><RectangleGeometry Rect="0,5,30,10" /></GeometryDrawing.Geometry></GeometryDrawing>
+                    </DrawingGroup>
+                </DrawingImage.Drawing>
+            </DrawingImage>
+            <DrawingImage x:Key="FlagUs">
+                <DrawingImage.Drawing>
+                    <DrawingGroup>
+                        <GeometryDrawing Brush="#FFFFFF"><GeometryDrawing.Geometry><RectangleGeometry Rect="0,0,30,20" /></GeometryDrawing.Geometry></GeometryDrawing>
+                        <GeometryDrawing Brush="#B22234">
+                            <GeometryDrawing.Geometry>
+                                <GeometryGroup>
+                                    <RectangleGeometry Rect="0,0,30,1.54" />
+                                    <RectangleGeometry Rect="0,3.08,30,1.54" />
+                                    <RectangleGeometry Rect="0,6.15,30,1.54" />
+                                    <RectangleGeometry Rect="0,9.23,30,1.54" />
+                                    <RectangleGeometry Rect="0,12.31,30,1.54" />
+                                    <RectangleGeometry Rect="0,15.38,30,1.54" />
+                                    <RectangleGeometry Rect="0,18.46,30,1.54" />
+                                </GeometryGroup>
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                        <GeometryDrawing Brush="#3C3B6E"><GeometryDrawing.Geometry><RectangleGeometry Rect="0,0,12,10.77" /></GeometryDrawing.Geometry></GeometryDrawing>
+                        <GeometryDrawing Brush="#FFFFFF">
+                            <GeometryDrawing.Geometry>
+                                <GeometryGroup>
+                                    <EllipseGeometry Center="2,2.2" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="5,2.2" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="8,2.2" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="11,2.2" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="3.5,4.3" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="6.5,4.3" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="9.5,4.3" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="2,6.4" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="5,6.4" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="8,6.4" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="11,6.4" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="3.5,8.5" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="6.5,8.5" RadiusX="0.6" RadiusY="0.6" />
+                                    <EllipseGeometry Center="9.5,8.5" RadiusX="0.6" RadiusY="0.6" />
+                                </GeometryGroup>
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                    </DrawingGroup>
+                </DrawingImage.Drawing>
+            </DrawingImage>
 
             <!-- ============================ Texto ============================ -->
             <Style x:Key="BodyText" TargetType="TextBlock">

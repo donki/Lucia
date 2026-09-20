@@ -1,10 +1,10 @@
 using System.Windows;
-using SocAiChat.Editor;
-using SocAiChat.Engine;
-using SocAiChat.Localization;
-using SocAiChat.Services;
+using SocLucia.Editor;
+using SocLucia.Engine;
+using SocLucia.Localization;
+using SocLucia.Services;
 
-namespace SocAiChat;
+namespace SocLucia;
 
 public partial class App : Application
 {
@@ -17,7 +17,7 @@ public partial class App : Application
     private void OnStartup(object sender, StartupEventArgs e)
     {
         // Una sola instancia: dos aplicaciones cargarian el modelo dos veces.
-        _single = new Mutex(true, "sOCAIChat.SingleInstance", out var first);
+        _single = new Mutex(true, "sOCLucia.SingleInstance", out var first);
         if (!first)
         {
             Shutdown();
@@ -50,10 +50,12 @@ public partial class App : Application
             else if (e.Args[i] == "--move-models" && i + 1 < e.Args.Length)
             {
                 var target = e.Args[++i];
-                window.Loaded += async (_, _) => { await SocAiChat.Engine.ModelLibrary.MoveAsync(target, null, CancellationToken.None); Shutdown(); };
+                window.Loaded += async (_, _) => { await SocLucia.Engine.ModelLibrary.MoveAsync(target, null, CancellationToken.None); Shutdown(); };
             }
             else if (e.Args[i] == "--settings")
                 window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => window.OpenSettingsForTest(), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            else if (e.Args[i] == "--about")
+                window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => new AboutWindow { Owner = window }.Show(), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 #endif
     }

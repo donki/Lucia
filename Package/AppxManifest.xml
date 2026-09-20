@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!--
-    Manifiesto del paquete MSIX de sOC AI Chat para la Microsoft Store.
+    Manifiesto del paquete MSIX de sOC Lucia para la Microsoft Store.
 
     LOS VALORES LOS PONE EL SCRIPT (tools/empaquetar-msix.ps1), que los trae por defecto ya
     rellenos con los que asigno Partner Center (Product management > Product identity). Aqui se
@@ -50,7 +50,7 @@
   </Resources>
 
   <Applications>
-    <Application Id="AIChat" Executable="sOCAIChat.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="Lucia" Executable="sOCLucia.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
           DisplayName="@@DISPLAY_NAME@@"
           Description="IA privada que se ejecuta en este PC: chat con un modelo local y una puerta para programar desde VS Code. Nada sale de tu ordenador."

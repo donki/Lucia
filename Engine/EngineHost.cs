@@ -4,9 +4,9 @@ using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Net;
-using SocAiChat.Services;
+using SocLucia.Services;
 
-namespace SocAiChat.Engine;
+namespace SocLucia.Engine;
 
 public enum EngineState { NoModel, DownloadingEngine, Starting, Ready, Stopped, Error }
 

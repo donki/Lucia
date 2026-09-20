@@ -4,7 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 
-namespace SocAiChat.Chat;
+namespace SocLucia.Chat;
 
 /// <summary>
 /// Markdown de andar por casa (lo que devuelve un modelo de chat) a elementos de WPF: parrafos,

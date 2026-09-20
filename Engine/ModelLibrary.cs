@@ -1,7 +1,7 @@
 using System.IO;
-using SocAiChat.Services;
+using SocLucia.Services;
 
-namespace SocAiChat.Engine;
+namespace SocLucia.Engine;
 
 /// <summary>
 /// La carpeta de los modelos se puede cambiar de sitio (otro disco con espacio). Al cambiarla se
@@ -59,6 +59,8 @@ public static class ModelLibrary
             }
             if (string.Equals(settings.ModelPath, file, StringComparison.OrdinalIgnoreCase))
                 settings.ModelPath = target;
+            foreach (var known in settings.Installed.Where(i => string.Equals(i.Path, file, StringComparison.OrdinalIgnoreCase)))
+                known.Path = target;
             done += size;
             progress?.Report(new MoveProgress(Path.GetFileName(file), done, total));
         }

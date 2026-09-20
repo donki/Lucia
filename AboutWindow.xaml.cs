@@ -2,10 +2,10 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Media.Imaging;
-using SocAiChat.Localization;
-using SocAiChat.Services;
+using SocLucia.Localization;
+using SocLucia.Services;
 
-namespace SocAiChat;
+namespace SocLucia;
 
 /// <summary>«Acerca de»: version, contacto, idioma, privacidad, licencia y aviso legal.</summary>
 public partial class AboutWindow : Window

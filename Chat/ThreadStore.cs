@@ -1,8 +1,8 @@
 using System.IO;
 using System.Text.Json;
-using SocAiChat.Services;
+using SocLucia.Services;
 
-namespace SocAiChat.Chat;
+namespace SocLucia.Chat;
 
 public sealed class StoredMessage
 {

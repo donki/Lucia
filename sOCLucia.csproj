@@ -6,13 +6,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <RootNamespace>SocAiChat</RootNamespace>
-    <AssemblyName>sOCAIChat</AssemblyName>
-    <ApplicationTitle>sOC AI Chat</ApplicationTitle>
-    <Version>2026.9.20.3</Version>
-    <AssemblyVersion>2026.9.20.3</AssemblyVersion>
-    <FileVersion>2026.9.20.3</FileVersion>
-    <Product>sOC AI Chat</Product>
+    <RootNamespace>SocLucia</RootNamespace>
+    <AssemblyName>sOCLucia</AssemblyName>
+    <ApplicationTitle>sOC Lucia</ApplicationTitle>
+    <Version>2026.9.20.4</Version>
+    <AssemblyVersion>2026.9.20.4</AssemblyVersion>
+    <FileVersion>2026.9.20.4</FileVersion>
+    <Product>sOC Lucia</Product>
     <Company>Socratic</Company>
     <Copyright>Copyright © 2026 Socratic</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

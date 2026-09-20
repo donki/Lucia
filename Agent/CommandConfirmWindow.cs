@@ -2,10 +2,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using SocAiChat.Localization;
-using SocAiChat.Services;
+using SocLucia.Localization;
+using SocLucia.Services;
 
-namespace SocAiChat.Agent;
+namespace SocLucia.Agent;
 
 /// <summary>
 /// «La IA quiere ejecutar esto»: la orden tal cual, el porque que dio el modelo, y ejecutar o

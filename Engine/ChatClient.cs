@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace SocAiChat.Engine;
+namespace SocLucia.Engine;
 
 /// <summary>Un mensaje tal como va al modelo. Los de herramienta llevan <see cref="ToolCallId"/>; los del asistente que pidieron herramientas, <see cref="ToolCalls"/>.</summary>
 public sealed record ChatMessage(string Role, string Content, string? ToolCallId = null, JsonArray? ToolCalls = null);
@@ -25,7 +25,7 @@ public sealed class ToolCall
 }
 
 /// <summary>Un trozo de respuesta en streaming: texto visible, razonamiento, o el fin con las herramientas pedidas.</summary>
-public sealed record ChatDelta(string? Content, string? Reasoning, IReadOnlyList<ToolCall>? ToolCalls = null);
+public sealed record ChatDelta(string? Content, string? Reasoning, IReadOnlyList<ToolCall>? ToolCalls = null, string? FinishReason = null);
 
 /// <summary>Cliente del <c>/v1/chat/completions</c> de llama-server, en streaming (SSE), con herramientas.</summary>
 public static class ChatClient
@@ -37,7 +37,8 @@ public static class ChatClient
         {
             ["model"] = "local",
             ["stream"] = true,
-            ["max_tokens"] = maxTokens,
+            // Con pensamiento, el razonamiento gasta del mismo tope: se le da sitio para que quede respuesta.
+            ["max_tokens"] = thinking ? maxTokens * 3 : maxTokens,
             ["temperature"] = 0.7,
             ["messages"] = new JsonArray(messages.Select(ToJson).ToArray()),
             // Con el «pensamiento» apagado el modelo contesta directo; encendido, llama-server separa
@@ -60,6 +61,7 @@ public static class ChatClient
             throw new HttpRequestException($"{(int)response.StatusCode}: {Trim(text)}");
         }
         var calls = new SortedDictionary<int, ToolCall>();
+        string? finish = null;
         await using var stream = await response.Content.ReadAsStreamAsync(cancel);
         using var reader = new StreamReader(stream, Encoding.UTF8);
         while (await reader.ReadLineAsync(cancel) is { } line)
@@ -72,6 +74,8 @@ public static class ChatClient
             JsonNode? node;
             try { node = JsonNode.Parse(payload); }
             catch (JsonException) { continue; }
+            if (node?["choices"]?[0]?["finish_reason"]?.GetValue<string>() is { Length: > 0 } reason)
+                finish = reason;
             var delta = node?["choices"]?[0]?["delta"];
             if (delta is null)
                 continue;
@@ -99,6 +103,8 @@ public static class ChatClient
                 if (call.Id.Length == 0) call.Id = $"call_{i}";
             yield return new ChatDelta(null, null, calls.Values.ToList());
         }
+        if (finish is not null)
+            yield return new ChatDelta(null, null, null, finish);
     }
 
     private static JsonNode ToJson(ChatMessage m)

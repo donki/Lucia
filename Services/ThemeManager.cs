@@ -4,7 +4,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using Microsoft.Win32;
 
-namespace SocAiChat.Services;
+namespace SocLucia.Services;
 
 /// <summary>
 /// Tema claro u oscuro siguiendo al de Windows, con los mismos nombres de recurso que declara
