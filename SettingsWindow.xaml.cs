@@ -31,6 +31,10 @@ public partial class SettingsWindow : Window
         PaintModel();
         ImportButton.Content = Loc.Get("ModelImport");
         ImportHint.Text = Loc.Get("ModelImportHint");
+        ModelsFolderLabel.Text = Loc.Get("ModelsFolder");
+        ModelsFolderBox.Text = Paths.Models;
+        ModelsFolderButton.ToolTip = Loc.Get("ModelsFolderPick");
+        ModelsFolderHint.Text = Loc.Get("ModelsFolderHint");
         CancelDownloadButton.ToolTip = Loc.Get("ModelCancel");
         InstructionsTitle.Text = Loc.Get("InstructionsTitle");
         InstructionsHint.Text = Loc.Get("InstructionsHint");
@@ -161,6 +165,42 @@ public partial class SettingsWindow : Window
     }
 
     private void OnCancelDownload(object sender, RoutedEventArgs e) => _download?.Cancel();
+
+    /// <summary>Cambiar la carpeta de modelos: se elige, se mueven los GGUF que haya y se apunta el activo a su nueva ruta.</summary>
+    private async void OnPickModelsFolder(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { InitialDirectory = Paths.Models, Title = Loc.Get("ModelsFolderPick") };
+        if (dialog.ShowDialog(this) != true) return;
+        await MoveModelsAsync(dialog.FolderName);
+    }
+
+    public async Task MoveModelsAsync(string target)
+    {
+        if (string.Equals(Path.GetFullPath(target), Path.GetFullPath(Paths.Models), StringComparison.OrdinalIgnoreCase)) return;
+        var count = Directory.Exists(Paths.Models) ? Directory.GetFiles(Paths.Models, "*.gguf").Length : 0;
+        if (count > 0 && !PromptWindow.Confirm(this, Loc.Get("ModelsFolder"), Loc.Format("ModelsFolderMoveConfirm", count, target))) return;
+        ModelsFolderButton.IsEnabled = false;
+        MoveStatus.Visibility = Visibility.Visible;
+        MoveStatus.Text = Loc.Get("ModelsFolderMoving");
+        try
+        {
+            var progress = new Progress<ModelLibrary.MoveProgress>(p => MoveStatus.Text = Loc.Format("ModelsFolderMovingFile", p.File, p.Total > 0 ? $"{p.Done * 100 / p.Total}%" : "…"));
+            await ModelLibrary.MoveAsync(target, progress, CancellationToken.None);
+            MoveStatus.Text = Loc.Get("ModelsFolderMoved");
+            ModelsFolderBox.Text = Paths.Models;
+            PaintModel();
+            (Owner as MainWindow)?.ModelChanged();
+        }
+        catch (Exception ex)
+        {
+            MoveStatus.Text = string.Empty;
+            PromptWindow.Alert(this, Loc.Get("Error"), ex.Message);
+        }
+        finally
+        {
+            ModelsFolderButton.IsEnabled = true;
+        }
+    }
 
     private void OnImport(object sender, RoutedEventArgs e)
     {

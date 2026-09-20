@@ -1,5 +1,12 @@
 # Changelog — sOC AI Chat
 
+## 2026.9.20.3 — Carpeta de modelos en otro sitio
+
+- En Ajustes › La IA, **la carpeta de los modelos se puede cambiar** (por ejemplo, a otro disco con
+  espacio). Al cambiarla se **mueven los GGUF que ya hay** con progreso (renombrado en el mismo
+  disco; copia y borrado entre discos, sin dejar nada a medias), el modelo activo pasa a su nueva
+  ruta y el motor se para mientras tanto. Por defecto sigue en `%LOCALAPPDATA%\sOCAIChat\models`.
+
 ## 2026.9.20.2 — Modo trabajo, bandeja y arranque con Windows
 
 - **Modo trabajo** (botón de terminal junto a Enviar, por conversación): la IA puede **ejecutar

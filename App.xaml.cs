@@ -47,6 +47,11 @@ public partial class App : Application
             }
             else if (e.Args[i] == "--work")
                 window.SetPendingWorkMode(auto: e.Args.Contains("--auto"));
+            else if (e.Args[i] == "--move-models" && i + 1 < e.Args.Length)
+            {
+                var target = e.Args[++i];
+                window.Loaded += async (_, _) => { await SocAiChat.Engine.ModelLibrary.MoveAsync(target, null, CancellationToken.None); Shutdown(); };
+            }
             else if (e.Args[i] == "--settings")
                 window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => window.OpenSettingsForTest(), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }

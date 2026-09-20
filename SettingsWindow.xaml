@@ -33,6 +33,13 @@
                         </Border>
                         <Button x:Name="ImportButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnImport" />
                         <TextBlock x:Name="ImportHint" Style="{StaticResource HintText}" Margin="0,6,0,0" />
+                        <TextBlock x:Name="ModelsFolderLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                        <DockPanel>
+                            <Button x:Name="ModelsFolderButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8DA;" Margin="6,0,0,0" Click="OnPickModelsFolder" />
+                            <TextBox x:Name="ModelsFolderBox" Style="{StaticResource Field}" IsReadOnly="True" />
+                        </DockPanel>
+                        <TextBlock x:Name="ModelsFolderHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                        <TextBlock x:Name="MoveStatus" Style="{StaticResource HintText}" Margin="0,4,0,0" Visibility="Collapsed" />
                     </StackPanel>
                 </Border>
 

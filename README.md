@@ -19,7 +19,8 @@ esa misma IA.
 - **Elegir la IA.** Un catálogo corto de modelos con licencia abierta (GGUF publicados en Hugging
   Face); solo se enseñan los que caben en la memoria del PC y se recomienda el mayor. También se
   puede **importar un GGUF** que ya tengas (se usa donde está, sin copiarlo). Cada modelo muestra su
-  licencia antes de descargarse.
+  licencia antes de descargarse. La **carpeta de los modelos** se puede cambiar de sitio (otro
+  disco): al cambiarla se mueven los que ya hay y el activo se apunta a su nueva ruta.
 - **Conversaciones** guardadas en el PC (`%LOCALAPPDATA%\sOCAIChat\threads`), con renombrar y
   borrar. Respuestas en streaming, Markdown (títulos, listas, negrita, bloques de código con botón
   de copiar), botón de parar.
@@ -74,7 +75,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 .\tools\entregar.ps1 -Version 2026.9.20.0 -Mensaje "…"                                 # todo lo anterior + OneDrive + release
 ```
 
-Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `sOCAIChat.exe --ask "pregunta"` envía esa pregunta al abrir, `--work` (y `--auto`) activa el modo trabajo (sin confirmaciones) y `--settings` abre Ajustes (para probar y capturar; no existe en Release). `--tray` existe también en Release: arranca escondida en la bandeja.
+Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `sOCAIChat.exe --ask "pregunta"` envía esa pregunta al abrir, `--work` (y `--auto`) activa el modo trabajo (sin confirmaciones), `--move-models <carpeta>` mueve la carpeta de modelos y `--settings` abre Ajustes (para probar y capturar; no existe en Release). `--tray` existe también en Release: arranca escondida en la bandeja.
 
 ## Licencia
 

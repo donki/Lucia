@@ -40,6 +40,9 @@ public sealed class AppSettings
     /// <summary>Modo trabajo: carpeta en la que se ejecutan las ordenes (por defecto, Documentos).</summary>
     public string WorkFolder { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
+    /// <summary>Carpeta de los modelos descargados (null = la de la aplicacion). Los GGUF pesan gigas: se puede llevar a otro disco.</summary>
+    public string? ModelsFolder { get; set; }
+
     /// <summary>Al minimizar, esconderse en el area de notificacion.</summary>
     public bool TrayOnMinimize { get; set; } = true;
 
