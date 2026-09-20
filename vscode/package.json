@@ -1,0 +1,78 @@
+{
+  "name": "soc-ai-chat-code",
+  "displayName": "sOC AI Chat Code",
+  "description": "Program with the private AI running in sOC AI Chat on this computer: chat, explain, improve and generate code, without anything leaving the PC.",
+  "version": "2026.9.20",
+  "publisher": "socratic",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": { "type": "git", "url": "https://github.com/donki/AIChat.git", "directory": "vscode" },
+  "engines": { "vscode": "^1.104.0" },
+  "categories": ["AI", "Chat", "Programming Languages"],
+  "keywords": ["local ai", "llama.cpp", "privacy", "code assistant", "soc"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "socAiChat.openChat", "title": "sOC AI Chat: Open chat", "icon": "$(comment-discussion)" },
+      { "command": "socAiChat.ask", "title": "sOC AI Chat: Ask about the selection" },
+      { "command": "socAiChat.explain", "title": "sOC AI Chat: Explain the selection" },
+      { "command": "socAiChat.improve", "title": "sOC AI Chat: Improve the selection" },
+      { "command": "socAiChat.tests", "title": "sOC AI Chat: Write tests for the selection" },
+      { "command": "socAiChat.checkConnection", "title": "sOC AI Chat: Check connection" }
+    ],
+    "menus": {
+      "editor/context": [
+        { "submenu": "socAiChat.submenu", "group": "navigation@9" }
+      ],
+      "socAiChat.submenu": [
+        { "command": "socAiChat.ask", "group": "1@1" },
+        { "command": "socAiChat.explain", "group": "1@2" },
+        { "command": "socAiChat.improve", "group": "1@3" },
+        { "command": "socAiChat.tests", "group": "1@4" }
+      ]
+    },
+    "submenus": [
+      { "id": "socAiChat.submenu", "label": "sOC AI Chat" }
+    ],
+    "keybindings": [
+      { "command": "socAiChat.openChat", "key": "ctrl+alt+i", "mac": "cmd+alt+i" }
+    ],
+    "configuration": {
+      "title": "sOC AI Chat",
+      "properties": {
+        "socAiChat.baseUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:41417/v1",
+          "description": "Address shown in sOC AI Chat > Settings > Code editors."
+        },
+        "socAiChat.token": {
+          "type": "string",
+          "default": "",
+          "description": "Token shown in sOC AI Chat > Settings > Code editors."
+        },
+        "socAiChat.maxTokens": {
+          "type": "number",
+          "default": 1024,
+          "description": "Longest answer, in tokens."
+        },
+        "socAiChat.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "description": "Creativity. Low is better for code."
+        },
+        "socAiChat.systemPrompt": {
+          "type": "string",
+          "default": "You are a senior software engineer helping inside VS Code. Answer concisely. When you give code, use fenced blocks with the language. Keep the user's language for prose.",
+          "description": "Standing instructions sent with every request."
+        }
+      }
+    },
+    "languageModelChatProviders": [
+      { "vendor": "socaichat", "displayName": "sOC AI Chat (local)", "managementCommand": "socAiChat.checkConnection" }
+    ]
+  },
+  "scripts": {
+    "package": "npx --yes @vscode/vsce package --no-dependencies"
+  }
+}

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>SocAiChat</RootNamespace>
+    <AssemblyName>sOCAIChat</AssemblyName>
+    <ApplicationTitle>sOC AI Chat</ApplicationTitle>
+    <Version>2026.9.20.0</Version>
+    <AssemblyVersion>2026.9.20.0</AssemblyVersion>
+    <FileVersion>2026.9.20.0</FileVersion>
+    <Product>sOC AI Chat</Product>
+    <Company>Socratic</Company>
+    <Copyright>Copyright © 2026 Socratic</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <ApplicationIcon>appicon.ico</ApplicationIcon>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- La extension de VS Code (vscode\) y el paquete MSIX no son codigo .NET. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);vscode\**;Package\**;bin\**;obj\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\logo.png" />
+  </ItemGroup>
+
+</Project>
