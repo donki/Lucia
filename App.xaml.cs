@@ -24,6 +24,7 @@ public partial class App : Application
             return;
         }
         Paths.Ensure();
+        ChildJob.KillStale(Paths.Engine);
         AppSettings.Load();
         if (AppSettings.Current.Language is { } language)
             Loc.Use(language);

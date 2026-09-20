@@ -144,6 +144,7 @@ public sealed class EngineHost : IDisposable
             info.ArgumentList.Add(arg);
         Log($"arrancando llama-server ({archive.Accelerator}) con {Path.GetFileName(settings.ModelPath)} en :{_port}");
         var process = Process.Start(info) ?? throw new InvalidOperationException("No se ha podido arrancar llama-server");
+        ChildJob.Add(process);   // muere con la aplicacion, pase lo que pase
         _process = process;
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) Log(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) Log(e.Data); };

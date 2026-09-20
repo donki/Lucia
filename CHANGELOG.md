@@ -1,5 +1,11 @@
 # Changelog — sOC AI Chat
 
+## 2026.9.20.1 — El motor muere con la aplicación
+
+- `llama-server` va en un «job» de Windows con cierre forzoso: si la aplicación se cierra a lo
+  bruto (Administrador de tareas, cuelgue), el motor se va con ella y no quedan gigas de memoria
+  ocupados. Al arrancar, además, se limpia cualquier motor huérfano de una sesión anterior.
+
 ## 2026.9.20.0 — Primera versión
 
 - **Chat con una IA local**: llama.cpp (`llama-server`, MIT) descargado y comprobado la primera
