@@ -33,6 +33,9 @@ public partial class App : Application
         var window = new MainWindow();
         MainWindow = window;
         window.Show();
+        // --tray (arranque con Windows): escondida en el area de notificacion desde el principio.
+        if (e.Args.Contains("--tray"))
+            window.Dispatcher.BeginInvoke(() => window.Tray?.HideToTray(), System.Windows.Threading.DispatcherPriority.Loaded);
 #if DEBUG
         // Solo en Debug, para probar y capturar sin teclear: --ask "pregunta" la envia al abrir; --settings abre Ajustes.
         for (var i = 0; i < e.Args.Length; i++)
@@ -42,6 +45,8 @@ public partial class App : Application
                 var question = e.Args[++i];
                 window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => window.SendText(question), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             }
+            else if (e.Args[i] == "--work")
+                window.SetPendingWorkMode(auto: e.Args.Contains("--auto"));
             else if (e.Args[i] == "--settings")
                 window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => window.OpenSettingsForTest(), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }

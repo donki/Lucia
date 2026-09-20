@@ -3,6 +3,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Text.Json.Nodes;
+using SocAiChat.Agent;
 using SocAiChat.Chat;
 using SocAiChat.Engine;
 using SocAiChat.Localization;
@@ -16,10 +18,17 @@ public partial class MainWindow : Window
     private ChatThread? _current;
     private CancellationTokenSource? _answering;
 
+    /// <summary>El icono del area de notificacion (lo usa Ajustes para cambiar su comportamiento y App para arrancar escondida).</summary>
+    public TrayIcon? Tray { get; private set; }
+
     public MainWindow()
     {
         InitializeComponent();
-        SourceInitialized += (_, _) => ThemeManager.ApplyToWindow(this);
+        SourceInitialized += (_, _) =>
+        {
+            ThemeManager.ApplyToWindow(this);
+            Tray = new TrayIcon(this, Loc.Get, () => Application.Current.Shutdown()) { MinimizeToTray = AppSettings.Current.TrayOnMinimize };
+        };
         EmptyLogo.Source = new BitmapImage(new Uri("pack://application:,,,/Assets/logo.png"));
         _threads = ThreadStore.LoadAll();
         ApplyTexts();
@@ -52,6 +61,7 @@ public partial class MainWindow : Window
         DeleteMenu.Header = Loc.Get("DeleteChat");
         SendButton.ToolTip = Loc.Get("Send");
         StopButton.ToolTip = Loc.Get("Stop");
+        WorkModeButton.ToolTip = Loc.Get("WorkMode");
         EmptyTitle.Text = Loc.Get("EmptyTitle");
         EmptyHint.Text = Loc.Get("EmptyHint");
         Composer.ToolTip = Loc.Get("ComposerHint");
@@ -135,14 +145,35 @@ public partial class MainWindow : Window
     private void ShowThread(ChatThread? thread)
     {
         _current = thread;
+        WorkModeButton.IsChecked = thread?.WorkMode ?? _pendingWorkMode;
         Messages.Children.Clear();
         EmptyState.Visibility = thread is null || thread.Messages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (thread is null)
             return;
         foreach (var message in thread.Messages)
-            Messages.Children.Add(Bubble(message.Role, message.Content, message.Reasoning));
+        {
+            if (message.Role == "tool")
+                Messages.Children.Add(ToolBubble(message.Command ?? string.Empty, message.Content));
+            else if (message.Role == "assistant" && message.Content.Length == 0 && message.ToolCalls is not null)
+                continue;   // la peticion de herramienta sin texto: ya se ve la orden en la burbuja de la herramienta
+            else
+                Messages.Children.Add(Bubble(message.Role, message.Content, message.Reasoning));
+        }
         ScrollToEnd();
     }
+
+    private void OnWorkModeToggled(object sender, RoutedEventArgs e)
+    {
+        if (_current is null)
+        {
+            _pendingWorkMode = WorkModeButton.IsChecked == true;
+            return;
+        }
+        _current.WorkMode = WorkModeButton.IsChecked == true;
+        ThreadStore.Save(_current);
+    }
+
+    private bool _pendingWorkMode;
 
     private async void OnRenameThread(object sender, RoutedEventArgs e)
     {
@@ -191,7 +222,10 @@ public partial class MainWindow : Window
         Composer.Clear();
         if (_current is null)
         {
-            _current = new ChatThread { Title = ThreadStore.TitleFrom(text) };
+            _current = new ChatThread { Title = ThreadStore.TitleFrom(text), WorkMode = _pendingWorkMode };
+#if DEBUG
+            _current.AutoApprove = _pendingAutoApprove;
+#endif
             _threads.Insert(0, _current);
             RefreshThreadList();
         }
@@ -200,48 +234,23 @@ public partial class MainWindow : Window
         ThreadStore.Save(thread);
         EmptyState.Visibility = Visibility.Collapsed;
         Messages.Children.Add(Bubble("user", text, null));
-        var answer = new StoredMessage { Role = "assistant", Content = string.Empty };
-        var bubble = Bubble("assistant", string.Empty, null);
-        Messages.Children.Add(bubble);
         ScrollToEnd();
 
         _answering = new CancellationTokenSource();
         SendButton.Visibility = Visibility.Collapsed;
         StopButton.Visibility = Visibility.Visible;
         var cancel = _answering.Token;
-        var settings = AppSettings.Current;
         try
         {
             var baseUrl = await App.Engine.EnsureReadyAsync(new Progress<Downloader.Progress>(PaintDownload), cancel);
-            var messages = new List<ChatMessage>();
-            if (settings.Instructions.Trim().Length > 0)
-                messages.Add(new ChatMessage("system", settings.Instructions.Trim()));
-            // Las ultimas 20 vueltas: suficiente memoria de conversacion sin pasarse del contexto.
-            foreach (var m in thread.Messages.TakeLast(20))
-                messages.Add(new ChatMessage(m.Role, m.Content));
-            var content = new System.Text.StringBuilder();
-            var reasoning = new System.Text.StringBuilder();
-            var lastPaint = DateTime.UtcNow;
-            await foreach (var delta in ChatClient.StreamAsync(baseUrl, messages, settings.Thinking, settings.MaxAnswerTokens, cancel))
-            {
-                if (delta.Content is not null) content.Append(delta.Content);
-                if (delta.Reasoning is not null) reasoning.Append(delta.Reasoning);
-                if ((DateTime.UtcNow - lastPaint).TotalMilliseconds > 120)
-                {
-                    RepaintBubble(bubble, content.ToString(), reasoning.Length > 0 ? reasoning.ToString() : null, streaming: true);
-                    lastPaint = DateTime.UtcNow;
-                }
-            }
-            answer.Content = content.ToString().Trim();
-            answer.Reasoning = reasoning.Length > 0 ? reasoning.ToString().Trim() : null;
+            await AnswerLoopAsync(thread, baseUrl, cancel);
         }
-        catch (OperationCanceledException)
-        {
-            answer.Content = (bubble.Tag as string ?? string.Empty).Trim();
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            answer.Content = Loc.Format("AnswerFailed", ex.Message);
+            var failed = new StoredMessage { Role = "assistant", Content = Loc.Format("AnswerFailed", ex.Message) };
+            thread.Messages.Add(failed);
+            Messages.Children.Add(Bubble("assistant", failed.Content, null));
         }
         finally
         {
@@ -249,14 +258,170 @@ public partial class MainWindow : Window
             _answering = null;
             SendButton.Visibility = Visibility.Visible;
             StopButton.Visibility = Visibility.Collapsed;
-        }
-        RepaintBubble(bubble, answer.Content, answer.Reasoning, streaming: false);
-        if (answer.Content.Length > 0 || answer.Reasoning is not null)
-        {
-            thread.Messages.Add(answer);
             ThreadStore.Save(thread);
         }
         Composer.Focus();
+    }
+
+    /// <summary>
+    /// Una vuelta de respuesta; en modo trabajo, tantas como herramientas pida el modelo: cada orden
+    /// se confirma, se ejecuta, su salida vuelve al modelo y se sigue hasta que conteste sin pedir mas.
+    /// </summary>
+    private async Task AnswerLoopAsync(ChatThread thread, string baseUrl, CancellationToken cancel)
+    {
+        var settings = AppSettings.Current;
+        var tools = thread.WorkMode ? CommandTool.Definitions() : null;
+        for (var round = 0; round < 12; round++)
+        {
+            cancel.ThrowIfCancellationRequested();
+            var messages = new List<ChatMessage>();
+            var system = settings.Instructions.Trim();
+            if (thread.WorkMode)
+                system = (system.Length > 0 ? system + "\n\n" : string.Empty) + CommandTool.SystemPrompt(settings.WorkFolder);
+            if (system.Length > 0)
+                messages.Add(new ChatMessage("system", system));
+            // Las ultimas vueltas: memoria de conversacion sin pasarse del contexto. Las de herramienta van completas.
+            foreach (var m in thread.Messages.TakeLast(30))
+            {
+                if (m.Role == "tool")
+                    messages.Add(new ChatMessage("tool", m.Content, m.ToolCallId));
+                else if (m.ToolCalls is { Length: > 0 } storedCalls)
+                    messages.Add(new ChatMessage(m.Role, m.Content, null, JsonNode.Parse(storedCalls) as JsonArray));
+                else
+                    messages.Add(new ChatMessage(m.Role, m.Content));
+            }
+
+            var answer = new StoredMessage { Role = "assistant", Content = string.Empty };
+            var bubble = Bubble("assistant", string.Empty, null);
+            Messages.Children.Add(bubble);
+            ScrollToEnd();
+            var content = new System.Text.StringBuilder();
+            var reasoning = new System.Text.StringBuilder();
+            IReadOnlyList<ToolCall>? calls = null;
+            var lastPaint = DateTime.UtcNow;
+            try
+            {
+                await foreach (var delta in ChatClient.StreamAsync(baseUrl, messages, settings.Thinking, settings.MaxAnswerTokens, tools, cancel))
+                {
+                    if (delta.Content is not null) content.Append(delta.Content);
+                    if (delta.Reasoning is not null) reasoning.Append(delta.Reasoning);
+                    if (delta.ToolCalls is not null) calls = delta.ToolCalls;
+                    if ((DateTime.UtcNow - lastPaint).TotalMilliseconds > 120)
+                    {
+                        RepaintBubble(bubble, content.ToString(), reasoning.Length > 0 ? reasoning.ToString() : null, streaming: true);
+                        lastPaint = DateTime.UtcNow;
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                answer.Content = content.ToString().Trim();
+                if (answer.Content.Length > 0) { RepaintBubble(bubble, answer.Content, null, false); thread.Messages.Add(answer); }
+                else Messages.Children.Remove(bubble);
+                throw;
+            }
+            answer.Content = content.ToString().Trim();
+            answer.Reasoning = reasoning.Length > 0 ? reasoning.ToString().Trim() : null;
+            if (calls is { Count: > 0 })
+            {
+                answer.ToolCalls = new JsonArray(calls.Select(c => (JsonNode)c.ToJson()).ToArray()).ToJsonString();
+                thread.Messages.Add(answer);
+                if (answer.Content.Length > 0) RepaintBubble(bubble, answer.Content, answer.Reasoning, false);
+                else Messages.Children.Remove(bubble);
+                foreach (var call in calls)
+                    await RunToolAsync(thread, call, cancel);
+                ThreadStore.Save(thread);
+                continue;   // otra vuelta con las salidas
+            }
+            RepaintBubble(bubble, answer.Content, answer.Reasoning, streaming: false);
+            if (answer.Content.Length > 0 || answer.Reasoning is not null)
+                thread.Messages.Add(answer);
+            else
+                Messages.Children.Remove(bubble);
+            return;
+        }
+    }
+
+    /// <summary>Confirma (salvo que la conversacion lo tenga quitado), ejecuta y deja la salida en el hilo y en pantalla.</summary>
+    private async Task RunToolAsync(ChatThread thread, ToolCall call, CancellationToken cancel)
+    {
+        string command = string.Empty, reason = string.Empty;
+        try
+        {
+            var args = JsonNode.Parse(call.Arguments) as JsonObject;
+            command = args?["command"]?.GetValue<string>() ?? string.Empty;
+            reason = args?["reason"]?.GetValue<string>() ?? string.Empty;
+        }
+        catch (Exception) { }
+        string output;
+        if (call.Name != CommandTool.Name || command.Trim().Length == 0)
+            output = $"Unknown tool or empty command: {call.Name}";
+        else
+        {
+            var approved = thread.AutoApprove;
+            if (!approved)
+            {
+                var (run, auto) = CommandConfirmWindow.Ask(this, command, reason);
+                approved = run;
+                if (auto) { thread.AutoApprove = true; ThreadStore.Save(thread); }
+            }
+            if (!approved)
+                output = "The user declined to run this command.";
+            else
+            {
+                var running = ToolBubble(command, Loc.Get("CommandRunning"));
+                Messages.Children.Add(running);
+                ScrollToEnd();
+                try
+                {
+                    var result = await CommandTool.RunAsync(command, AppSettings.Current.WorkFolder, cancel);
+                    output = (result.TimedOut ? "[timed out after 3 minutes]\n" : $"[exit code {result.ExitCode}]\n") + result.Output;
+                }
+                catch (OperationCanceledException) { Messages.Children.Remove(running); throw; }
+                catch (Exception ex) { output = "[error] " + ex.Message; }
+                Messages.Children.Remove(running);
+            }
+        }
+        thread.Messages.Add(new StoredMessage { Role = "tool", ToolCallId = call.Id, Command = command, Content = output });
+        Messages.Children.Add(ToolBubble(command, output));
+        ScrollToEnd();
+    }
+
+    /// <summary>La orden ejecutada y, plegada, su salida.</summary>
+    private Border ToolBubble(string command, string output)
+    {
+        var fontSize = AppSettings.Current.FontSize;
+        var panel = new StackPanel();
+        var head = new TextBlock { FontSize = fontSize - 1, Foreground = (Brush)FindResource("TextSecondary"), TextWrapping = TextWrapping.Wrap };
+        head.Inlines.Add(new System.Windows.Documents.Run("\uE756  ") { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") });
+        head.Inlines.Add(new System.Windows.Documents.Run(command) { FontFamily = new FontFamily("Cascadia Mono, Consolas") });
+        panel.Children.Add(head);
+        var body = new TextBox
+        {
+            Text = output.Trim(),
+            IsReadOnly = true,
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Foreground = (Brush)FindResource("TextPrimary"),
+            FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+            FontSize = fontSize - 2,
+            TextWrapping = TextWrapping.Wrap,
+            MaxHeight = 320,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        panel.Children.Add(new Expander { Header = Loc.Get("CommandOutput"), Foreground = (Brush)FindResource("TextSecondary"), FontSize = fontSize - 2, Content = body, IsExpanded = output.Length < 600 });
+        return new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(12, 8, 12, 8),
+            Margin = new Thickness(0, 4, 80, 4),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Background = (Brush)FindResource("PageBackground"),
+            BorderBrush = (Brush)FindResource("Separator"),
+            BorderThickness = new Thickness(1),
+            Child = panel,
+        };
     }
 
     private void OnStop(object sender, RoutedEventArgs e) => _answering?.Cancel();
@@ -269,6 +434,13 @@ public partial class MainWindow : Window
     }
 
     public void OpenSettingsForTest() => new SettingsWindow { Owner = this }.Show();
+
+    private bool _pendingAutoApprove;
+    public void SetPendingWorkMode(bool auto)
+    {
+        _pendingWorkMode = true; _pendingAutoApprove = auto; WorkModeButton.IsChecked = true;
+        if (_current is not null) { _current.WorkMode = true; _current.AutoApprove = auto; }
+    }
 #endif
 
     // ------------------------------------------------------------------ burbujas

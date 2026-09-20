@@ -89,6 +89,31 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Modo trabajo -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="WorkTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="WorkHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                        <TextBlock x:Name="WorkFolderLabel" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
+                        <DockPanel>
+                            <Button x:Name="WorkFolderButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8DA;" Margin="6,0,0,0" Click="OnPickWorkFolder" />
+                            <TextBox x:Name="WorkFolderBox" Style="{StaticResource Field}" LostFocus="OnWorkFolderChanged" />
+                        </DockPanel>
+                        <Button x:Name="OpenCommandLogButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnOpenCommandLog" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Windows: bandeja y arranque -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="WindowsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <CheckBox x:Name="TrayCheck" Style="{StaticResource Check}" Margin="0" Click="OnTrayChanged" />
+                        <TextBlock x:Name="TrayHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
+                        <CheckBox x:Name="StartupCheck" Style="{StaticResource Check}" Click="OnStartupChanged" />
+                        <TextBlock x:Name="StartupHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
+                    </StackPanel>
+                </Border>
+
                 <!-- Idioma -->
                 <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
                     <StackPanel>

@@ -26,6 +26,14 @@ esa misma IA.
 - **Instrucciones fijas** (el «system prompt»), opción de dejar que el modelo **razone** antes de
   responder (el razonamiento sale plegado), tamaño de letra, español/inglés, tema claro/oscuro
   siguiendo a Windows.
+- **Modo trabajo (cowork).** Con el botón de terminal junto a Enviar, la IA puede **ejecutar
+  órdenes de PowerShell** en el PC (herramienta `run_command` por *tool calling* de llama.cpp):
+  cada orden se muestra con su motivo y se aprueba antes de ejecutarse —o se deja de preguntar en
+  esa conversación—, su salida vuelve al modelo y el bucle sigue hasta que responde. Carpeta de
+  trabajo configurable, 3 minutos de tope por orden, registro en `logs\commands.log`. Hace falta un
+  modelo con soporte de herramientas (los del catálogo lo tienen).
+- **Bandeja y arranque**: al minimizar se queda en el área de notificación (ajustable) y puede
+  **arrancar con Windows** escondida (`--tray`).
 - **Editores de código (VS Code).** En Ajustes, una puerta `http://127.0.0.1:41417/v1` compatible
   con la API de OpenAI, protegida con un token y solo en loopback, que reenvía al motor
   (`/v1/models`, `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, con streaming; la
@@ -50,6 +58,8 @@ el token que se muestra en Ajustes.
 - `Engine/`: `EnginePin` (versión fijada de llama.cpp y sus SHA), `EngineHost` (descarga, arranque, salud, parada), `ModelCatalog` (catálogo, elección del cuantizado, descarga), `ChatClient` (SSE), `Downloader`.
 - `Chat/`: `ThreadStore` (JSON por conversación) y `Markdown` (render a WPF).
 - `Editor/EditorDoor.cs`: la puerta para editores (`HttpListener`).
+- `Agent/`: `CommandTool` (definición de la herramienta, ejecución con PowerShell y registro) y `CommandConfirmWindow`; el bucle de vueltas vive en `MainWindow.AnswerLoopAsync`.
+- `Services/TrayIcon.cs`: icono de bandeja (Shell_NotifyIcon) y `WindowsStartup` (HKCU\Run).
 - `Localization/Loc.cs`: todos los textos, es/en.
 - `vscode/`: la extensión de VS Code (JavaScript plano, sin compilación).
 - `Package/` + `tools/empaquetar-msix.ps1`: el MSIX. `tools/entregar.ps1`: EXE + MSIX + `.vsix` + OneDrive + release.
@@ -64,7 +74,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 .\tools\entregar.ps1 -Version 2026.9.20.0 -Mensaje "…"                                 # todo lo anterior + OneDrive + release
 ```
 
-Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `sOCAIChat.exe --ask "pregunta"` envía esa pregunta al abrir y `--settings` abre Ajustes (para probar y capturar; no existe en Release).
+Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `sOCAIChat.exe --ask "pregunta"` envía esa pregunta al abrir, `--work` (y `--auto`) activa el modo trabajo (sin confirmaciones) y `--settings` abre Ajustes (para probar y capturar; no existe en Release). `--tray` existe también en Release: arranca escondida en la bandeja.
 
 ## Licencia
 

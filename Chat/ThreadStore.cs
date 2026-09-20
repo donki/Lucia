@@ -10,6 +10,11 @@ public sealed class StoredMessage
     public string Content { get; set; } = string.Empty;
     /// <summary>Razonamiento del modelo, si lo hubo y se dejo pensar. No se reenvia en turnos siguientes.</summary>
     public string? Reasoning { get; set; }
+    /// <summary>Asistente en modo trabajo: las herramientas que pidio (JSON de tool_calls), para que el historial sea coherente.</summary>
+    public string? ToolCalls { get; set; }
+    /// <summary>Mensaje «tool»: a que llamada responde y que orden se ejecuto (para enseñarla).</summary>
+    public string? ToolCallId { get; set; }
+    public string? Command { get; set; }
     public DateTimeOffset At { get; set; } = DateTimeOffset.Now;
 }
 
@@ -20,6 +25,10 @@ public sealed class ChatThread
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.Now;
     public List<StoredMessage> Messages { get; set; } = [];
+    /// <summary>Modo trabajo: la IA puede ejecutar ordenes en este PC (con confirmacion).</summary>
+    public bool WorkMode { get; set; }
+    /// <summary>El usuario quito la confirmacion para esta conversacion.</summary>
+    public bool AutoApprove { get; set; }
 }
 
 /// <summary>Conversaciones en <c>threads\&lt;id&gt;.json</c>, un fichero por conversacion. Solo en este PC.</summary>

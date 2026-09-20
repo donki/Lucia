@@ -1,5 +1,19 @@
 # Changelog — sOC AI Chat
 
+## 2026.9.20.2 — Modo trabajo, bandeja y arranque con Windows
+
+- **Modo trabajo** (botón de terminal junto a Enviar, por conversación): la IA puede **ejecutar
+  órdenes de PowerShell en este PC** para mirar ficheros, compilar, pasar tests, usar git… Cada
+  orden se enseña con el motivo que da el modelo y se aprueba una a una (o «no volver a preguntar
+  en esta conversación»); la salida vuelve a la IA, que sigue hasta contestar (hasta 12 vueltas).
+  Carpeta de trabajo en Ajustes; tiempo máximo de 3 minutos por orden; registro de todo lo
+  ejecutado en `logs\commands.log`. Necesita un modelo con soporte de herramientas (Qwen, Ministral,
+  Gemma 4…).
+- **Área de notificación**: al minimizar se esconde y queda el icono (clic para volver; botón
+  derecho, Abrir o Salir). Ajustable.
+- **Arrancar con Windows** (Ajustes › Windows): entrada en el registro del usuario con `--tray`,
+  que arranca escondida en la bandeja.
+
 ## 2026.9.20.1 — El motor muere con la aplicación
 
 - `llama-server` va en un «job» de Windows con cierre forzoso: si la aplicación se cierra a lo

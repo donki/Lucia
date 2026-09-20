@@ -37,6 +37,12 @@ public sealed class AppSettings
     /// <summary>Puerta local para editores de codigo (VS Code): apagada por defecto.</summary>
     public EditorDoorSettings EditorDoor { get; set; } = new();
 
+    /// <summary>Modo trabajo: carpeta en la que se ejecutan las ordenes (por defecto, Documentos).</summary>
+    public string WorkFolder { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+    /// <summary>Al minimizar, esconderse en el area de notificacion.</summary>
+    public bool TrayOnMinimize { get; set; } = true;
+
     public static AppSettings Current { get; private set; } = new();
 
     public static void Load()

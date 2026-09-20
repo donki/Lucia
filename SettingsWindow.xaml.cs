@@ -51,6 +51,19 @@ public partial class SettingsWindow : Window
         NewTokenButton.ToolTip = Loc.Get("DoorNewToken");
         DoorHow.Text = Loc.Get("DoorHow");
         PaintDoor();
+        WorkTitle.Text = Loc.Get("WorkTitle");
+        WorkHint.Text = Loc.Get("WorkHint");
+        WorkFolderLabel.Text = Loc.Get("WorkFolder");
+        WorkFolderBox.Text = s.WorkFolder;
+        WorkFolderButton.ToolTip = Loc.Get("WorkFolderPick");
+        OpenCommandLogButton.Content = Loc.Get("OpenCommandLog");
+        WindowsTitle.Text = Loc.Get("WindowsSection");
+        TrayCheck.Content = Loc.Get("TrayOnMinimize");
+        TrayCheck.IsChecked = s.TrayOnMinimize;
+        TrayHint.Text = Loc.Get("TrayOnMinimizeHint");
+        StartupCheck.Content = Loc.Get("StartWithWindows");
+        StartupCheck.IsChecked = WindowsStartup.IsEnabled();
+        StartupHint.Text = Loc.Get("StartWithWindowsHint");
         LanguageTitle.Text = Loc.Get("LanguageTitle");
         PaintLanguageButtons();
         DiagnosticsTitle.Text = Loc.Get("DiagnosticsTitle");
@@ -259,6 +272,40 @@ public partial class SettingsWindow : Window
         AppSettings.Current.Save();
         Loc.Use(code);
     }
+
+    // ------------------------------------------------------------------ modo trabajo y Windows
+
+    private void OnWorkFolderChanged(object sender, RoutedEventArgs e)
+    {
+        var folder = WorkFolderBox.Text.Trim();
+        if (folder.Length == 0 || !Directory.Exists(folder))
+        {
+            WorkFolderBox.Text = AppSettings.Current.WorkFolder;
+            return;
+        }
+        AppSettings.Current.WorkFolder = folder;
+        AppSettings.Current.Save();
+    }
+
+    private void OnPickWorkFolder(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { InitialDirectory = AppSettings.Current.WorkFolder };
+        if (dialog.ShowDialog(this) != true) return;
+        WorkFolderBox.Text = dialog.FolderName;
+        OnWorkFolderChanged(sender, e);
+    }
+
+    private void OnOpenCommandLog(object sender, RoutedEventArgs e) => Open(Path.Combine(Paths.Logs, "commands.log"));
+
+    private void OnTrayChanged(object sender, RoutedEventArgs e)
+    {
+        AppSettings.Current.TrayOnMinimize = TrayCheck.IsChecked == true;
+        AppSettings.Current.Save();
+        if ((Owner as MainWindow)?.Tray is { } tray)
+            tray.MinimizeToTray = AppSettings.Current.TrayOnMinimize;
+    }
+
+    private void OnStartupChanged(object sender, RoutedEventArgs e) => WindowsStartup.Set(StartupCheck.IsChecked == true);
 
     private void OnOpenLog(object sender, RoutedEventArgs e) => Open(Paths.EngineLog);
 

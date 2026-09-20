@@ -94,6 +94,7 @@
                                  PreviewKeyDown="OnComposerKey" />
                     </Border>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="8,0,0,0">
+                        <ToggleButton x:Name="WorkModeButton" Style="{StaticResource ToggleIconButton}" Content="&#xE756;" Width="40" Height="40" Click="OnWorkModeToggled" />
                         <Button x:Name="SendButton" Style="{StaticResource IconButton}" Content="&#xE724;" Width="44" Height="40" Click="OnSend" />
                         <Button x:Name="StopButton" Style="{StaticResource DangerIconButton}" Content="&#xE71A;" Width="44" Height="40" Click="OnStop" Visibility="Collapsed" />
                     </StackPanel>
