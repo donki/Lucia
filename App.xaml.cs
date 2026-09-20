@@ -54,6 +54,12 @@ public partial class App : Application
             }
             else if (e.Args[i] == "--settings")
                 window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => window.OpenSettingsForTest(), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            else if (e.Args[i] == "--tool" && i + 2 < e.Args.Length)
+            {
+                // Prueba de una herramienta sin modelo: --tool read_file {"path":"x"} (con --auto no pregunta)
+                var name = e.Args[++i]; var json = e.Args[++i];
+                window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => window.RunToolForTest(name, json), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }
             else if (e.Args[i] == "--about")
                 window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => new AboutWindow { Owner = window }.Show(), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }

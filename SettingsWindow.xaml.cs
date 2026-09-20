@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using SocLucia.Agent;
 using SocLucia.Engine;
 using SocLucia.Localization;
 using SocLucia.Services;
@@ -63,6 +64,9 @@ public partial class SettingsWindow : Window
         WorkFolderBox.Text = s.WorkFolder;
         WorkFolderButton.ToolTip = Loc.Get("WorkFolderPick");
         OpenCommandLogButton.Content = Loc.Get("OpenCommandLog");
+        PermTitle.Text = Loc.Get("PermSection");
+        PermHint.Text = Loc.Get("PermSectionHint");
+        PaintPermissions();
         WindowsTitle.Text = Loc.Get("WindowsSection");
         TrayCheck.Content = Loc.Get("TrayOnMinimize");
         TrayCheck.IsChecked = s.TrayOnMinimize;
@@ -420,7 +424,48 @@ public partial class SettingsWindow : Window
         OnWorkFolderChanged(sender, e);
     }
 
-    private void OnOpenCommandLog(object sender, RoutedEventArgs e) => Open(Path.Combine(Paths.Logs, "commands.log"));
+    private void OnOpenCommandLog(object sender, RoutedEventArgs e) => Open(Path.Combine(Paths.Logs, "actions.log"));
+
+    /// <summary>Una fila por recurso: preguntar, permitir siempre o no ofrecerselo a la IA.</summary>
+    private void PaintPermissions()
+    {
+        PermList.Children.Clear();
+        var s = AppSettings.Current;
+        foreach (var resource in Enum.GetValues<Resource>())
+        {
+            var grid = new Grid { Margin = new Thickness(0, 3, 0, 3) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var text = new StackPanel();
+            var title = new TextBlock { Style = (Style)FindResource("BodyText") };
+            title.Inlines.Add(new System.Windows.Documents.Run(PermissionWindow.Glyph(resource) + "  ") { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), Foreground = (Brush)FindResource("Primary") });
+            title.Inlines.Add(Loc.Get("Perm_" + resource));
+            text.Children.Add(title);
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Get("PermHint_" + resource), TextWrapping = TextWrapping.Wrap });
+            grid.Children.Add(text);
+            var choices = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+            var current = s.PermissionFor(resource);
+            foreach (var permission in new[] { Permission.Ask, Permission.Allow, Permission.Deny })
+            {
+                var radio = new RadioButton
+                {
+                    Content = Loc.Get(permission == Permission.Allow ? "PermAllowAlways" : "Perm" + permission),
+                    GroupName = "perm_" + resource,
+                    IsChecked = permission == current,
+                    Margin = new Thickness(10, 0, 0, 0),
+                    Foreground = (Brush)FindResource("TextPrimary"),
+                    VerticalContentAlignment = VerticalAlignment.Center,
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                };
+                var chosen = permission;
+                radio.Checked += (_, _) => { s.SetPermission(resource, chosen); s.Save(); };
+                choices.Children.Add(radio);
+            }
+            Grid.SetColumn(choices, 1);
+            grid.Children.Add(choices);
+            PermList.Children.Add(grid);
+        }
+    }
 
     private void OnTrayChanged(object sender, RoutedEventArgs e)
     {

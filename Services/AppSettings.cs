@@ -46,6 +46,18 @@ public sealed class AppSettings
     /// <summary>Al minimizar, esconderse en el area de notificacion.</summary>
     public bool TrayOnMinimize { get; set; } = true;
 
+    /// <summary>Permiso por recurso del PC (Agent.Resource → Ask/Allow/Deny). Lo que no este apuntado, pregunta.</summary>
+    public Dictionary<string, string> Permissions { get; set; } = new();
+
+    public Agent.Permission PermissionFor(Agent.Resource resource)
+        => Permissions.TryGetValue(resource.ToString(), out var v) && Enum.TryParse<Agent.Permission>(v, out var p) ? p : Agent.Permission.Ask;
+
+    public void SetPermission(Agent.Resource resource, Agent.Permission permission)
+    {
+        if (permission == Agent.Permission.Ask) Permissions.Remove(resource.ToString());
+        else Permissions[resource.ToString()] = permission.ToString();
+    }
+
     /// <summary>IAs descargadas o importadas, con su nombre visible: los GGUF por si solos no dicen como se llaman.</summary>
     public List<InstalledModel> Installed { get; set; } = [];
 

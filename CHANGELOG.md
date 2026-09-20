@@ -1,5 +1,21 @@
 # Changelog — sOC Lucia
 
+## 2026.9.20.5 — Permisos por recurso y VS Code con contexto
+
+- **La IA puede usar el PC pidiendo permiso.** En modo trabajo, además de órdenes de PowerShell,
+  ahora tiene herramientas para **leer ficheros, listar y buscar carpetas, escribir ficheros,
+  descargar de internet, leer y escribir el portapapeles y abrir cosas** (fichero, carpeta,
+  programa o web), más los datos básicos del PC. Cada acción se enseña antes con su motivo y se
+  aprueba; se puede dejar de preguntar por ese recurso en la conversación o siempre.
+- **Ajustes › Modo trabajo › Permisos**: por cada recurso (órdenes, leer ficheros, escribir
+  ficheros, internet, portapapeles, abrir cosas) se elige **Preguntar, Siempre o Nunca**; con
+  «Nunca» la IA ni siquiera ve la herramienta. Registro de todo en `logsctions.log`.
+- **Extensión de VS Code con contexto del proyecto**: en el chat lateral la IA puede **listar,
+  leer y buscar en los ficheros del workspace y ver el editor activo** por sí misma (con cada paso
+  visible), así «analiza la carpeta» funciona sin pegar código; **escribir un fichero pide
+  confirmación**. Se apaga con `socLucia.workspaceTools`.
+- El atajo del chat en VS Code pasa a **Ctrl+Alt+L** (Ctrl+Alt+I lo usa Copilot Chat y ganaba).
+
 ## 2026.9.20.4 — Ahora se llama Lucia
 
 - La aplicación pasa a llamarse **sOC Lucia** (antes sOC AI Chat): exe `sOCLucia.exe`, repositorio

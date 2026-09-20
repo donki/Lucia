@@ -2,7 +2,7 @@
   "name": "soc-lucia-code",
   "displayName": "sOC Lucia Code",
   "description": "Program with the private AI running in sOC Lucia on this computer: chat, explain, improve and generate code, without anything leaving the PC.",
-  "version": "2026.9.204",
+  "version": "2026.9.205",
   "publisher": "socratic",
   "license": "MIT",
   "icon": "icon.png",
@@ -36,7 +36,7 @@
       { "id": "socLucia.submenu", "label": "sOC Lucia" }
     ],
     "keybindings": [
-      { "command": "socLucia.openChat", "key": "ctrl+alt+i", "mac": "cmd+alt+i" }
+      { "command": "socLucia.openChat", "key": "ctrl+alt+l", "mac": "cmd+alt+l" }
     ],
     "configuration": {
       "title": "sOC Lucia",
@@ -65,6 +65,11 @@
           "type": "string",
           "default": "You are a senior software engineer helping inside VS Code. Answer concisely. When you give code, use fenced blocks with the language. Keep the user's language for prose.",
           "description": "Standing instructions sent with every request."
+        },
+        "socLucia.workspaceTools": {
+          "type": "boolean",
+          "default": true,
+          "description": "Let the AI look at the open workspace on its own (list, read and search files; writing a file always asks first)."
         }
       }
     },

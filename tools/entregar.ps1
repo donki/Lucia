@@ -77,7 +77,7 @@ VS Code
 -------
 $($vsix.Name): la extension "sOC Lucia Code". Instalar: Extensiones > ... > Instalar desde VSIX.
 Luego, en sOC Lucia > Ajustes > Editores de codigo (VS Code): activar y copiar el token en la
-opcion socLucia.token de VS Code. Ctrl+Alt+I abre el chat; boton derecho sobre una seleccion >
+opcion socLucia.token de VS Code. Ctrl+Alt+L abre el chat (Ctrl+Alt+I lo usa Copilot); boton derecho sobre una seleccion >
 sOC Lucia. Sirve tambien Continue, Cline o cualquier cliente compatible con OpenAI, con la
 direccion http://127.0.0.1:41417/v1 y ese token.
 

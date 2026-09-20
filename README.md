@@ -33,12 +33,15 @@ esa misma IA.
 - **Instrucciones fijas** (el «system prompt»), opción de dejar que el modelo **razone** antes de
   responder (el razonamiento sale plegado), tamaño de letra, español/inglés, tema claro/oscuro
   siguiendo a Windows.
-- **Modo trabajo (cowork).** Con el botón de terminal junto a Enviar, la IA puede **ejecutar
-  órdenes de PowerShell** en el PC (herramienta `run_command` por *tool calling* de llama.cpp):
-  cada orden se muestra con su motivo y se aprueba antes de ejecutarse —o se deja de preguntar en
-  esa conversación—, su salida vuelve al modelo y el bucle sigue hasta que responde. Carpeta de
-  trabajo configurable, 3 minutos de tope por orden, registro en `logs\commands.log`. Hace falta un
-  modelo con soporte de herramientas (los del catálogo lo tienen).
+- **Modo trabajo (cowork) con permisos.** Con el botón de terminal junto a Enviar, la IA puede
+  usar el PC a través de herramientas (*tool calling* de llama.cpp): **órdenes de PowerShell**,
+  **leer/listar/buscar ficheros**, **escribir ficheros**, **descargar de internet**,
+  **portapapeles** y **abrir cosas** con su programa habitual, más los datos básicos del PC. Cada
+  acción se muestra con su motivo y se aprueba antes de hacerse —o se deja de preguntar por ese
+  recurso en la conversación, o siempre—. En Ajustes › Permisos cada recurso se pone en
+  **Preguntar, Siempre o Nunca** (con «Nunca» la IA no ve esa herramienta). Carpeta de trabajo
+  configurable, 3 minutos de tope por orden, registro en `logsctions.log`. Hace falta un modelo
+  con soporte de herramientas (los del catálogo lo tienen).
 - **Bandeja y arranque**: al minimizar se queda en el área de notificación (ajustable) y puede
   **arrancar con Windows** escondida (`--tray`).
 - **Editores de código (VS Code).** En Ajustes, una puerta `http://127.0.0.1:41417/v1` compatible
@@ -46,9 +49,10 @@ esa misma IA.
   (`/v1/models`, `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, con streaming; la
   primera petición arranca la IA). Sin indicación del cliente, el «pensamiento» del modelo va
   apagado, para que no se gaste la respuesta razonando. La extensión **sOC Lucia Code**
-  (`vscode/`, `.vsix` en cada release) añade a VS Code un chat lateral con «Insertar», acciones
-  sobre la selección (preguntar, explicar, mejorar, tests) y un proveedor de modelo para el
-  *Manage models…* de Copilot Chat. Continue, Cline y similares funcionan con la misma dirección y
+  (`vscode/`, `.vsix` en cada release) añade a VS Code un chat lateral con «Insertar» que **ve el
+  workspace** (la IA lista, lee y busca ficheros y mira el editor activo por sí misma; escribir un
+  fichero pide confirmación), acciones sobre la selección (preguntar, explicar, mejorar, tests) y
+  un proveedor de modelo para el *Manage models…* de Copilot Chat. Continue, Cline y similares funcionan con la misma dirección y
   token. Detalles en [vscode/README.md](vscode/README.md).
 
 ## Privacidad

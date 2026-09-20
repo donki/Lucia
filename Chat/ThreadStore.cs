@@ -29,6 +29,8 @@ public sealed class ChatThread
     public bool WorkMode { get; set; }
     /// <summary>El usuario quito la confirmacion para esta conversacion.</summary>
     public bool AutoApprove { get; set; }
+    /// <summary>Recursos (Agent.Resource) que el usuario dejo de confirmar en esta conversacion.</summary>
+    public List<string> Approved { get; set; } = [];
 }
 
 /// <summary>Conversaciones en <c>threads\&lt;id&gt;.json</c>, un fichero por conversacion. Solo en este PC.</summary>

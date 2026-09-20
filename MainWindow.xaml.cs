@@ -174,7 +174,7 @@ public partial class MainWindow : Window
         foreach (var message in thread.Messages)
         {
             if (message.Role == "tool")
-                Messages.Children.Add(ToolBubble(message.Command ?? string.Empty, message.Content));
+                Messages.Children.Add(ToolBubble(ResourceOf(message.Command), message.Command ?? string.Empty, message.Content));
             else if (message.Role == "assistant" && message.Content.Length == 0 && message.ToolCalls is not null)
                 continue;   // la peticion de herramienta sin texto: ya se ve la orden en la burbuja de la herramienta
             else
@@ -293,14 +293,14 @@ public partial class MainWindow : Window
     private async Task AnswerLoopAsync(ChatThread thread, string baseUrl, CancellationToken cancel)
     {
         var settings = AppSettings.Current;
-        var tools = thread.WorkMode ? CommandTool.Definitions() : null;
+        var tools = thread.WorkMode ? ToolBox.Definitions(settings) : null;
         for (var round = 0; round < 12; round++)
         {
             cancel.ThrowIfCancellationRequested();
             var messages = new List<ChatMessage>();
             var system = settings.Instructions.Trim();
             if (thread.WorkMode)
-                system = (system.Length > 0 ? system + "\n\n" : string.Empty) + CommandTool.SystemPrompt(settings.WorkFolder);
+                system = (system.Length > 0 ? system + "\n\n" : string.Empty) + ToolBox.SystemPrompt(settings);
             if (system.Length > 0)
                 messages.Add(new ChatMessage("system", system));
             // Las ultimas vueltas: memoria de conversacion sin pasarse del contexto. Las de herramienta van completas.
@@ -385,58 +385,73 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Confirma (salvo que la conversacion lo tenga quitado), ejecuta y deja la salida en el hilo y en pantalla.</summary>
+    /// <summary>
+    /// Pide permiso segun el recurso (Ajustes › Permisos, o lo aprobado en esta conversacion),
+    /// ejecuta la herramienta y deja lo hecho en el hilo, en pantalla y en el registro.
+    /// </summary>
     private async Task RunToolAsync(ChatThread thread, ToolCall call, CancellationToken cancel)
     {
-        string command = string.Empty, reason = string.Empty;
-        try
-        {
-            var args = JsonNode.Parse(call.Arguments) as JsonObject;
-            command = args?["command"]?.GetValue<string>() ?? string.Empty;
-            reason = args?["reason"]?.GetValue<string>() ?? string.Empty;
-        }
-        catch (Exception) { }
+        var tool = ToolBox.Find(call.Name);
+        JsonObject args;
+        try { args = JsonNode.Parse(call.Arguments) as JsonObject ?? new JsonObject(); }
+        catch (Exception) { args = new JsonObject(); }
+        var detail = tool?.Detail(args) ?? string.Empty;
+        var label = tool is null ? call.Name : detail.Length > 0 ? $"{tool.Name}  {detail}" : tool.Name;
+        var reason = args["reason"]?.GetValue<string>();
         string output;
-        if (call.Name != CommandTool.Name || command.Trim().Length == 0)
-            output = $"Unknown tool or empty command: {call.Name}";
+        if (tool is null)
+            output = $"Unknown tool: {call.Name}";
+        else if (tool.Name != ToolBox.SystemInfo && AppSettings.Current.PermissionFor(tool.Resource) == Permission.Deny)
+            output = "This resource is turned off in the app settings.";
         else
         {
-            var approved = thread.AutoApprove;
+            var approved = tool.Name == ToolBox.SystemInfo || thread.AutoApprove || thread.Approved.Contains(tool.Resource.ToString())
+                           || AppSettings.Current.PermissionFor(tool.Resource) == Permission.Allow;
             if (!approved)
             {
-                var (run, auto) = CommandConfirmWindow.Ask(this, command, reason);
-                approved = run;
-                if (auto) { thread.AutoApprove = true; ThreadStore.Save(thread); }
+                var answer = PermissionWindow.Ask(this, tool.Resource, detail, reason);
+                approved = answer != PermissionWindow.Answer.Deny;
+                if (answer == PermissionWindow.Answer.Conversation) { thread.Approved.Add(tool.Resource.ToString()); ThreadStore.Save(thread); }
+                if (answer == PermissionWindow.Answer.Always) { AppSettings.Current.SetPermission(tool.Resource, Permission.Allow); AppSettings.Current.Save(); }
             }
             if (!approved)
-                output = "The user declined to run this command.";
+            {
+                output = "The user declined this action.";
+                ToolBox.Log(tool, detail, "declined");
+            }
             else
             {
-                var running = ToolBubble(command, Loc.Get("CommandRunning"));
+                var running = ToolBubble(tool.Resource, label, Loc.Get("CommandRunning"));
                 Messages.Children.Add(running);
                 ScrollToEnd();
                 try
                 {
-                    var result = await CommandTool.RunAsync(command, AppSettings.Current.WorkFolder, cancel);
-                    output = (result.TimedOut ? "[timed out after 3 minutes]\n" : $"[exit code {result.ExitCode}]\n") + result.Output;
+                    output = await tool.Run(args, cancel);
+                    ToolBox.Log(tool, detail, "ok");
                 }
-                catch (OperationCanceledException) { Messages.Children.Remove(running); throw; }
-                catch (Exception ex) { output = "[error] " + ex.Message; }
+                catch (OperationCanceledException) { Messages.Children.Remove(running); ToolBox.Log(tool, detail, "cancelled"); throw; }
+                catch (Exception ex) { output = "[error] " + ex.Message; ToolBox.Log(tool, detail, "error: " + ex.Message); }
                 Messages.Children.Remove(running);
             }
         }
-        thread.Messages.Add(new StoredMessage { Role = "tool", ToolCallId = call.Id, Command = command, Content = output });
-        Messages.Children.Add(ToolBubble(command, output));
+        thread.Messages.Add(new StoredMessage { Role = "tool", ToolCallId = call.Id, Command = label, Content = output });
+        Messages.Children.Add(ToolBubble(tool?.Resource ?? Resource.Commands, label, output));
         ScrollToEnd();
     }
 
+    private static Resource ResourceOf(string? label)
+    {
+        var name = (label ?? string.Empty).Split(' ', 2)[0];
+        return ToolBox.Find(name)?.Resource ?? Resource.Commands;
+    }
+
     /// <summary>La orden ejecutada y, plegada, su salida.</summary>
-    private Border ToolBubble(string command, string output)
+    private Border ToolBubble(Resource resource, string command, string output)
     {
         var fontSize = AppSettings.Current.FontSize;
         var panel = new StackPanel();
         var head = new TextBlock { FontSize = fontSize - 1, Foreground = (Brush)FindResource("TextSecondary"), TextWrapping = TextWrapping.Wrap };
-        head.Inlines.Add(new System.Windows.Documents.Run("\uE756  ") { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") });
+        head.Inlines.Add(new System.Windows.Documents.Run(PermissionWindow.Glyph(resource) + "  ") { FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") });
         head.Inlines.Add(new System.Windows.Documents.Run(command) { FontFamily = new FontFamily("Cascadia Mono, Consolas") });
         panel.Children.Add(head);
         var body = new TextBox
@@ -477,6 +492,14 @@ public partial class MainWindow : Window
     }
 
     public void OpenSettingsForTest() => new SettingsWindow { Owner = this }.Show();
+
+    public async void RunToolForTest(string name, string json)
+    {
+        _current ??= new ChatThread { Title = "prueba de herramientas", WorkMode = true, AutoApprove = _pendingAutoApprove };
+        if (!_threads.Contains(_current)) { _threads.Insert(0, _current); RefreshThreadList(); }
+        EmptyState.Visibility = Visibility.Collapsed;
+        await RunToolAsync(_current, new ToolCall { Id = "call_test", Name = name, Arguments = json }, CancellationToken.None);
+    }
 
     private bool _pendingAutoApprove;
     public void SetPendingWorkMode(bool auto)

@@ -10,7 +10,8 @@ Program with the private AI that [sOC Lucia](https://github.com/donki/Lucia) run
 
 ## What it does
 
-- **sOC Lucia: Open chat** (`Ctrl+Alt+I`): a chat panel beside the editor. Answers stream in; every code block has an **Insert** button that puts it at the cursor (or replaces the selection). "Include the current selection" attaches the selected code to the question.
+- **sOC Lucia: Open chat** (`Ctrl+Alt+L`): a chat panel beside the editor. Answers stream in; every code block has an **Insert** button that puts it at the cursor (or replaces the selection). "Include the current selection" attaches the selected code to the question.
+- **It sees your workspace.** In the chat panel the AI can list, read and search the files of the open folder and look at the active editor by itself (tools `list_files`, `read_file`, `search_text`, `active_editor`), so "analyse this project" works without pasting code; each step is shown in the panel. `write_file` always asks before writing. Turn it off with `socLucia.workspaceTools`.
 - Right-click on a selection → **sOC Lucia ›** *Ask about the selection*, *Explain*, *Improve*, *Write tests*.
 - **Copilot Chat and other model consumers**: the extension registers the app as a language model provider (vendor `soclucia`). In Copilot Chat, *Manage models…* shows "*<your AI> (sOC Lucia)*". Needs VS Code 1.104 or newer.
 
