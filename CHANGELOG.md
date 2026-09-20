@@ -1,5 +1,17 @@
 # Changelog — sOC Lucia
 
+## 2026.9.20.7 — Descargas que se retoman y buscador de Hugging Face
+
+- **Las descargas se retoman.** Si cierras la aplicación (o se corta la red) con una IA a medias, al
+  volver a abrirla sigue **desde donde iba** (petición *Range* sobre el `.part`; si el servidor no lo
+  admite, empieza de cero). Cancelar a mano sí tira lo descargado.
+- **Buscador de IA en Hugging Face** en Ajustes › La IA: busca repositorios GGUF por nombre o
+  familia (llama, mistral, gemma, qwen, deepseek…), **pesa cada resultado** (elige el cuantizado
+  habitual Q4_K_M) y lo valora **para este PC** igual que el catálogo: ★ óptima, «funciona pero más
+  lenta», «lenta»; las que no caben en memoria no se muestran. Orden: óptimas primero, luego las más
+  descargadas. Se instalan con el mismo botón que las del catálogo (avisa si el repositorio exige
+  aceptar una licencia).
+
 ## 2026.9.20.6 — Modo y modelo a mano en el chat
 
 - Encima del redactor, un selector **Preguntas / Agente** por conversación (antes era un botón de

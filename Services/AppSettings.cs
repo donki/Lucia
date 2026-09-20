@@ -58,6 +58,9 @@ public sealed class AppSettings
         else Permissions[resource.ToString()] = permission.ToString();
     }
 
+    /// <summary>Descarga a medias al cerrar la aplicacion: se retoma en el siguiente arranque (el .part sigue en la carpeta de modelos).</summary>
+    public PendingDownload? Pending { get; set; }
+
     /// <summary>IAs descargadas o importadas, con su nombre visible: los GGUF por si solos no dicen como se llaman.</summary>
     public List<InstalledModel> Installed { get; set; } = [];
 
@@ -120,4 +123,14 @@ public sealed class InstalledModel
     public string Name { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
     public string? License { get; set; }
+}
+
+/// <summary>La ficha minima para volver a pedir la misma IA al catalogo o a Hugging Face.</summary>
+public sealed class PendingDownload
+{
+    public string Name { get; set; } = string.Empty;
+    public string Repo { get; set; } = string.Empty;
+    public long ApproxBytes { get; set; }
+    public string License { get; set; } = string.Empty;
+    public string Blurb { get; set; } = "CatalogHf";
 }

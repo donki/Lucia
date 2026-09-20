@@ -22,8 +22,9 @@ esa misma IA.
   Face). La aplicación **analiza el PC** (procesador, RAM, gráfica y su memoria de vídeo): solo se
   enseñan los que caben, llevan **★ los óptimos** (caben enteros en la gráfica, o son ligeros para
   el procesador), se avisa de los que irán lentos y se recomienda el mayor de los óptimos. La
-  **descarga sigue en segundo plano** con Ajustes cerrado. Las IA **instaladas se pueden poner en
-  uso o borrar**. También se puede **importar un GGUF** que ya tengas (se usa donde está, sin
+  **descarga sigue en segundo plano** con Ajustes cerrado y **se retoma** donde iba si se cierra la
+  aplicación a medias. Un **buscador de Hugging Face** encuentra más IA (repositorios GGUF), las pesa y
+  las valora para este PC con el mismo criterio. Las IA **instaladas se pueden poner en uso o borrar**. También se puede **importar un GGUF** que ya tengas (se usa donde está, sin
   copiarlo). Cada modelo muestra su licencia antes de descargarse. La **carpeta de los modelos** se
   puede cambiar de sitio (otro disco): al cambiarla se mueven los que ya hay y el activo se apunta
   a su nueva ruta.

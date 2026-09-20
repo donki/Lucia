@@ -33,6 +33,8 @@ public partial class App : Application
         var window = new MainWindow();
         MainWindow = window;
         window.Show();
+        // Una descarga que quedo a medias al cerrar se retoma sola (el .part sigue en la carpeta de modelos).
+        window.Dispatcher.BeginInvoke(ModelDownloads.ResumePending, System.Windows.Threading.DispatcherPriority.ApplicationIdle);   // tambien con --tray, que no llega a Loaded
         // --tray (arranque con Windows): escondida en el area de notificacion desde el principio.
         if (e.Args.Contains("--tray"))
             window.Dispatcher.BeginInvoke(() => window.Tray?.HideToTray(), System.Windows.Threading.DispatcherPriority.Loaded);
@@ -59,6 +61,11 @@ public partial class App : Application
                 // Prueba de una herramienta sin modelo: --tool read_file {"path":"x"} (con --auto no pregunta)
                 var name = e.Args[++i]; var json = e.Args[++i];
                 window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => window.RunToolForTest(name, json), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }
+            else if (e.Args[i] == "--search" && i + 1 < e.Args.Length)
+            {
+                var query = e.Args[++i];
+                window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => window.OpenSettingsForTest().SearchForTest(query), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             }
             else if (e.Args[i] == "--about")
                 window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => new AboutWindow { Owner = window }.Show(), System.Windows.Threading.DispatcherPriority.ApplicationIdle);

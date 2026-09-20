@@ -19,7 +19,7 @@ public partial class SettingsWindow : Window
         Loc.LanguageChanged += ApplyTexts;
         ModelDownloads.Changed += PaintDownload;
         ModelDownloads.Finished += OnDownloadFinished;
-        Closed += (_, _) => { Loc.LanguageChanged -= ApplyTexts; ModelDownloads.Changed -= PaintDownload; ModelDownloads.Finished -= OnDownloadFinished; };
+        Closed += (_, _) => { Loc.LanguageChanged -= ApplyTexts; ModelDownloads.Changed -= PaintDownload; ModelDownloads.Finished -= OnDownloadFinished; _search?.Cancel(); };
         ApplyTexts();
         PaintDownload();
     }
@@ -39,6 +39,9 @@ public partial class SettingsWindow : Window
         ModelsFolderHint.Text = Loc.Get("ModelsFolderHint");
         CancelDownloadButton.ToolTip = Loc.Get("ModelCancel");
         InstalledLabel.Text = Loc.Get("ModelsInstalled");
+        SearchLabel.Text = Loc.Get("SearchHf");
+        SearchBox.ToolTip = SearchButton.ToolTip = Loc.Get("SearchHfTip");
+        if (_hits is null) SearchHint.Text = Loc.Get("SearchHfHint");
         InstructionsTitle.Text = Loc.Get("InstructionsTitle");
         InstructionsHint.Text = Loc.Get("InstructionsHint");
         InstructionsBox.Text = s.Instructions;
@@ -109,11 +112,83 @@ public partial class SettingsWindow : Window
         var recommended = ModelCatalog.Recommended(pc);
         foreach (var model in ModelCatalog.Fitting(pc.RamBytes))
             CatalogList.Children.Add(CatalogRow(model, ModelCatalog.FitOf(model, pc), model == recommended, s.ModelName == model.Name || installed.Any(i => i.Name == model.Name)));
+        if (_hits is not null) PaintSearch();
         InstalledList.Children.Clear();
         InstalledLabel.Visibility = installed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         foreach (var model in installed)
             InstalledList.Children.Add(InstalledRow(model, string.Equals(s.ModelPath, model.Path, StringComparison.OrdinalIgnoreCase)));
     }
+
+    // ------------------------------------------------------------------ buscador de Hugging Face
+
+    private List<HuggingFace.Hit>? _hits;
+    private CancellationTokenSource? _search;
+
+    private void OnSearchKey(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter) { e.Handled = true; OnSearchModels(sender, e); }
+    }
+
+    private async void OnSearchModels(object sender, RoutedEventArgs e) => await SearchAsync();
+
+    private async Task SearchAsync()
+    {
+        var query = SearchBox.Text.Trim();
+        if (query.Length == 0) return;
+        _search?.Cancel();
+        _search = new CancellationTokenSource();
+        var token = _search.Token;
+        SearchButton.IsEnabled = false;
+        SearchHint.Text = Loc.Get("SearchHfSearching");
+        SearchList.Children.Clear();
+        try
+        {
+            _hits = await HuggingFace.SearchAsync(query, _pc ??= PcProfile.Detect(App.Engine.Accelerator), token);
+            PaintSearch();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            SearchHint.Text = Loc.Format("SearchHfError", ex.Message);
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested) SearchButton.IsEnabled = true;
+        }
+    }
+
+    public async void SearchForTest(string query)
+    {
+        SearchBox.Text = query;
+        await SearchAsync();
+        foreach (var h in _hits ?? [])
+            EngineHost.Log($"HF {ModelCatalog.FitOf(h.Model, _pc!)} {h.Model.Name} | {h.Model.Repo} | {h.FileName} | {Human(h.Model.ApproxBytes)} | {h.Model.License} | {h.Downloads} desc" + (h.Gated ? " | gated" : string.Empty));
+        SearchLabel.BringIntoView();
+    }
+
+    /// <summary>Los resultados, con la misma fila que el catalogo: estrella si es optima, aviso si ira lenta.</summary>
+    private void PaintSearch()
+    {
+        SearchList.Children.Clear();
+        if (_hits is null) return;
+        var pc = _pc ??= PcProfile.Detect(App.Engine.Accelerator);
+        var fitting = _hits.Where(h => ModelCatalog.FitOf(h.Model, pc) != ModelFit.TooBig).ToList();
+        SearchHint.Text = fitting.Count == 0 ? Loc.Get("SearchHfNone") : Loc.Format("SearchHfFound", fitting.Count, _hits.Count - fitting.Count);
+        var installed = ModelCatalog.InstalledFiles();
+        var s = AppSettings.Current;
+        foreach (var hit in fitting)
+        {
+            var extra = $"{hit.Model.Repo} · {hit.FileName} · {Loc.Format("SearchHfStats", HumanCount(hit.Downloads), hit.Likes)}" + (hit.Gated ? " · " + Loc.Get("SearchHfGated") : string.Empty);
+            SearchList.Children.Add(CatalogRow(hit.Model, ModelCatalog.FitOf(hit.Model, pc), false, s.ModelName == hit.Model.Name || installed.Any(i => i.Name == hit.Model.Name), extra));
+        }
+    }
+
+    private static string HumanCount(long n) => n switch
+    {
+        >= 1_000_000 => $"{n / 1_000_000.0:0.#} M",
+        >= 1_000 => $"{n / 1_000.0:0.#} k",
+        _ => n.ToString(),
+    };
 
     /// <summary>Una IA que ya esta en la carpeta: se puede poner en uso o borrar (los GGUF pesan gigas).</summary>
     private UIElement InstalledRow(InstalledModel model, bool active)
@@ -175,7 +250,7 @@ public partial class SettingsWindow : Window
 
     private PcProfile? _pc;
 
-    private UIElement CatalogRow(CatalogModel model, ModelFit fit, bool recommended, bool installed)
+    private UIElement CatalogRow(CatalogModel model, ModelFit fit, bool recommended, bool installed, string? extra = null)
     {
         var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -194,6 +269,8 @@ public partial class SettingsWindow : Window
             ModelFit.Ok => Loc.Get(_pc!.HasUsableGpu ? "FitOkGpu" : "FitOkCpu"),
             _ => Loc.Get("FitSlow"),
         };
+        if (extra is not null)
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = extra, TextTrimming = TextTrimming.CharacterEllipsis });
         text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{Loc.Get(model.Blurb)} · {Loc.Format("ModelSize", Human(model.ApproxBytes))} · {model.License}", TextWrapping = TextWrapping.Wrap });
         text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = fitText, Foreground = fit == ModelFit.Slow ? (Brush)FindResource("Danger") : fit == ModelFit.Optimal ? (Brush)FindResource("Success") : (Brush)FindResource("TextSecondary"), TextWrapping = TextWrapping.Wrap });
         grid.Children.Add(text);

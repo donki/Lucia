@@ -544,7 +544,7 @@ public partial class MainWindow : Window
         OnSend(this, new RoutedEventArgs());
     }
 
-    public void OpenSettingsForTest() => new SettingsWindow { Owner = this }.Show();
+    public SettingsWindow OpenSettingsForTest() { var w = new SettingsWindow { Owner = this }; w.Show(); return w; }
 
     public async void RunToolForTest(string name, string json)
     {

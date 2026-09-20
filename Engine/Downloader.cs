@@ -18,32 +18,58 @@ public static class Downloader
         public double? Fraction => Total is > 0 ? (double)Received / Total : null;
     }
 
-    /// <summary>Baja a un fichero temporal al lado y lo renombra al final: nunca queda un fichero a medias con el nombre bueno.</summary>
+    /// <summary>
+    /// Baja a un fichero temporal al lado y lo renombra al final: nunca queda un fichero a medias con
+    /// el nombre bueno. Si ya hay un .part (la aplicacion se cerro a medias), sigue desde donde iba
+    /// con una peticion Range; si el servidor no lo admite, empieza de cero.
+    /// </summary>
     public static async Task DownloadAsync(string url, string destination, string? sha256, IProgress<Progress>? progress, CancellationToken cancel)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         var temp = destination + ".part";
-        using (var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancel))
+        var already = File.Exists(temp) ? new FileInfo(temp).Length : 0;
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (already > 0)
+            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(already, null);
+        using (var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel))
         {
-            response.EnsureSuccessStatusCode();
-            var total = response.Content.Headers.ContentLength;
-            await using var source = await response.Content.ReadAsStreamAsync(cancel);
-            await using var target = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20, useAsync: true);
-            var buffer = new byte[1 << 20];
-            long received = 0;
-            var lastReport = DateTime.UtcNow;
-            int read;
-            while ((read = await source.ReadAsync(buffer, cancel)) > 0)
+            if (already > 0 && response.StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable)
             {
-                await target.WriteAsync(buffer.AsMemory(0, read), cancel);
-                received += read;
-                if ((DateTime.UtcNow - lastReport).TotalMilliseconds > 150)
+                // El .part ya esta completo o el fichero cambio: se mira el tamaño real y se decide.
+                using var head = await Http.SendAsync(new HttpRequestMessage(HttpMethod.Head, url), cancel);
+                if (!(head.IsSuccessStatusCode && head.Content.Headers.ContentLength == already))
                 {
-                    progress?.Report(new Progress(received, total));
-                    lastReport = DateTime.UtcNow;
+                    File.Delete(temp);
+                    await DownloadAsync(url, destination, sha256, progress, cancel);
+                    return;
                 }
+                progress?.Report(new Progress(already, already));
             }
-            progress?.Report(new Progress(received, total ?? received));
+            else
+            {
+                response.EnsureSuccessStatusCode();
+                var resumed = already > 0 && response.StatusCode == System.Net.HttpStatusCode.PartialContent;
+                if (already > 0) EngineHost.Log(resumed ? $"descarga retomada en el byte {already:N0}: {Path.GetFileName(destination)}" : $"el servidor no admite retomar; se baja de cero: {Path.GetFileName(destination)}");
+                if (!resumed) already = 0;
+                var total = response.Content.Headers.ContentLength is { } len ? len + already : (long?)null;
+                await using var source = await response.Content.ReadAsStreamAsync(cancel);
+                await using var target = new FileStream(temp, resumed ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20, useAsync: true);
+                var buffer = new byte[1 << 20];
+                long received = already;
+                var lastReport = DateTime.UtcNow;
+                int read;
+                while ((read = await source.ReadAsync(buffer, cancel)) > 0)
+                {
+                    await target.WriteAsync(buffer.AsMemory(0, read), cancel);
+                    received += read;
+                    if ((DateTime.UtcNow - lastReport).TotalMilliseconds > 150)
+                    {
+                        progress?.Report(new Progress(received, total));
+                        lastReport = DateTime.UtcNow;
+                    }
+                }
+                progress?.Report(new Progress(received, total ?? received));
+            }
         }
         if (sha256 is not null)
         {

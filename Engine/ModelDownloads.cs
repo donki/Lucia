@@ -32,11 +32,22 @@ public static class ModelDownloads
             return;
         _cancel = new CancellationTokenSource();
         Current = new Status(model, 0, null);
+        var settings = AppSettings.Current;
+        settings.Pending = new PendingDownload { Name = model.Name, Repo = model.Repo, ApproxBytes = model.ApproxBytes, License = model.License, Blurb = model.Blurb };
+        settings.Save();
         Raise(Changed);
         _ = RunAsync(model, _cancel.Token);
     }
 
     public static void Cancel() => _cancel?.Cancel();
+
+    /// <summary>Si la aplicacion se cerro con una descarga a medias, se retoma donde iba (el .part se reutiliza).</summary>
+    public static void ResumePending()
+    {
+        var p = AppSettings.Current.Pending;
+        if (p is null || Busy) return;
+        Start(new CatalogModel(p.Name, p.Repo, p.ApproxBytes, p.License, p.Blurb));
+    }
 
     private static async Task RunAsync(CatalogModel model, CancellationToken cancel)
     {
@@ -66,8 +77,27 @@ public static class ModelDownloads
             _cancel?.Dispose();
             _cancel = null;
             Current = null;
+            // Acabada o cancelada a mano: ya no queda pendiente (al cancelar se tira el .part).
+            // Un error de red la deja pendiente para retomarla en el siguiente arranque.
+            if (error is null || error is OperationCanceledException)
+            {
+                if (error is OperationCanceledException) DeleteParts();
+                AppSettings.Current.Pending = null;
+                AppSettings.Current.Save();
+            }
         }
         Raise(() => Finished?.Invoke(model, error));
+    }
+
+    private static void DeleteParts()
+    {
+        try
+        {
+            if (!System.IO.Directory.Exists(Paths.Models)) return;
+            foreach (var part in System.IO.Directory.GetFiles(Paths.Models, "*.gguf.part"))
+                System.IO.File.Delete(part);
+        }
+        catch (Exception) { }
     }
 
     private static void Raise(Action? action)
