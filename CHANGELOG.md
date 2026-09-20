@@ -1,5 +1,14 @@
 # Changelog — sOC Lucia
 
+## 2026.9.20.6 — Modo y modelo a mano en el chat
+
+- Encima del redactor, un selector **Preguntas / Agente** por conversación (antes era un botón de
+  terminal sin texto): en *Preguntas* la IA solo responde; en *Agente* usa el PC con permisos.
+- Al lado, un desplegable con las **IA instaladas** para cambiar de modelo sin pasar por Ajustes.
+- Al abrir la aplicación se empieza con una **conversación nueva**; las anteriores siguen en la lista.
+- Ajustes: «Tamaño de la letra del chat» con el valor en px y una explicación (solo cambia el texto de
+  la conversación).
+
 ## 2026.9.20.5 — Permisos por recurso y VS Code con contexto
 
 - **La IA puede usar el PC pidiendo permiso.** En modo trabajo, además de órdenes de PowerShell,

@@ -86,8 +86,23 @@
                 </DockPanel>
             </Border>
 
-            <!-- Redactor -->
-            <Border DockPanel.Dock="Bottom" Padding="16,8,16,10">
+            <!-- Redactor: encima, el modo de la conversacion (preguntas o agente) -->
+            <Border DockPanel.Dock="Bottom" Padding="16,4,16,10">
+                <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                <Border HorizontalAlignment="Left" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource Separator}" BorderThickness="1" CornerRadius="10" Padding="2" Margin="0,0,0,6">
+                    <StackPanel Orientation="Horizontal">
+                        <ToggleButton x:Name="AskModeButton" Style="{StaticResource SegmentButton}" Click="OnAskMode">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8BD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" /><TextBlock x:Name="AskModeText" VerticalAlignment="Center" /></StackPanel>
+                        </ToggleButton>
+                        <ToggleButton x:Name="WorkModeButton" Style="{StaticResource SegmentButton}" Click="OnWorkModeToggled">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE756;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" /><TextBlock x:Name="WorkModeText" VerticalAlignment="Center" /></StackPanel>
+                        </ToggleButton>
+                    </StackPanel>
+                </Border>
+                <!-- La IA de esta sesion: las instaladas, para cambiar sin pasar por Ajustes -->
+                <ComboBox x:Name="ModelCombo" Style="{StaticResource DeviceCombo}" Height="34" MinWidth="180" Margin="10,0,0,6" VerticalAlignment="Center" SelectionChanged="OnModelPicked" />
+                </StackPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -100,11 +115,11 @@
                                  PreviewKeyDown="OnComposerKey" />
                     </Border>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="8,0,0,0">
-                        <ToggleButton x:Name="WorkModeButton" Style="{StaticResource ToggleIconButton}" Content="&#xE756;" Width="40" Height="40" Click="OnWorkModeToggled" />
                         <Button x:Name="SendButton" Style="{StaticResource IconButton}" Content="&#xE724;" Width="44" Height="40" Click="OnSend" />
                         <Button x:Name="StopButton" Style="{StaticResource DangerIconButton}" Content="&#xE71A;" Width="44" Height="40" Click="OnStop" Visibility="Collapsed" />
                     </StackPanel>
                 </Grid>
+                </StackPanel>
             </Border>
 
             <!-- Mensajes -->

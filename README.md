@@ -28,12 +28,14 @@ esa misma IA.
   puede cambiar de sitio (otro disco): al cambiarla se mueven los que ya hay y el activo se apunta
   a su nueva ruta.
 - **Conversaciones** guardadas en el PC (`%LOCALAPPDATA%\sOCLucia\threads`), con renombrar y
-  borrar en cada fila. Respuestas en streaming, Markdown (títulos, listas, negrita, bloques de
-  código con botón de copiar), botón de parar; cada pregunta se puede copiar, editar y reenviar.
+  borrar en cada fila; al abrir se empieza una nueva. Respuestas en streaming, Markdown (títulos,
+  listas, negrita, bloques de código con botón de copiar), botón de parar; cada pregunta se puede
+  copiar, editar y reenviar. Encima del redactor, el modo (Preguntas/Agente) y la IA en uso, que se
+  cambia entre las instaladas sin pasar por Ajustes.
 - **Instrucciones fijas** (el «system prompt»), opción de dejar que el modelo **razone** antes de
   responder (el razonamiento sale plegado), tamaño de letra, español/inglés, tema claro/oscuro
   siguiendo a Windows.
-- **Modo trabajo (cowork) con permisos.** Con el botón de terminal junto a Enviar, la IA puede
+- **Modo agente (cowork) con permisos.** Con «Agente» elegido encima del redactor (por conversación; «Preguntas» es solo responder), la IA puede
   usar el PC a través de herramientas (*tool calling* de llama.cpp): **órdenes de PowerShell**,
   **leer/listar/buscar ficheros**, **escribir ficheros**, **descargar de internet**,
   **portapapeles** y **abrir cosas** con su programa habitual, más los datos básicos del PC. Cada

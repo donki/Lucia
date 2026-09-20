@@ -17,7 +17,7 @@ public partial class App : Application
     private void OnStartup(object sender, StartupEventArgs e)
     {
         // Una sola instancia: dos aplicaciones cargarian el modelo dos veces.
-        _single = new Mutex(true, "sOCLucia.SingleInstance", out var first);
+        _single = new Mutex(true, "sOCLucia.SingleInstance." + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(Paths.Root.ToLowerInvariant())))[..12], out var first);
         if (!first)
         {
             Shutdown();

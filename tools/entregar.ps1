@@ -28,7 +28,8 @@ $v = [regex]::Replace($v, '"version": "[^"]+"', "`"version`": `"$semver`"", 1)
 [IO.File]::WriteAllText('vscode\package.json', $v)
 
 # 2. Exe + MSIX (el script de MSIX publica el exe autocontenido de un solo fichero).
-Get-Process sOCLucia -ErrorAction SilentlyContinue | Stop-Process -Force
+# Solo se paran las instancias de esta carpeta (pruebas); la que Josep tenga abierta desde OneDrive sigue.
+Get-Process sOCLucia -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$raiz*" } | Stop-Process -Force
 .\tools\empaquetar-msix.ps1 2>&1 | Select-String "Paquete:|error|fall"
 $exe = 'bin\Release\net10.0-windows\win-x64\publish\sOCLucia.exe'
 if (-not (Test-Path $exe)) { throw 'No hay exe publicado.' }
@@ -45,7 +46,12 @@ if (-not $vsix) { throw 'No hay .vsix.' }
 $d = 'C:\ID\OneDrive\Lucia'
 New-Item -ItemType Directory -Force $d | Out-Null
 Get-ChildItem $d -Include *.msix, *.vsix -Recurse | Remove-Item -Force
-Copy-Item $exe $d -Force
+try { Copy-Item $exe $d -Force -ErrorAction Stop; Remove-Item "$d\sOCLucia-nueva.exe" -ErrorAction SilentlyContinue }
+catch {
+    # El exe de OneDrive esta en uso (la aplicacion abierta): se deja al lado y Josep lo renombra al cerrarla.
+    Copy-Item $exe "$d\sOCLucia-nueva.exe" -Force
+    Write-Warning "sOCLucia.exe estaba en uso: la version nueva queda como sOCLucia-nueva.exe"
+}
 Copy-Item bin\sOCLucia.msix "$d\sOCLucia-$msixVer.msix" -Force
 Copy-Item $vsix.FullName $d -Force
 $leeme = @"
@@ -64,6 +70,11 @@ Antes se llamaba sOC AI Chat
 ----------------------------
 Hasta la 2026.9.20.3 el exe era sOCAIChat.exe. Cierralo si lo tienes abierto y abre sOCLucia.exe:
 tus conversaciones, ajustes, motor e IA se trasladan solos la primera vez.
+
+Si hay un sOCLucia-nueva.exe
+----------------------------
+Es que la aplicacion estaba abierta al copiar la version nueva: cierrala, borra sOCLucia.exe y
+renombra sOCLucia-nueva.exe a sOCLucia.exe.
 
 Como ejecutarlo
 ---------------

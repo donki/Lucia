@@ -207,6 +207,34 @@
                 </Setter>
             </Style>
 
+            <!-- Selector de modo del chat (Preguntas / Agente): dos segmentos, el activo relleno de marca. -->
+            <Style x:Key="SegmentButton" TargetType="ToggleButton" BasedOn="{StaticResource ToggleIconButton}">
+                <Setter Property="FontFamily" Value="Segoe UI" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Width" Value="Auto" />
+                <Setter Property="Height" Value="30" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="Padding" Value="12,0" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ToggleButton">
+                            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Primary}" />
+                                    <Setter Property="Foreground" Value="{DynamicResource OnPrimary}" />
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Opacity" Value="0.85" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!--
                 Desplegable de dispositivos con plantilla propia. La de fabrica de WPF pinta el
                 desplegable y la lista en blanco pase lo que pase: en tema oscuro salia una caja

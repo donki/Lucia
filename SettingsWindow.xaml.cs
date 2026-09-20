@@ -48,6 +48,8 @@ public partial class SettingsWindow : Window
         ThinkingHint.Text = Loc.Get("ThinkingHint");
         FontSizeTitle.Text = Loc.Get("FontSizeTitle");
         FontSizeSlider.Value = s.FontSize;
+        FontSizeValue.Text = $"{s.FontSize:0} px";
+        FontSizeHint.Text = Loc.Get("FontSizeHint");
         DoorTitle.Text = Loc.Get("DoorTitle");
         DoorHint.Text = Loc.Get("DoorHint");
         DoorCheck.Content = Loc.Get("DoorEnable");
@@ -331,6 +333,7 @@ public partial class SettingsWindow : Window
         if (!IsLoaded) return;
         AppSettings.Current.FontSize = FontSizeSlider.Value;
         AppSettings.Current.Save();
+        FontSizeValue.Text = $"{FontSizeSlider.Value:0} px";
     }
 
     // ------------------------------------------------------------------ puerta de editores

@@ -56,8 +56,10 @@
                         <TextBlock x:Name="ThinkingHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
                         <DockPanel Margin="0,12,0,0">
                             <TextBlock x:Name="FontSizeTitle" Style="{StaticResource BodyText}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="FontSizeValue" Style="{StaticResource HintText}" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
                             <Slider x:Name="FontSizeSlider" Minimum="12" Maximum="20" TickFrequency="1" IsSnapToTickEnabled="True" Width="180" Margin="12,0,0,0" HorizontalAlignment="Left" ValueChanged="OnFontSizeChanged" />
                         </DockPanel>
+                        <TextBlock x:Name="FontSizeHint" Style="{StaticResource HintText}" Margin="0,2,0,0" />
                     </StackPanel>
                 </Border>
 

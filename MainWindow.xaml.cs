@@ -37,10 +37,7 @@ public partial class MainWindow : Window
         ModelDownloads.Changed += PaintEngineStatus;
         ModelDownloads.Finished += (_, error) => { if (error is null) ModelChanged(); else PaintEngineStatus(); };
         RefreshThreadList();
-        if (_threads.Count > 0)
-            ThreadList.SelectedIndex = 0;
-        else
-            ShowThread(null);
+        ShowThread(null);   // al abrir, conversacion nueva; las anteriores quedan en la lista
         Loaded += (_, _) =>
         {
             Composer.Focus();
@@ -63,6 +60,11 @@ public partial class MainWindow : Window
         SendButton.ToolTip = Loc.Get("Send");
         StopButton.ToolTip = Loc.Get("Stop");
         WorkModeButton.ToolTip = Loc.Get("WorkMode");
+        WorkModeText.Text = Loc.Get("AgentMode");
+        AskModeButton.ToolTip = Loc.Get("AskModeHint");
+        AskModeText.Text = Loc.Get("AskMode");
+        PaintMode();
+        PaintModels();
         EmptyTitle.Text = Loc.Get("EmptyTitle");
         EmptyHint.Text = Loc.Get("EmptyHint");
         Composer.ToolTip = Loc.Get("ComposerHint");
@@ -118,9 +120,47 @@ public partial class MainWindow : Window
     /// <summary>Tras cambiar de modelo en Ajustes: el motor se reinicia con el nuevo en la siguiente pregunta, y de paso se calienta.</summary>
     public void ModelChanged()
     {
+        PaintModels();
         PaintEngineStatus();
         if (AppSettings.Current.HasModel)
             _ = WarmUpAsync();
+    }
+
+    private sealed record ModelRow(string Name, string Path, string? License)
+    {
+        public override string ToString() => Name;
+    }
+
+    private bool _paintingModels;
+
+    /// <summary>Las IA instaladas (y la activa aunque este fuera de la carpeta), con la activa seleccionada.</summary>
+    private void PaintModels()
+    {
+        _paintingModels = true;
+        try
+        {
+            var s = AppSettings.Current;
+            var rows = ModelCatalog.InstalledFiles().Select(m => new ModelRow(m.Name, m.Path, m.License)).ToList();
+            if (s.HasModel && !rows.Any(r => string.Equals(r.Path, s.ModelPath, StringComparison.OrdinalIgnoreCase)))
+                rows.Insert(0, new ModelRow(s.ModelName ?? System.IO.Path.GetFileName(s.ModelPath!), s.ModelPath!, s.ModelLicense));
+            ModelCombo.ItemsSource = rows;
+            ModelCombo.SelectedItem = rows.FirstOrDefault(r => string.Equals(r.Path, s.ModelPath, StringComparison.OrdinalIgnoreCase));
+            ModelCombo.ToolTip = Loc.Get("ModelPick");
+            ModelCombo.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        finally { _paintingModels = false; }
+    }
+
+    private void OnModelPicked(object sender, SelectionChangedEventArgs e)
+    {
+        if (_paintingModels || ModelCombo.SelectedItem is not ModelRow row) return;
+        var s = AppSettings.Current;
+        if (string.Equals(row.Path, s.ModelPath, StringComparison.OrdinalIgnoreCase)) return;
+        s.ModelPath = row.Path;
+        s.ModelName = row.Name;
+        s.ModelLicense = row.License;
+        s.Save();
+        ModelChanged();
     }
 
     private static string Human(long bytes) => bytes switch
@@ -166,7 +206,7 @@ public partial class MainWindow : Window
     private void ShowThread(ChatThread? thread)
     {
         _current = thread;
-        WorkModeButton.IsChecked = thread?.WorkMode ?? _pendingWorkMode;
+        PaintMode(thread?.WorkMode ?? _pendingWorkMode);
         Messages.Children.Clear();
         EmptyState.Visibility = thread is null || thread.Messages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (thread is null)
@@ -183,15 +223,28 @@ public partial class MainWindow : Window
         ScrollToEnd();
     }
 
-    private void OnWorkModeToggled(object sender, RoutedEventArgs e)
+    private void OnWorkModeToggled(object sender, RoutedEventArgs e) => SetMode(agent: true);
+
+    private void OnAskMode(object sender, RoutedEventArgs e) => SetMode(agent: false);
+
+    /// <summary>El modo es de la conversacion (o de la que se va a crear): preguntas, o agente con herramientas y permisos.</summary>
+    private void SetMode(bool agent)
     {
+        PaintMode(agent);
         if (_current is null)
         {
-            _pendingWorkMode = WorkModeButton.IsChecked == true;
+            _pendingWorkMode = agent;
             return;
         }
-        _current.WorkMode = WorkModeButton.IsChecked == true;
+        _current.WorkMode = agent;
         ThreadStore.Save(_current);
+    }
+
+    private void PaintMode(bool? agent = null)
+    {
+        var a = agent ?? (_current?.WorkMode ?? _pendingWorkMode);
+        WorkModeButton.IsChecked = a;
+        AskModeButton.IsChecked = !a;
     }
 
     private bool _pendingWorkMode;
@@ -504,7 +557,7 @@ public partial class MainWindow : Window
     private bool _pendingAutoApprove;
     public void SetPendingWorkMode(bool auto)
     {
-        _pendingWorkMode = true; _pendingAutoApprove = auto; WorkModeButton.IsChecked = true;
+        _pendingWorkMode = true; _pendingAutoApprove = auto; PaintMode(true);
         if (_current is not null) { _current.WorkMode = true; _current.AutoApprove = auto; }
     }
 #endif
