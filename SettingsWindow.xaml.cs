@@ -39,6 +39,8 @@ public partial class SettingsWindow : Window
         ModelsFolderHint.Text = Loc.Get("ModelsFolderHint");
         CancelDownloadButton.ToolTip = Loc.Get("ModelCancel");
         InstalledLabel.Text = Loc.Get("ModelsInstalled");
+        CatalogLabel.Text = Loc.Get("CatalogLabel");
+        OnlyGgufCheck.Content = Loc.Get("SearchOnlyGguf");
         SearchLabel.Text = Loc.Get("SearchHf");
         SearchBox.ToolTip = SearchButton.ToolTip = Loc.Get("SearchHfTip");
         if (_hits is null) SearchHint.Text = Loc.Get("SearchHfHint");
@@ -49,6 +51,9 @@ public partial class SettingsWindow : Window
         ThinkingCheck.Content = Loc.Get("ThinkingTitle");
         ThinkingCheck.IsChecked = s.Thinking;
         ThinkingHint.Text = Loc.Get("ThinkingHint");
+        InternetCheck.Content = Loc.Get("InternetTitle");
+        InternetCheck.IsChecked = s.InternetAccess;
+        InternetHint.Text = Loc.Get("InternetHint");
         FontSizeTitle.Text = Loc.Get("FontSizeTitle");
         FontSizeSlider.Value = s.FontSize;
         FontSizeValue.Text = $"{s.FontSize:0} px";
@@ -72,6 +77,20 @@ public partial class SettingsWindow : Window
         PermTitle.Text = Loc.Get("PermSection");
         PermHint.Text = Loc.Get("PermSectionHint");
         PaintPermissions();
+        DocsTitle.Text = Loc.Get("DocsTitle");
+        DocsHint.Text = Loc.Get("DocsHint");
+        DocsFolderButton.ToolTip = Loc.Get("DocsPick");
+        DocsOpenButton.ToolTip = Loc.Get("DocsOpen");
+        PaintDocs();
+        TasksTitle.Text = Loc.Get("TasksTitle");
+        TasksHint.Text = Loc.Get("TasksHint");
+        PaintTasks();
+        MemoryTitle.Text = Loc.Get("MemoryTitle");
+        MemoryHint.Text = Loc.Get("MemoryHint");
+        MemoryCheck.Content = Loc.Get("MemoryEnable");
+        MemoryCheck.IsChecked = s.MemoryEnabled;
+        MemoryClearButton.Content = Loc.Get("MemoryClear");
+        PaintMemory();
         WindowsTitle.Text = Loc.Get("WindowsSection");
         TrayCheck.Content = Loc.Get("TrayOnMinimize");
         TrayCheck.IsChecked = s.TrayOnMinimize;
@@ -143,7 +162,7 @@ public partial class SettingsWindow : Window
         SearchList.Children.Clear();
         try
         {
-            _hits = await HuggingFace.SearchAsync(query, _pc ??= PcProfile.Detect(App.Engine.Accelerator), token);
+            _hits = await HuggingFace.SearchAsync(query, _pc ??= PcProfile.Detect(App.Engine.Accelerator), OnlyGgufCheck.IsChecked == true, token);
             PaintSearch();
         }
         catch (OperationCanceledException) { }
@@ -159,10 +178,11 @@ public partial class SettingsWindow : Window
 
     public async void SearchForTest(string query)
     {
+        if (query.StartsWith('*')) { OnlyGgufCheck.IsChecked = false; query = query[1..]; }
         SearchBox.Text = query;
         await SearchAsync();
         foreach (var h in _hits ?? [])
-            EngineHost.Log($"HF {ModelCatalog.FitOf(h.Model, _pc!)} {h.Model.Name} | {h.Model.Repo} | {h.FileName} | {Human(h.Model.ApproxBytes)} | {h.Model.License} | {h.Downloads} desc" + (h.Gated ? " | gated" : string.Empty));
+            EngineHost.Log($"HF {(h.Runnable ? ModelCatalog.FitOf(h.Model, _pc!).ToString() : "no:" + h.Kind)} {h.Model.Name} | {h.Model.Repo} | {h.FileName} | {Human(h.Model.ApproxBytes)} | {h.Model.License} | {h.Downloads} desc" + (h.Gated ? " | gated" : string.Empty));
         SearchLabel.BringIntoView();
     }
 
@@ -172,14 +192,40 @@ public partial class SettingsWindow : Window
         SearchList.Children.Clear();
         if (_hits is null) return;
         var pc = _pc ??= PcProfile.Detect(App.Engine.Accelerator);
-        var fitting = _hits.Where(h => ModelCatalog.FitOf(h.Model, pc) != ModelFit.TooBig).ToList();
-        SearchHint.Text = fitting.Count == 0 ? Loc.Get("SearchHfNone") : Loc.Format("SearchHfFound", fitting.Count, _hits.Count - fitting.Count);
+        var runnable = _hits.Count(h => h.Runnable);
+        var optimal = _hits.Count(h => h.Runnable && ModelCatalog.FitOf(h.Model, pc) == ModelFit.Optimal);
+        SearchHint.Text = _hits.Count == 0 ? Loc.Get("SearchHfNone") : Loc.Format("SearchHfFound", _hits.Count, optimal, runnable);
         var installed = ModelCatalog.InstalledFiles();
         var s = AppSettings.Current;
-        foreach (var hit in fitting)
+        foreach (var hit in _hits)
         {
-            var extra = $"{hit.Model.Repo} · {hit.FileName} · {Loc.Format("SearchHfStats", HumanCount(hit.Downloads), hit.Likes)}" + (hit.Gated ? " · " + Loc.Get("SearchHfGated") : string.Empty);
-            SearchList.Children.Add(CatalogRow(hit.Model, ModelCatalog.FitOf(hit.Model, pc), false, s.ModelName == hit.Model.Name || installed.Any(i => i.Name == hit.Model.Name), extra));
+            var stats = Loc.Format("SearchHfStats", HumanCount(hit.Downloads), hit.Likes) + (hit.Gated ? " · " + Loc.Get("SearchHfGated") : string.Empty);
+            if (hit.Runnable)
+            {
+                SearchList.Children.Add(CatalogRow(hit.Model, ModelCatalog.FitOf(hit.Model, pc), false, s.ModelName == hit.Model.Name || installed.Any(i => i.Name == hit.Model.Name), $"{hit.Model.Repo} · {hit.FileName} · {stats}"));
+                continue;
+            }
+            // No es un GGUF de un fichero: se enseña que es y se puede abrir en el navegador, pero no se instala.
+            var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold, Text = hit.Model.Name, Opacity = 0.8 });
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{hit.Model.Repo} · {stats}", TextTrimming = TextTrimming.CharacterEllipsis });
+            var why = hit.Kind switch
+            {
+                "gguf" or "gguf-sharded" => Loc.Get("SearchNotSingleGguf"),
+                "" => Loc.Get("SearchNotGguf"),
+                _ => Loc.Format("SearchNotGgufKind", hit.Kind),
+            };
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = why, TextWrapping = TextWrapping.Wrap });
+            grid.Children.Add(text);
+            var open = new Button { Style = (Style)FindResource("GhostIconButton"), Content = "\uE774", ToolTip = Loc.Get("SearchOpenHf"), VerticalAlignment = VerticalAlignment.Center };
+            var url = hit.Url;
+            open.Click += (_, _) => Open(url);
+            Grid.SetColumn(open, 1);
+            grid.Children.Add(open);
+            SearchList.Children.Add(grid);
         }
     }
 
@@ -267,22 +313,30 @@ public partial class SettingsWindow : Window
         {
             ModelFit.Optimal => Loc.Get(_pc!.HasUsableGpu ? "FitOptimalGpu" : "FitOptimalCpu"),
             ModelFit.Ok => Loc.Get(_pc!.HasUsableGpu ? "FitOkGpu" : "FitOkCpu"),
+            ModelFit.TooBig => Loc.Get("FitTooBig"),
             _ => Loc.Get("FitSlow"),
         };
         if (extra is not null)
             text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = extra, TextTrimming = TextTrimming.CharacterEllipsis });
         text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{Loc.Get(model.Blurb)} · {Loc.Format("ModelSize", Human(model.ApproxBytes))} · {model.License}", TextWrapping = TextWrapping.Wrap });
-        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = fitText, Foreground = fit == ModelFit.Slow ? (Brush)FindResource("Danger") : fit == ModelFit.Optimal ? (Brush)FindResource("Success") : (Brush)FindResource("TextSecondary"), TextWrapping = TextWrapping.Wrap });
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = fitText, Foreground = fit is ModelFit.Slow or ModelFit.TooBig ? (Brush)FindResource("Danger") : fit == ModelFit.Optimal ? (Brush)FindResource("Success") : (Brush)FindResource("TextSecondary"), TextWrapping = TextWrapping.Wrap });
         grid.Children.Add(text);
-        var button = new Button
+        Button button;
+        if (installed)
         {
-            Style = (Style)FindResource(installed ? "GhostIconButton" : "IconButton"),
-            Content = installed ? "" : "",
-            ToolTip = installed ? Loc.Get("ModelInstalled") : Loc.Get("ModelInstall"),
-            IsEnabled = !installed && !ModelDownloads.Busy,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        button.Click += (_, _) => { ModelDownloads.Start(model); PaintModel(); };
+            // Ya esta en el disco: el boton es borrarla (los GGUF pesan gigas).
+            button = new Button { Style = (Style)FindResource("DangerIconButton"), Content = "\uE74D", ToolTip = Loc.Get("ModelDelete"), IsEnabled = !ModelDownloads.Busy, VerticalAlignment = VerticalAlignment.Center };
+            button.Click += (_, _) =>
+            {
+                var file = ModelCatalog.InstalledFiles().FirstOrDefault(i => i.Name == model.Name);
+                if (file is not null) DeleteModel(file);
+            };
+        }
+        else
+        {
+            button = new Button { Style = (Style)FindResource("IconButton"), Content = "\uE896", ToolTip = fit == ModelFit.TooBig ? Loc.Get("FitTooBig") : Loc.Get("ModelInstall"), IsEnabled = fit != ModelFit.TooBig && !ModelDownloads.Busy, VerticalAlignment = VerticalAlignment.Center };
+            button.Click += (_, _) => { ModelDownloads.Start(model); PaintModel(); };
+        }
         Grid.SetColumn(button, 1);
         grid.Children.Add(button);
         return grid;
@@ -399,6 +453,12 @@ public partial class SettingsWindow : Window
         s.Save();
     }
 
+    private void OnInternetChanged(object sender, RoutedEventArgs e)
+    {
+        AppSettings.Current.InternetAccess = InternetCheck.IsChecked == true;
+        AppSettings.Current.Save();
+    }
+
     private void OnThinkingChanged(object sender, RoutedEventArgs e)
     {
         AppSettings.Current.Thinking = ThinkingCheck.IsChecked == true;
@@ -513,6 +573,7 @@ public partial class SettingsWindow : Window
         var s = AppSettings.Current;
         foreach (var resource in Enum.GetValues<Resource>())
         {
+            if (resource == Resource.Internet) continue;   // lo manda la casilla «acceder a internet» de arriba
             var grid = new Grid { Margin = new Thickness(0, 3, 0, 3) };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -560,6 +621,99 @@ public partial class SettingsWindow : Window
     private void OnOpenLog(object sender, RoutedEventArgs e) => Open(Paths.EngineLog);
 
     private void OnOpenData(object sender, RoutedEventArgs e) => Open(Paths.Root);
+
+    // ------------------------------------------------------------------ documentos y memoria
+
+    private void PaintDocs()
+    {
+        DocsFolderBox.Text = DocumentIndex.Folder;
+        var n = DocumentIndex.Files().Count;
+        DocsCount.Text = Directory.Exists(DocumentIndex.Folder) ? Loc.Format("DocsCount", n) : Loc.Get("DocsMissing");
+    }
+
+    private void OnPickDocsFolder(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { InitialDirectory = Directory.Exists(DocumentIndex.Folder) ? DocumentIndex.Folder : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), Title = Loc.Get("DocsPick") };
+        if (dialog.ShowDialog(this) != true) return;
+        AppSettings.Current.DocumentsFolder = string.Equals(Path.GetFullPath(dialog.FolderName), Path.GetFullPath(DocumentIndex.DefaultFolder), StringComparison.OrdinalIgnoreCase) ? null : dialog.FolderName;
+        AppSettings.Current.Save();
+        PaintDocs();
+    }
+
+    private void OnOpenDocs(object sender, RoutedEventArgs e)
+    {
+        try { Directory.CreateDirectory(DocumentIndex.Folder); } catch (Exception) { }
+        Open(DocumentIndex.Folder);
+        PaintDocs();
+    }
+
+    private void PaintTasks()
+    {
+        TasksList.Children.Clear();
+        var tasks = Scheduler.All;
+        TasksEmpty.Text = tasks.Count == 0 ? Loc.Get("TasksEmpty") : string.Empty;
+        TasksEmpty.Visibility = tasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var task in tasks)
+        {
+            var grid = new Grid { Margin = new Thickness(0, 3, 0, 3) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var on = new CheckBox { Style = (Style)FindResource("Check"), IsChecked = task.Enabled, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), ToolTip = Loc.Get("TaskEnabled") };
+            var id = task.Id;
+            on.Click += (_, _) => { Scheduler.SetEnabled(id, on.IsChecked == true); PaintTasks(); };
+            grid.Children.Add(on);
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), Text = task.Title, FontWeight = FontWeights.SemiBold });
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = task.Prompt, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 36 });
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = task.Describe(System.Globalization.CultureInfo.CurrentUICulture) + (task.Enabled ? " · " + Loc.Format("TaskNext", task.NextRun.LocalDateTime.ToString("g")) : string.Empty) + (task.LastRun is { } l ? " · " + Loc.Format("TaskLast", l.LocalDateTime.ToString("g")) : string.Empty) });
+            Grid.SetColumn(text, 1);
+            grid.Children.Add(text);
+            var delete = new Button { Style = (Style)FindResource("DangerIconButton"), Content = "\uE74D", ToolTip = Loc.Get("TaskDelete"), VerticalAlignment = VerticalAlignment.Center };
+            delete.Click += (_, _) => { Scheduler.Remove(id); PaintTasks(); };
+            Grid.SetColumn(delete, 2);
+            grid.Children.Add(delete);
+            TasksList.Children.Add(grid);
+        }
+    }
+
+    private void PaintMemory()
+    {
+        MemoryList.Children.Clear();
+        var facts = UserMemory.All;
+        MemoryEmpty.Text = facts.Count == 0 ? Loc.Get("MemoryEmpty") : string.Empty;
+        MemoryEmpty.Visibility = facts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        MemoryClearButton.IsEnabled = facts.Count > 0;
+        foreach (var fact in facts)
+        {
+            var grid = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), Text = fact.Text, TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = fact.At.LocalDateTime.ToString("g") });
+            grid.Children.Add(text);
+            var delete = new Button { Style = (Style)FindResource("GhostIconButton"), Content = "\uE74D", ToolTip = Loc.Get("MemoryForget"), VerticalAlignment = VerticalAlignment.Center };
+            var id = fact.Id;
+            delete.Click += (_, _) => { UserMemory.Remove(id); PaintMemory(); };
+            Grid.SetColumn(delete, 1);
+            grid.Children.Add(delete);
+            MemoryList.Children.Add(grid);
+        }
+    }
+
+    private void OnMemoryChanged(object sender, RoutedEventArgs e)
+    {
+        AppSettings.Current.MemoryEnabled = MemoryCheck.IsChecked == true;
+        AppSettings.Current.Save();
+    }
+
+    private void OnClearMemory(object sender, RoutedEventArgs e)
+    {
+        if (!PromptWindow.Confirm(this, Loc.Get("MemoryTitle"), Loc.Get("MemoryClearConfirm"))) return;
+        UserMemory.Clear();
+        PaintMemory();
+    }
 
     private void Open(string path)
     {

@@ -31,6 +31,10 @@ public sealed class ChatThread
     public bool AutoApprove { get; set; }
     /// <summary>Recursos (Agent.Resource) que el usuario dejo de confirmar en esta conversacion.</summary>
     public List<string> Approved { get; set; } = [];
+    /// <summary>Ejecucion desatendida (tarea programada): las herramientas que piden permiso se rechazan.</summary>
+    [System.Text.Json.Serialization.JsonIgnore] public bool Unattended { get; set; }
+    /// <summary>Id de la tarea programada que la creo, si es el caso.</summary>
+    public string? TaskId { get; set; }
 }
 
 /// <summary>Conversaciones en <c>threads\&lt;id&gt;.json</c>, un fichero por conversacion. Solo en este PC.</summary>

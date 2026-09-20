@@ -46,11 +46,22 @@ public sealed class AppSettings
     /// <summary>Al minimizar, esconderse en el area de notificacion.</summary>
     public bool TrayOnMinimize { get; set; } = true;
 
+    /// <summary>Carpeta de documentos que la IA tiene en cuenta (null = Documentos\Lucia).</summary>
+    public string? DocumentsFolder { get; set; }
+
+    /// <summary>Guardar lo que la IA aprende del usuario (memory.json) y recordarselo en cada conversacion.</summary>
+    public bool MemoryEnabled { get; set; } = true;
+
+    /// <summary>La IA puede buscar y leer en internet (en los dos modos). Es el consentimiento: con el, no se pregunta por cada pagina.</summary>
+    public bool InternetAccess { get; set; } = true;
+
     /// <summary>Permiso por recurso del PC (Agent.Resource → Ask/Allow/Deny). Lo que no este apuntado, pregunta.</summary>
     public Dictionary<string, string> Permissions { get; set; } = new();
 
     public Agent.Permission PermissionFor(Agent.Resource resource)
-        => Permissions.TryGetValue(resource.ToString(), out var v) && Enum.TryParse<Agent.Permission>(v, out var p) ? p : Agent.Permission.Ask;
+        => resource == Agent.Resource.Free ? Agent.Permission.Allow
+         : resource == Agent.Resource.Internet ? (InternetAccess ? Agent.Permission.Allow : Agent.Permission.Deny)
+         : Permissions.TryGetValue(resource.ToString(), out var v) && Enum.TryParse<Agent.Permission>(v, out var p) ? p : Agent.Permission.Ask;
 
     public void SetPermission(Agent.Resource resource, Agent.Permission permission)
     {

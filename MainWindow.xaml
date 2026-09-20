@@ -115,8 +115,8 @@
                                  PreviewKeyDown="OnComposerKey" />
                     </Border>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="8,0,0,0">
+                        <Button x:Name="StopButton" Style="{StaticResource DangerIconButton}" Content="&#xE71A;" Width="40" Height="40" Click="OnStop" Visibility="Collapsed" />
                         <Button x:Name="SendButton" Style="{StaticResource IconButton}" Content="&#xE724;" Width="44" Height="40" Click="OnSend" />
-                        <Button x:Name="StopButton" Style="{StaticResource DangerIconButton}" Content="&#xE71A;" Width="44" Height="40" Click="OnStop" Visibility="Collapsed" />
                     </StackPanel>
                 </Grid>
                 </StackPanel>

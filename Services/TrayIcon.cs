@@ -32,6 +32,26 @@ public sealed class TrayIcon : IDisposable
         _exit = exit;
         _hwnd = new WindowInteropHelper(window).Handle;
         HwndSource.FromHwnd(_hwnd)?.AddHook(Hook);
+        // Minimizar desde la barra de tareas o con Win+D no pasa por SC_MINIMIZE: se caza el cambio de estado.
+        window.StateChanged += (_, _) =>
+        {
+            if (window.WindowState == WindowState.Minimized && MinimizeToTray)
+                window.Dispatcher.BeginInvoke(() => { window.WindowState = WindowState.Normal; HideToTray(); });
+        };
+    }
+
+    public bool Hidden => _shown && !_window.IsVisible;
+
+    /// <summary>Un globo en el area de notificacion (solo tiene sentido con la ventana escondida).</summary>
+    public void Notify(string title, string text)
+    {
+        Add();
+        var data = Data();
+        data.uFlags = 0x10;   // NIF_INFO
+        data.szInfoTitle = title.Length > 63 ? title[..63] : title;
+        data.szInfo = text.Length > 255 ? text[..255] : text;
+        data.dwInfoFlags = 0x1;   // NIIF_INFO
+        Shell_NotifyIcon(1 /* NIM_MODIFY */, ref data);
     }
 
     private IntPtr Hook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

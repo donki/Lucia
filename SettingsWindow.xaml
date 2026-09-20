@@ -20,17 +20,19 @@
                         <TextBlock x:Name="ModelTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,8" />
                         <TextBlock x:Name="ModelCurrent" Style="{StaticResource BodyText}" />
                         <TextBlock x:Name="ModelDetail" Style="{StaticResource HintText}" Margin="0,4,0,0" />
-                        <TextBlock x:Name="ModelRam" Style="{StaticResource HintText}" Margin="0,10,0,6" />
+                        <TextBlock x:Name="InstalledLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,2" />
+                        <StackPanel x:Name="InstalledList" />
+                        <TextBlock x:Name="CatalogLabel" Style="{StaticResource FieldLabel}" Margin="0,14,0,2" />
+                        <TextBlock x:Name="ModelRam" Style="{StaticResource HintText}" Margin="0,0,0,6" />
                         <StackPanel x:Name="CatalogList" />
                         <TextBlock x:Name="SearchLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
                         <DockPanel>
                             <Button x:Name="SearchButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE721;" Margin="6,0,0,0" Click="OnSearchModels" />
                             <TextBox x:Name="SearchBox" Style="{StaticResource Field}" KeyDown="OnSearchKey" />
                         </DockPanel>
+                        <CheckBox x:Name="OnlyGgufCheck" Style="{StaticResource Check}" Margin="0,6,0,0" IsChecked="True" />
                         <TextBlock x:Name="SearchHint" Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap" />
                         <StackPanel x:Name="SearchList" Margin="0,4,0,0" />
-                        <TextBlock x:Name="InstalledLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,2" />
-                        <StackPanel x:Name="InstalledList" />
                         <Border x:Name="DownloadBox" Visibility="Collapsed" Margin="0,8,0,0" Padding="0">
                             <StackPanel>
                                 <TextBlock x:Name="DownloadText" Style="{StaticResource HintText}" />
@@ -61,6 +63,8 @@
                                  VerticalContentAlignment="Top" Padding="8,6" VerticalScrollBarVisibility="Auto" LostFocus="OnInstructionsChanged" />
                         <CheckBox x:Name="ThinkingCheck" Style="{StaticResource Check}" Margin="0,12,0,0" Click="OnThinkingChanged" />
                         <TextBlock x:Name="ThinkingHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
+                        <CheckBox x:Name="InternetCheck" Style="{StaticResource Check}" Margin="0,12,0,0" Click="OnInternetChanged" />
+                        <TextBlock x:Name="InternetHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
                         <DockPanel Margin="0,12,0,0">
                             <TextBlock x:Name="FontSizeTitle" Style="{StaticResource BodyText}" VerticalAlignment="Center" />
                             <TextBlock x:Name="FontSizeValue" Style="{StaticResource HintText}" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
@@ -121,6 +125,42 @@
                         <TextBlock x:Name="PermHint" Style="{StaticResource HintText}" Margin="0,0,0,6" />
                         <StackPanel x:Name="PermList" />
                         <Button x:Name="OpenCommandLogButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnOpenCommandLog" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Documentos que la IA tiene en cuenta -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="DocsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="DocsHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                        <DockPanel>
+                            <Button x:Name="DocsOpenButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8A7;" Margin="6,0,0,0" Click="OnOpenDocs" />
+                            <Button x:Name="DocsFolderButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8DA;" Margin="6,0,0,0" Click="OnPickDocsFolder" />
+                            <TextBox x:Name="DocsFolderBox" Style="{StaticResource Field}" IsReadOnly="True" />
+                        </DockPanel>
+                        <TextBlock x:Name="DocsCount" Style="{StaticResource HintText}" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Tareas programadas -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="TasksTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="TasksHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                        <StackPanel x:Name="TasksList" />
+                        <TextBlock x:Name="TasksEmpty" Style="{StaticResource HintText}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Lo que la IA sabe del usuario -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="MemoryTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="MemoryHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                        <CheckBox x:Name="MemoryCheck" Style="{StaticResource Check}" Margin="0,0,0,8" Click="OnMemoryChanged" />
+                        <StackPanel x:Name="MemoryList" />
+                        <TextBlock x:Name="MemoryEmpty" Style="{StaticResource HintText}" />
+                        <Button x:Name="MemoryClearButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnClearMemory" />
                     </StackPanel>
                 </Border>
 

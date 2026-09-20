@@ -36,15 +36,21 @@ esa misma IA.
 - **Instrucciones fijas** (el «system prompt»), opción de dejar que el modelo **razone** antes de
   responder (el razonamiento sale plegado), tamaño de letra, español/inglés, tema claro/oscuro
   siguiendo a Windows.
-- **Modo agente (cowork) con permisos.** Con «Agente» elegido encima del redactor (por conversación; «Preguntas» es solo responder), la IA puede
-  usar el PC a través de herramientas (*tool calling* de llama.cpp): **órdenes de PowerShell**,
-  **leer/listar/buscar ficheros**, **escribir ficheros**, **descargar de internet**,
-  **portapapeles** y **abrir cosas** con su programa habitual, más los datos básicos del PC. Cada
-  acción se muestra con su motivo y se aprueba antes de hacerse —o se deja de preguntar por ese
-  recurso en la conversación, o siempre—. En Ajustes › Permisos cada recurso se pone en
-  **Preguntar, Siempre o Nunca** (con «Nunca» la IA no ve esa herramienta). Carpeta de trabajo
-  configurable, 3 minutos de tope por orden, registro en `logsctions.log`. Hace falta un modelo
-  con soporte de herramientas (los del catálogo lo tienen).
+- **Herramientas con permisos.** La IA puede usar el PC: **órdenes de PowerShell**,
+  **leer/listar/buscar ficheros**, **escribir ficheros**, **buscar y leer en internet** (ajuste
+  «acceder a internet», marcado por defecto), **portapapeles** y **abrir cosas**, más los datos del
+  PC. En Ajustes › Permisos cada recurso se pone en **Preguntar, Siempre o Nunca**; cada acción se
+  muestra con su motivo y se aprueba (una vez, en la conversación o siempre). En **modo preguntas**
+  las usa solo si la pregunta lo pide; en **modo agente** resuelve la tarea paso a paso. Registro en
+  `logs\actions.log`.
+- **Tus documentos.** Una carpeta (`Documentos\Lucia` por defecto) con texto, Markdown, CSV, JSON,
+  código, HTML o .docx que la IA tiene en cuenta: con cada pregunta recibe los pasajes que encajan y
+  puede listarlos y leerlos; también **genera documentos** ahí (.md, .txt, .html, .csv, **.docx**).
+- **Memoria sobre ti.** Frases que la IA guarda cuando le cuentas algo duradero; en Ajustes se ven
+  y se borran (o se apaga). Solo en este PC.
+- **Tareas programadas.** «Cada mañana a las 9…», «el viernes a las 18:00…», «cada 30 minutos…»: la
+  IA las programa y se ejecutan solas como conversaciones ⏰ mientras la aplicación esté abierta
+  (también en la bandeja). Desatendidas solo usan los recursos en «Siempre».
 - **Bandeja y arranque**: al minimizar se queda en el área de notificación (ajustable) y puede
   **arrancar con Windows** escondida (`--tray`).
 - **Editores de código (VS Code).** En Ajustes, una puerta `http://127.0.0.1:41417/v1` compatible

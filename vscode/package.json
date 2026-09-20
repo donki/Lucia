@@ -2,7 +2,7 @@
   "name": "soc-lucia-code",
   "displayName": "sOC Lucia Code",
   "description": "Program with the private AI running in sOC Lucia on this computer: chat, explain, improve and generate code, without anything leaving the PC.",
-  "version": "2026.9.207",
+  "version": "2026.9.208",
   "publisher": "socratic",
   "license": "MIT",
   "icon": "icon.png",

@@ -1,5 +1,35 @@
 # Changelog — sOC Lucia
 
+## 2026.9.20.8 — Documentos, memoria, tareas programadas y más manos libres
+
+- **Internet como ajuste** (Ajustes › Instrucciones, marcado por defecto): la IA puede **buscar en la
+  web** (`web_search`, DuckDuckGo sin cuenta) y **leer páginas** en los dos modos cuando la pregunta
+  lo necesita; sin marcar, trabaja sin conexión. Deja de aparecer en Permisos.
+- **Tus documentos** (Ajustes): carpeta (por defecto `Documentos\Lucia`) cuyo contenido la IA tiene en
+  cuenta: texto, Markdown, CSV, JSON, código, HTML y Word (.docx). Con cada pregunta recibe los pasajes
+  que encajan con ella y puede listarlos y leerlos enteros. **Genera documentos** ahí mismo
+  (`save_document`, .md/.txt/.html/.csv y **.docx**), con botón para abrirlos desde la conversación.
+- **Lo que la IA sabe de ti** (Ajustes): frases que guarda cuando le cuentas algo duradero
+  (`remember`), se ven todas, se borran una a una o todas, y se puede apagar. Solo en `memory.json`.
+- **Tareas programadas**: pídeselo en el chat («cada mañana a las 9…», «el viernes a las 18:00…»,
+  «cada 30 minutos…») y se ejecutan solas como conversaciones ⏰ mientras la aplicación esté abierta
+  (también en la bandeja, con globo al acabar). En Ajustes se ven, se paran y se borran. Las
+  ejecuciones desatendidas solo usan los recursos en «Siempre».
+- **Modo preguntas con manos**: también puede usar documentos, internet, ficheros y órdenes cuando la
+  pregunta lo pide (pidiendo permiso); el modo agente cambia la consigna (resolver la tarea paso a
+  paso), no el alcance.
+- **Escribir mientras responde**: se pueden enviar más preguntas durante una respuesta; quedan en la
+  conversación y se contestan a continuación. Parar sigue al lado de Enviar.
+- **Texto copiable**: todo el texto del chat (preguntas, respuestas, razonamiento) se puede seleccionar
+  y copiar; los bloques de código tienen copiar y **guardar como fichero** (con la extensión del lenguaje).
+- **Buscador de Hugging Face**: muestra **todos** los resultados (óptimos primero, luego por descargas;
+  los que no caben, marcados), entiende **palabras clave** (imágenes, vídeo, voz, transcribir, traducir,
+  visión, música…) y, sin la casilla «solo GGUF», enseña modelos de cualquier tipo con su tipo y enlace
+  (no se instalan aquí: la aplicación solo ejecuta modelos de texto GGUF).
+- **Borrar IA** también desde la fila del catálogo (papelera cuando ya está instalada); «Instaladas en
+  este PC» sube arriba del catálogo.
+- Bandeja: minimizar desde la barra de tareas o con Win+D también esconde en la bandeja.
+
 ## 2026.9.20.7 — Descargas que se retoman y buscador de Hugging Face
 
 - **Las descargas se retoman.** Si cierras la aplicación (o se corta la red) con una IA a medias, al

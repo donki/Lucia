@@ -47,6 +47,7 @@ public partial class MainWindow : Window
                 _ = WarmUpAsync();
         };
         Closing += (_, _) => _answering?.Cancel();
+        StartScheduler();
     }
 
     private void ApplyTexts()
@@ -288,7 +289,7 @@ public partial class MainWindow : Window
     private async void OnSend(object sender, RoutedEventArgs e)
     {
         var text = Composer.Text.Trim();
-        if (text.Length == 0 || _answering is not null)
+        if (text.Length == 0)
             return;
         if (!AppSettings.Current.HasModel)
         {
@@ -311,32 +312,86 @@ public partial class MainWindow : Window
         EmptyState.Visibility = Visibility.Collapsed;
         Messages.Children.Add(Bubble("user", text, null));
         ScrollToEnd();
+        if (_answering is not null)
+        {
+            // Ya hay una respuesta en marcha: la pregunta queda en la conversacion y se contesta al acabar.
+            if (!_pendingAnswers.Contains(thread)) _pendingAnswers.Add(thread);
+            return;
+        }
+        await AnswerAsync(thread);
+    }
 
-        _answering = new CancellationTokenSource();
-        SendButton.Visibility = Visibility.Collapsed;
-        StopButton.Visibility = Visibility.Visible;
-        var cancel = _answering.Token;
-        try
+    private readonly List<ChatThread> _pendingAnswers = [];
+
+    /// <summary>Responde a la conversacion y, si mientras tanto se enviaron mas preguntas, las va contestando.</summary>
+    private async Task AnswerAsync(ChatThread thread)
+    {
+        while (true)
         {
-            var baseUrl = await App.Engine.EnsureReadyAsync(new Progress<Downloader.Progress>(PaintDownload), cancel);
-            await AnswerLoopAsync(thread, baseUrl, cancel);
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            var failed = new StoredMessage { Role = "assistant", Content = Loc.Format("AnswerFailed", ex.Message) };
-            thread.Messages.Add(failed);
-            Messages.Children.Add(Bubble("assistant", failed.Content, null));
-        }
-        finally
-        {
-            _answering?.Dispose();
-            _answering = null;
-            SendButton.Visibility = Visibility.Visible;
-            StopButton.Visibility = Visibility.Collapsed;
-            ThreadStore.Save(thread);
+            _answering = new CancellationTokenSource();
+            StopButton.Visibility = Visibility.Visible;
+            var cancel = _answering.Token;
+            try
+            {
+                var baseUrl = await App.Engine.EnsureReadyAsync(new Progress<Downloader.Progress>(PaintDownload), cancel);
+                await AnswerLoopAsync(thread, baseUrl, cancel);
+            }
+            catch (OperationCanceledException) { _pendingAnswers.Clear(); }
+            catch (Exception ex)
+            {
+                var failed = new StoredMessage { Role = "assistant", Content = Loc.Format("AnswerFailed", ex.Message) };
+                thread.Messages.Add(failed);
+                if (thread == _current) Messages.Children.Add(Bubble("assistant", failed.Content, null));
+            }
+            finally
+            {
+                _answering?.Dispose();
+                _answering = null;
+                StopButton.Visibility = Visibility.Collapsed;
+                ThreadStore.Save(thread);
+            }
+            if (thread.TaskId is not null) FinishedTask(thread);
+            if (_pendingAnswers.Count == 0) break;
+            thread = _pendingAnswers[0];
+            _pendingAnswers.RemoveAt(0);
+            if (thread != _current) ShowThread(thread);
         }
         Composer.Focus();
+    }
+
+    // ------------------------------------------------------------------ tareas programadas
+
+    private System.Windows.Threading.DispatcherTimer? _scheduleTimer;
+
+    private void StartScheduler()
+    {
+        _scheduleTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _scheduleTimer.Tick += async (_, _) => await RunDueTasksAsync();
+        _scheduleTimer.Start();
+    }
+
+    /// <summary>Las tareas que tocan se mandan como conversaciones nuevas, una detras de otra, cuando la IA esta libre.</summary>
+    private async Task RunDueTasksAsync()
+    {
+        if (_answering is not null || !AppSettings.Current.HasModel) return;
+        foreach (var task in Scheduler.Due(DateTimeOffset.Now))
+        {
+            var thread = new ChatThread { Title = "\u23F0 " + task.Title, WorkMode = true, Unattended = true, TaskId = task.Id };
+            thread.Messages.Add(new StoredMessage { Role = "user", Content = task.Prompt });
+            ThreadStore.Save(thread);
+            Scheduler.Ran(task, thread.Id);
+            _threads.Insert(0, thread);
+            RefreshThreadList();
+            ShowThread(thread);
+            await AnswerAsync(thread);
+        }
+    }
+
+    private void FinishedTask(ChatThread thread)
+    {
+        var last = thread.Messages.LastOrDefault(m => m.Role == "assistant")?.Content ?? string.Empty;
+        if (Tray is { Hidden: true })
+            Tray.Notify(thread.Title, last.Length > 0 ? last : Loc.Get("TaskDone"));
     }
 
     /// <summary>
@@ -346,7 +401,9 @@ public partial class MainWindow : Window
     private async Task AnswerLoopAsync(ChatThread thread, string baseUrl, CancellationToken cancel)
     {
         var settings = AppSettings.Current;
-        var tools = thread.WorkMode ? ToolBox.Definitions(settings) : null;
+        var tools = thread.WorkMode ? ToolBox.Definitions(settings) : ToolBox.QuestionDefinitions(settings);
+        var question = thread.Messages.LastOrDefault(m => m.Role == "user")?.Content ?? string.Empty;
+        var context = ToolBox.ContextPrompt(settings, question);
         for (var round = 0; round < 12; round++)
         {
             cancel.ThrowIfCancellationRequested();
@@ -354,6 +411,10 @@ public partial class MainWindow : Window
             var system = settings.Instructions.Trim();
             if (thread.WorkMode)
                 system = (system.Length > 0 ? system + "\n\n" : string.Empty) + ToolBox.SystemPrompt(settings);
+            else
+                system = (system.Length > 0 ? system + "\n\n" : string.Empty) + ToolBox.QuestionPrompt(settings) + (settings.InternetAccess ? " " + ToolBox.InternetPrompt : string.Empty);
+            if (context.Length > 0)
+                system = (system.Length > 0 ? system + "\n\n" : string.Empty) + context;
             if (system.Length > 0)
                 messages.Add(new ChatMessage("system", system));
             // Las ultimas vueltas: memoria de conversacion sin pasarse del contexto. Las de herramienta van completas.
@@ -454,12 +515,20 @@ public partial class MainWindow : Window
         string output;
         if (tool is null)
             output = $"Unknown tool: {call.Name}";
-        else if (tool.Name != ToolBox.SystemInfo && AppSettings.Current.PermissionFor(tool.Resource) == Permission.Deny)
+        else if (AppSettings.Current.PermissionFor(tool.Resource) == Permission.Deny)
             output = "This resource is turned off in the app settings.";
         else
         {
-            var approved = tool.Name == ToolBox.SystemInfo || thread.AutoApprove || thread.Approved.Contains(tool.Resource.ToString())
+            var approved = tool.Resource == Resource.Free || thread.AutoApprove || thread.Approved.Contains(tool.Resource.ToString())
                            || AppSettings.Current.PermissionFor(tool.Resource) == Permission.Allow;
+            if (!approved && thread.Unattended)
+            {
+                output = "Unattended run: this action needs your approval; set the resource to Always in Settings > Permissions to allow it in scheduled tasks.";
+                ToolBox.Log(tool, detail, "unattended-declined");
+                thread.Messages.Add(new StoredMessage { Role = "tool", ToolCallId = call.Id, Command = label, Content = output });
+                Messages.Children.Add(ToolBubble(tool.Resource, label, output));
+                return;
+            }
             if (!approved)
             {
                 var answer = PermissionWindow.Ask(this, tool.Resource, detail, reason);
@@ -522,6 +591,14 @@ public partial class MainWindow : Window
             Margin = new Thickness(0, 4, 0, 0),
         };
         panel.Children.Add(new Expander { Header = Loc.Get("CommandOutput"), Foreground = (Brush)FindResource("TextSecondary"), FontSize = fontSize - 2, Content = body, IsExpanded = output.Length < 600 });
+        if (output.StartsWith("Saved: ", StringComparison.Ordinal) && System.IO.File.Exists(output[7..].Trim()))
+        {
+            // Un documento recien creado: abrirlo con su programa.
+            var path = output[7..].Trim();
+            var open = new Button { Style = (Style)FindResource("OutlineButton"), Content = Loc.Format("OpenDocument", System.IO.Path.GetFileName(path)), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0) };
+            open.Click += (_, _) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); } catch (Exception) { } };
+            panel.Children.Add(open);
+        }
         return new Border
         {
             CornerRadius = new CornerRadius(10),
@@ -595,13 +672,13 @@ public partial class MainWindow : Window
                 FontSize = fontSize - 2,
                 IsExpanded = false,
                 Margin = new Thickness(0, 0, 0, 6),
-                Content = new TextBlock { Text = reasoning, TextWrapping = TextWrapping.Wrap, FontSize = fontSize - 2, Foreground = (Brush)FindResource("TextSecondary"), Margin = new Thickness(0, 4, 0, 0) },
+                Content = new TextBox { Text = reasoning, TextWrapping = TextWrapping.Wrap, FontSize = fontSize - 2, Foreground = (Brush)FindResource("TextSecondary"), Margin = new Thickness(0, 4, 0, 0), IsReadOnly = true, BorderThickness = new Thickness(0), Background = Brushes.Transparent, Padding = new Thickness(0) },
             };
             panel.Children.Add(expander);
         }
         if (user)
         {
-            panel.Children.Add(new TextBlock { Text = content, TextWrapping = TextWrapping.Wrap, FontSize = fontSize, Foreground = foreground });
+            panel.Children.Add(new TextBox { Text = content, TextWrapping = TextWrapping.Wrap, FontSize = fontSize, Foreground = foreground, IsReadOnly = true, BorderThickness = new Thickness(0), Background = Brushes.Transparent, Padding = new Thickness(0), SelectionBrush = (Brush)FindResource("OnPrimary"), SelectionOpacity = 0.35 });
             // Lo que preguntaste se puede copiar, retocar en el redactor o volver a enviar tal cual.
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, -6, -4) };
             actions.Children.Add(UserAction("\uE8C8", Loc.Get("Copy"), () => { try { Clipboard.SetText(content); } catch (Exception) { } }));
@@ -612,7 +689,7 @@ public partial class MainWindow : Window
         else if (content.Length == 0 && streaming)
             panel.Children.Add(new TextBlock { Text = "…", FontSize = fontSize, Foreground = foreground });
         else
-            panel.Children.Add(Markdown.Render(content, fontSize, foreground, (Brush)FindResource("PageBackground"), (Brush)FindResource("Accent"), Loc.Get("Copy")));
+            panel.Children.Add(Markdown.Render(content, fontSize, foreground, (Brush)FindResource("PageBackground"), (Brush)FindResource("Accent"), Loc.Get("Copy"), Loc.Get("SaveCode")));
         if (!user && !streaming && content.Length > 0)
         {
             var copy = new Button { Content = "", ToolTip = Loc.Get("Copy"), Style = (Style)FindResource("GhostIconButton"), Width = 28, Height = 28, FontSize = 13, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-6, 4, 0, -4) };
