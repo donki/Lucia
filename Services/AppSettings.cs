@@ -134,6 +134,8 @@ public sealed class InstalledModel
     public string Name { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
     public string? License { get; set; }
+    /// <summary>Repositorio de Hugging Face del que salio (para pedirle la parte de vision si la tiene).</summary>
+    public string? Repo { get; set; }
 }
 
 /// <summary>La ficha minima para volver a pedir la misma IA al catalogo o a Hugging Face.</summary>

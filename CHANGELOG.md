@@ -1,5 +1,31 @@
 # Changelog — sOC Lucia
 
+## 2026.9.21.0 — Imágenes generadas, adjuntos y visión, «Pensar» en el chat y VS Code en la barra lateral
+
+- **Imágenes en el chat**: «dibuja un faro al atardecer» y la IA la genera en este PC con
+  [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) (MIT, versión fijada como
+  llama.cpp) y **Stable Diffusion 1.5** (GGUF Q8_0, 1,7 GB; licencia CreativeML OpenRAIL-M). Se
+  descargan la primera vez (o desde Ajustes › Imágenes). La imagen sale en la conversación con
+  **abrir** y **guardar como**; quedan en `images\`. Mientras se genera, la IA del chat se pausa (no
+  caben las dos en la memoria de la gráfica) y se retoma en la siguiente pregunta; si la gráfica no
+  puede, se genera en la CPU. Herramienta `generate_image` en los dos modos.
+- **Adjuntar ficheros e imágenes**: botón 📎, arrastrar al redactor o **Ctrl+V** (imágenes o ficheros
+  del portapapeles). Los ficheros de texto/código/.docx van dentro de la pregunta; las imágenes van al
+  modelo como tales si tiene **visión**: para las IA del catálogo que la tienen (Gemma 4, Qwen3.5,
+  Ministral 3, Qwen3.8) se ofrece descargar su parte de visión (mmproj) al adjuntar la primera
+  imagen, y el motor arranca con ella (`--mmproj`). Los adjuntos se ven en la burbuja (miniatura o
+  nombre, con abrir) y se guardan con la conversación.
+- **«Pensar» en el chat**: la casilla de razonar antes de responder está junto al modo y la IA, no en
+  Ajustes.
+- **Instancia única**: si Lucia ya está abierta (aunque esté en la bandeja), volver a ejecutarla la
+  trae al frente en vez de no hacer nada.
+- **Extensión de VS Code 2026.9.210**: el chat vive en la **barra de actividad** (icono propio a la
+  izquierda, como los demás complementos) y tiene lo del chat de escritorio: conversaciones guardadas,
+  modos Preguntas/Agente, «Pensar» (razonamiento plegado), adjuntos (fichero abierto, del workspace o
+  del disco, la selección, imágenes pegadas), parar, copiar/editar/reenviar la pregunta, y en cada
+  bloque de código copiar, insertar y guardar como fichero. En modo agente, además de leer el
+  workspace, puede **escribir ficheros** y **ejecutar órdenes** (PowerShell en la carpeta; siempre pide).
+
 ## 2026.9.20.8 — Documentos, memoria, tareas programadas y más manos libres
 
 - **Internet como ajuste** (Ajustes › Instrucciones, marcado por defecto): la IA puede **buscar en la

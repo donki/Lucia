@@ -62,7 +62,7 @@ public static class ModelDownloads
             });
             var path = await ModelCatalog.DownloadAsync(model, file, progress, cancel);
             var settings = AppSettings.Current;
-            settings.Remember(new InstalledModel { Name = model.Name, Path = path, License = model.License });
+            settings.Remember(new InstalledModel { Name = model.Name, Path = path, License = model.License, Repo = model.Repo });
             settings.ModelPath = path;
             settings.ModelName = model.Name;
             settings.ModelLicense = model.License;

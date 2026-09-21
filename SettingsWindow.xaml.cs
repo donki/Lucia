@@ -48,9 +48,7 @@ public partial class SettingsWindow : Window
         InstructionsHint.Text = Loc.Get("InstructionsHint");
         InstructionsBox.Text = s.Instructions;
         InstructionsBox.ToolTip = Loc.Get("InstructionsPlaceholder");
-        ThinkingCheck.Content = Loc.Get("ThinkingTitle");
-        ThinkingCheck.IsChecked = s.Thinking;
-        ThinkingHint.Text = Loc.Get("ThinkingHint");
+        PaintImages();
         InternetCheck.Content = Loc.Get("InternetTitle");
         InternetCheck.IsChecked = s.InternetAccess;
         InternetHint.Text = Loc.Get("InternetHint");
@@ -453,15 +451,55 @@ public partial class SettingsWindow : Window
         s.Save();
     }
 
+    // ------------------------------------------------------------------ imagenes
+
+    private CancellationTokenSource? _imagesInstall;
+
+    private void PaintImages()
+    {
+        ImagesTitle.Text = Loc.Get("ImagesTitle");
+        ImagesHint.Text = Loc.Get("ImagesHint");
+        var installed = ImageEngine.ModelInstalled && ImageEngine.EngineInstalled;
+        ImagesStatus.Text = _imagesInstall is not null ? Loc.Get("ImagesInstalling")
+            : installed ? Loc.Format("ImagesInstalled", ImageEngine.Default.Name, ImageEngine.Default.License, ImageEngine.InstalledBytes() / (1024.0 * 1024 * 1024))
+            : Loc.Format("ImagesNotInstalled", ImageEngine.Default.Name, ImageEngine.Default.ApproxBytes / (1024.0 * 1024 * 1024));
+        ImagesInstallButton.Content = _imagesInstall is not null ? Loc.Get("Cancel") : Loc.Get("ImagesInstall");
+        ImagesInstallButton.Visibility = installed && _imagesInstall is null ? Visibility.Collapsed : Visibility.Visible;
+        ImagesFolderButton.Content = Loc.Get("ImagesFolder");
+        ImagesFolderButton.Visibility = Directory.Exists(ImageEngine.ImagesFolder) ? Visibility.Visible : Visibility.Collapsed;
+        ImagesRemoveButton.Content = Loc.Get("ImagesRemove");
+        ImagesRemoveButton.Visibility = installed && _imagesInstall is null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void OnImagesInstall(object sender, RoutedEventArgs e)
+    {
+        if (_imagesInstall is not null) { _imagesInstall.Cancel(); return; }
+        _imagesInstall = new CancellationTokenSource();
+        PaintImages();
+        try
+        {
+            await ImageEngine.EnsureInstalledAsync(new Progress<Downloader.Progress>(p => ImagesStatus.Text = Loc.Get("ImagesInstalling") + (p.Fraction is { } f ? $" {f:P0}" : string.Empty)), _imagesInstall.Token);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { PromptWindow.Alert(this, Loc.Get("ImagesTitle"), ex.Message); }
+        finally { _imagesInstall.Dispose(); _imagesInstall = null; PaintImages(); }
+    }
+
+    private void OnImagesFolder(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo(ImageEngine.ImagesFolder) { UseShellExecute = true }); } catch (Exception) { }
+    }
+
+    private void OnImagesRemove(object sender, RoutedEventArgs e)
+    {
+        if (!PromptWindow.Confirm(this, Loc.Get("ImagesRemove"), Loc.Get("ImagesRemoveConfirm"))) return;
+        ImageEngine.Uninstall();
+        PaintImages();
+    }
+
     private void OnInternetChanged(object sender, RoutedEventArgs e)
     {
         AppSettings.Current.InternetAccess = InternetCheck.IsChecked == true;
-        AppSettings.Current.Save();
-    }
-
-    private void OnThinkingChanged(object sender, RoutedEventArgs e)
-    {
-        AppSettings.Current.Thinking = ThinkingCheck.IsChecked == true;
         AppSettings.Current.Save();
     }
 

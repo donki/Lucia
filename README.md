@@ -33,9 +33,17 @@ esa misma IA.
   listas, negrita, bloques de código con botón de copiar), botón de parar; cada pregunta se puede
   copiar, editar y reenviar. Encima del redactor, el modo (Preguntas/Agente) y la IA en uso, que se
   cambia entre las instaladas sin pasar por Ajustes.
-- **Instrucciones fijas** (el «system prompt»), opción de dejar que el modelo **razone** antes de
-  responder (el razonamiento sale plegado), tamaño de letra, español/inglés, tema claro/oscuro
-  siguiendo a Windows.
+- **Adjuntos**: ficheros de texto, código o .docx (van dentro de la pregunta) e **imágenes** (botón 📎,
+  arrastrar o Ctrl+V). Las imágenes las entiende la IA si tiene **visión**: a las del catálogo que la
+  tienen (Gemma 4, Qwen3.5, Ministral 3, Qwen3.8) se les descarga su parte de visión (`mmproj`) al
+  adjuntar la primera imagen y el motor arranca con `--mmproj`.
+- **Imágenes generadas**: «dibuja…» y la IA genera la imagen en el PC con `stable-diffusion.cpp`
+  (`Engine/ImageEngine.cs`, versión fijada con SHA como llama.cpp) y Stable Diffusion 1.5 (GGUF); sale
+  en la conversación con abrir y guardar como. Mientras se genera se para llama-server (no caben las
+  dos en la gráfica); si la gráfica no puede, CPU. Ajustes › Imágenes instala o quita el motor y el modelo.
+- **Instrucciones fijas** (el «system prompt»), la casilla **Pensar** en el chat para dejar que el
+  modelo razone antes de responder (el razonamiento sale plegado), tamaño de letra, español/inglés,
+  tema claro/oscuro siguiendo a Windows. Una sola instancia: volver a ejecutarla trae la abierta.
 - **Herramientas con permisos.** La IA puede usar el PC: **órdenes de PowerShell**,
   **leer/listar/buscar ficheros**, **escribir ficheros**, **buscar y leer en internet** (ajuste
   «acceder a internet», marcado por defecto), **portapapeles** y **abrir cosas**, más los datos del
@@ -58,10 +66,13 @@ esa misma IA.
   (`/v1/models`, `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, con streaming; la
   primera petición arranca la IA). Sin indicación del cliente, el «pensamiento» del modelo va
   apagado, para que no se gaste la respuesta razonando. La extensión **sOC Lucia Code**
-  (`vscode/`, `.vsix` en cada release) añade a VS Code un chat lateral con «Insertar» que **ve el
-  workspace** (la IA lista, lee y busca ficheros y mira el editor activo por sí misma; escribir un
-  fichero pide confirmación), acciones sobre la selección (preguntar, explicar, mejorar, tests) y
-  un proveedor de modelo para el *Manage models…* de Copilot Chat. Continue, Cline y similares funcionan con la misma dirección y
+  (`vscode/`, `.vsix` en cada release) añade a VS Code un chat en la **barra de actividad** (icono
+  propio) con lo del chat de escritorio: conversaciones guardadas, Preguntas/Agente, «Pensar»,
+  adjuntos (fichero, selección, imágenes pegadas), parar, copiar/editar/reenviar, y en cada bloque de
+  código copiar, insertar y guardar. En modo agente **ve y cambia el workspace** (lista, lee y busca
+  ficheros, mira el editor activo; escribir un fichero o ejecutar una orden pide confirmación),
+  acciones sobre la selección (preguntar, explicar, mejorar, tests) y un proveedor de modelo para el
+  *Manage models…* de Copilot Chat. Continue, Cline y similares funcionan con la misma dirección y
   token. Detalles en [vscode/README.md](vscode/README.md).
 
 ## Privacidad
@@ -75,7 +86,7 @@ el token que se muestra en Ajustes.
 
 - `App.xaml`: sistema visual sOCratic (paleta índigo, tarjetas, botones con icono); `Services/ThemeManager.cs` sigue al tema de Windows.
 - `MainWindow`: conversaciones y chat. `SettingsWindow`: la IA (catálogo, importar), instrucciones, razonamiento, letra, puerta de editores, idioma, diagnóstico. `AboutWindow`: la «Acerca de» del catálogo. `PromptWindow`: los diálogos pequeños.
-- `Engine/`: `EnginePin` (versión fijada de llama.cpp y sus SHA), `EngineHost` (descarga, arranque, salud, parada), `ModelCatalog` (catálogo, elección del cuantizado, descarga), `ChatClient` (SSE), `Downloader`.
+- `Engine/`: `EnginePin` (versión fijada de llama.cpp y sus SHA), `EngineHost` (descarga, arranque, salud, parada; `--mmproj` si el modelo tiene visión), `ModelCatalog` (catálogo, elección del cuantizado, descarga; `PickMmprojAsync`/`DownloadMmprojAsync` para la parte de visión), `ChatClient` (SSE; imágenes como partes `image_url`), `Downloader`, `ImageEngine` (stable-diffusion.cpp fijado con SHA, modelo SD 1.5 y generación con `sd-cli`).
 - `Chat/`: `ThreadStore` (JSON por conversación) y `Markdown` (render a WPF).
 - `Editor/EditorDoor.cs`: la puerta para editores (`HttpListener`).
 - `Agent/`: `CommandTool` (definición de la herramienta, ejecución con PowerShell y registro) y `CommandConfirmWindow`; el bucle de vueltas vive en `MainWindow.AnswerLoopAsync`.

@@ -1,42 +1,118 @@
 {
   "name": "soc-lucia-code",
   "displayName": "sOC Lucia Code",
-  "description": "Program with the private AI running in sOC Lucia on this computer: chat, explain, improve and generate code, without anything leaving the PC.",
-  "version": "2026.9.208",
+  "description": "Program with the private AI running in sOC Lucia on this computer: a chat in the activity bar with conversations, Questions/Agent modes, reasoning, attachments and images, without anything leaving the PC.",
+  "version": "2026.9.21",
   "publisher": "socratic",
   "license": "MIT",
   "icon": "icon.png",
-  "repository": { "type": "git", "url": "https://github.com/donki/Lucia.git", "directory": "vscode" },
-  "engines": { "vscode": "^1.104.0" },
-  "categories": ["AI", "Chat", "Programming Languages"],
-  "keywords": ["local ai", "llama.cpp", "privacy", "code assistant", "soc"],
-  "activationEvents": ["onStartupFinished"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/donki/Lucia.git",
+    "directory": "vscode"
+  },
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "local ai",
+    "llama.cpp",
+    "privacy",
+    "code assistant",
+    "soc"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./extension.js",
   "contributes": {
     "commands": [
-      { "command": "socLucia.openChat", "title": "sOC Lucia: Open chat", "icon": "$(comment-discussion)" },
-      { "command": "socLucia.ask", "title": "sOC Lucia: Ask about the selection" },
-      { "command": "socLucia.explain", "title": "sOC Lucia: Explain the selection" },
-      { "command": "socLucia.improve", "title": "sOC Lucia: Improve the selection" },
-      { "command": "socLucia.tests", "title": "sOC Lucia: Write tests for the selection" },
-      { "command": "socLucia.checkConnection", "title": "sOC Lucia: Check connection" }
+      {
+        "command": "socLucia.openChat",
+        "title": "sOC Lucia: Open chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "socLucia.newChat",
+        "title": "sOC Lucia: New conversation",
+        "icon": "$(add)"
+      },
+      {
+        "command": "socLucia.ask",
+        "title": "sOC Lucia: Ask about the selection"
+      },
+      {
+        "command": "socLucia.explain",
+        "title": "sOC Lucia: Explain the selection"
+      },
+      {
+        "command": "socLucia.improve",
+        "title": "sOC Lucia: Improve the selection"
+      },
+      {
+        "command": "socLucia.tests",
+        "title": "sOC Lucia: Write tests for the selection"
+      },
+      {
+        "command": "socLucia.checkConnection",
+        "title": "sOC Lucia: Check connection"
+      }
     ],
     "menus": {
       "editor/context": [
-        { "submenu": "socLucia.submenu", "group": "navigation@9" }
+        {
+          "submenu": "socLucia.submenu",
+          "group": "navigation@9"
+        }
       ],
       "socLucia.submenu": [
-        { "command": "socLucia.ask", "group": "1@1" },
-        { "command": "socLucia.explain", "group": "1@2" },
-        { "command": "socLucia.improve", "group": "1@3" },
-        { "command": "socLucia.tests", "group": "1@4" }
+        {
+          "command": "socLucia.ask",
+          "group": "1@1"
+        },
+        {
+          "command": "socLucia.explain",
+          "group": "1@2"
+        },
+        {
+          "command": "socLucia.improve",
+          "group": "1@3"
+        },
+        {
+          "command": "socLucia.tests",
+          "group": "1@4"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "socLucia.newChat",
+          "when": "view == socLucia.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "socLucia.checkConnection",
+          "when": "view == socLucia.chatView",
+          "group": "overflow@1"
+        }
       ]
     },
     "submenus": [
-      { "id": "socLucia.submenu", "label": "sOC Lucia" }
+      {
+        "id": "socLucia.submenu",
+        "label": "sOC Lucia"
+      }
     ],
     "keybindings": [
-      { "command": "socLucia.openChat", "key": "ctrl+alt+l", "mac": "cmd+alt+l" }
+      {
+        "command": "socLucia.openChat",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l"
+      }
     ],
     "configuration": {
       "title": "sOC Lucia",
@@ -69,13 +145,37 @@
         "socLucia.workspaceTools": {
           "type": "boolean",
           "default": true,
-          "description": "Let the AI look at the open workspace on its own (list, read and search files; writing a file always asks first)."
+          "description": "Agent mode: let the AI look at the open workspace on its own (list, read and search files) and change it (write a file, run a command; both always ask first)."
         }
       }
     },
     "languageModelChatProviders": [
-      { "vendor": "soclucia", "displayName": "sOC Lucia (local)", "managementCommand": "socLucia.checkConnection" }
-    ]
+      {
+        "vendor": "soclucia",
+        "displayName": "sOC Lucia (local)",
+        "managementCommand": "socLucia.checkConnection"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "socLucia",
+          "title": "sOC Lucia",
+          "icon": "icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "socLucia": [
+        {
+          "type": "webview",
+          "id": "socLucia.chatView",
+          "name": "Chat",
+          "icon": "icon.svg",
+          "contextualTitle": "sOC Lucia"
+        }
+      ]
+    }
   },
   "scripts": {
     "package": "npx --yes @vscode/vsce package --no-dependencies"

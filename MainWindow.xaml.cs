@@ -34,6 +34,11 @@ public partial class MainWindow : Window
         ApplyTexts();
         Loc.LanguageChanged += ApplyTexts;
         App.Engine.StateChanged += () => Dispatcher.BeginInvoke(PaintEngineStatus);
+        // La IA de imagenes: su estado (descargando, generando) y el progreso van a la misma barra.
+        ImageEngine.Status += s => Dispatcher.BeginInvoke(() => { _imageStatus = s; PaintEngineStatus(); });
+        ToolBox.ImageProgress = new Progress<Downloader.Progress>(PaintDownload);
+        // Pegar una imagen o ficheros en el redactor los adjunta.
+        DataObject.AddPastingHandler(Composer, OnComposerPaste);
         ModelDownloads.Changed += PaintEngineStatus;
         ModelDownloads.Finished += (_, error) => { if (error is null) ModelChanged(); else PaintEngineStatus(); };
         RefreshThreadList();
@@ -69,6 +74,11 @@ public partial class MainWindow : Window
         EmptyTitle.Text = Loc.Get("EmptyTitle");
         EmptyHint.Text = Loc.Get("EmptyHint");
         Composer.ToolTip = Loc.Get("ComposerHint");
+        AttachButton.ToolTip = Loc.Get("Attach");
+        ThinkText.Text = Loc.Get("ThinkToggle");
+        ThinkButton.ToolTip = Loc.Get("ThinkingHint");
+        ThinkButton.IsChecked = AppSettings.Current.Thinking;
+        PaintAttachments();
         PaintEngineStatus();
         if (_current is not null)
             ShowThread(_current);
@@ -91,11 +101,18 @@ public partial class MainWindow : Window
             EngineProgress.Visibility = Visibility.Collapsed;
     });
 
+    private string? _imageStatus;
+
     private void PaintEngineStatus()
     {
         var engine = App.Engine;
         var settings = AppSettings.Current;
         var model = settings.ModelName is { Length: > 0 } name ? name : null;
+        if (_imageStatus is { Length: > 0 })
+        {
+            EngineStatus.Text = _imageStatus;
+            return;
+        }
         if (ModelDownloads.Current is { } download)
         {
             // Una IA bajando en segundo plano: se ve aqui aunque Ajustes este cerrado.
@@ -110,7 +127,7 @@ public partial class MainWindow : Window
             EngineState.NoModel => Loc.Get("EngineNoModel"),
             EngineState.DownloadingEngine => Loc.Get("EngineDownloading"),
             EngineState.Starting => Loc.Get("EngineStarting"),
-            EngineState.Ready => $"{Loc.Get("EngineReady")} · {model}",
+            EngineState.Ready => $"{Loc.Get("EngineReady")} · {model}" + (engine.Vision ? " · " + Loc.Get("VisionOn") : string.Empty),
             EngineState.Stopped => Loc.Get("EngineStopped"),
             _ => $"{Loc.Get("EngineError")}: {engine.Detail}",
         };
@@ -219,12 +236,275 @@ public partial class MainWindow : Window
             else if (message.Role == "assistant" && message.Content.Length == 0 && message.ToolCalls is not null)
                 continue;   // la peticion de herramienta sin texto: ya se ve la orden en la burbuja de la herramienta
             else
-                Messages.Children.Add(Bubble(message.Role, message.Content, message.Reasoning));
+                Messages.Children.Add(Bubble(message.Role, message.Content, message.Reasoning, message.Attachments));
         }
         ScrollToEnd();
     }
 
     private void OnWorkModeToggled(object sender, RoutedEventArgs e) => SetMode(agent: true);
+
+    /// <summary>Pensar antes de responder: se cambia desde el chat y vale para las siguientes preguntas.</summary>
+    private void OnThinkToggled(object sender, RoutedEventArgs e)
+    {
+        AppSettings.Current.Thinking = ThinkButton.IsChecked == true;
+        AppSettings.Current.Save();
+    }
+
+    // ------------------------------------------------------------------ adjuntos
+
+    /// <summary>Lo que se va a adjuntar a la siguiente pregunta: ficheros elegidos, arrastrados o pegados (las imagenes pegadas van a un PNG temporal).</summary>
+    private readonly List<(string Name, string Path, bool IsImage, bool Temp)> _pendingFiles = [];
+
+    private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".xml", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".log",
+        ".cs", ".xaml", ".js", ".ts", ".jsx", ".tsx", ".py", ".java", ".kt", ".c", ".h", ".cpp", ".hpp", ".rs", ".go", ".rb", ".php", ".swift",
+        ".html", ".htm", ".css", ".scss", ".sql", ".ps1", ".psm1", ".bat", ".cmd", ".sh", ".gradle", ".csproj", ".sln", ".props", ".targets", ".tex", ".rtf", ".docx",
+    };
+
+    private void OnAttach(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = Loc.Get("Attach"), Filter = Loc.Get("AttachFilter") };
+        if (dialog.ShowDialog(this) != true) return;
+        foreach (var file in dialog.FileNames) AddPendingFile(file);
+    }
+
+    private void OnComposerDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) || e.Data.GetDataPresent(DataFormats.Bitmap) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnComposerDrop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] files)
+            foreach (var file in files) AddPendingFile(file);
+        else if (e.Data.GetData(DataFormats.Bitmap) is BitmapSource bitmap)
+            AddPendingImage(bitmap);
+        e.Handled = true;
+    }
+
+    /// <summary>Ctrl+V con una imagen o con ficheros en el portapapeles: se adjuntan; con texto, pega como siempre.</summary>
+    private void OnComposerPaste(object sender, DataObjectPastingEventArgs e)
+    {
+        try
+        {
+            if (e.DataObject.GetDataPresent(DataFormats.FileDrop) && e.DataObject.GetData(DataFormats.FileDrop) is string[] files)
+            {
+                foreach (var file in files) AddPendingFile(file);
+                e.CancelCommand();
+            }
+            else if (!e.DataObject.GetDataPresent(DataFormats.UnicodeText) && Clipboard.ContainsImage() && Clipboard.GetImage() is { } image)
+            {
+                AddPendingImage(image);
+                e.CancelCommand();
+            }
+        }
+        catch (Exception) { }
+    }
+
+    private void AddPendingFile(string path)
+    {
+        if (!System.IO.File.Exists(path)) return;
+        var isImage = ThreadStore.IsImageFile(path);
+        if (!isImage && !TextExtensions.Contains(System.IO.Path.GetExtension(path)))
+        {
+            // Sin extension conocida: vale si parece texto (sin bytes nulos en el arranque).
+            try
+            {
+                var head = new byte[4096];
+                using var s = System.IO.File.OpenRead(path);
+                var n = s.Read(head, 0, head.Length);
+                if (Array.IndexOf(head, (byte)0, 0, n) >= 0) { PromptWindow.Alert(this, Loc.Get("Attach"), Loc.Format("AttachUnsupported", System.IO.Path.GetFileName(path))); return; }
+            }
+            catch (Exception) { return; }
+        }
+        if (new System.IO.FileInfo(path).Length > 20L * 1024 * 1024) { PromptWindow.Alert(this, Loc.Get("Attach"), Loc.Format("AttachTooBig", System.IO.Path.GetFileName(path))); return; }
+        _pendingFiles.Add((System.IO.Path.GetFileName(path), path, isImage, false));
+        PaintAttachments();
+    }
+
+    private void AddPendingImage(BitmapSource image)
+    {
+        try
+        {
+            var temp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"soclucia-{Guid.NewGuid():N}.png");
+            using (var stream = System.IO.File.Create(temp))
+            {
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(image));
+                encoder.Save(stream);
+            }
+            _pendingFiles.Add((Loc.Get("PastedImage"), temp, true, true));
+            PaintAttachments();
+        }
+        catch (Exception) { }
+    }
+
+    private void PaintAttachments()
+    {
+        AttachmentsPanel.Children.Clear();
+        AttachmentsPanel.Visibility = _pendingFiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var file in _pendingFiles)
+        {
+            var chip = AttachmentChip(file.Name, file.Path, file.IsImage, removable: true);
+            var pending = file;
+            ((Button)((DockPanel)chip.Child).Children[0]).Click += (_, _) => { _pendingFiles.Remove(pending); if (pending.Temp) try { System.IO.File.Delete(pending.Path); } catch (Exception) { } PaintAttachments(); };
+            AttachmentsPanel.Children.Add(chip);
+        }
+    }
+
+    /// <summary>Una ficha de adjunto: miniatura si es imagen, si no el nombre; con quitar (antes de enviar) o abrir (en la burbuja).</summary>
+    private Border AttachmentChip(string name, string path, bool isImage, bool removable)
+    {
+        var dock = new DockPanel { LastChildFill = true };
+        var action = new Button { Style = (Style)FindResource("GhostIconButton"), Content = removable ? "\uE711" : "\uE8A7", Width = 24, Height = 24, FontSize = 11, ToolTip = removable ? Loc.Get("Remove") : Loc.Get("Open") };
+        DockPanel.SetDock(action, Dock.Right);
+        dock.Children.Add(action);
+        if (!removable)
+            action.Click += (_, _) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); } catch (Exception) { } };
+        if (isImage && System.IO.File.Exists(path))
+        {
+            try
+            {
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.DecodePixelWidth = 160;
+                bitmap.UriSource = new Uri(path);
+                bitmap.EndInit();
+                dock.Children.Add(new Image { Source = bitmap, MaxHeight = 90, Margin = new Thickness(0, 0, 6, 0), ToolTip = name });
+            }
+            catch (Exception) { dock.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center }); }
+        }
+        else
+            dock.Children.Add(new TextBlock { Text = "\uE8A5  " + name, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 260 });
+        return new Border
+        {
+            Child = dock,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8, 4, 4, 4),
+            Margin = new Thickness(0, 0, 6, 6),
+            Background = (Brush)FindResource("CardBackground"),
+            BorderBrush = (Brush)FindResource("Separator"),
+            BorderThickness = new Thickness(1),
+        };
+    }
+
+    /// <summary>Copia lo pendiente a la carpeta de la conversacion y devuelve las fichas (null si no hay nada).</summary>
+    private List<Attachment>? TakePendingAttachments(ChatThread thread)
+    {
+        if (_pendingFiles.Count == 0) return null;
+        var list = new List<Attachment>();
+        foreach (var file in _pendingFiles)
+        {
+            try
+            {
+                var a = ThreadStore.Attach(thread, file.Path);
+                a.Name = file.Name;
+                list.Add(a);
+                if (file.Temp) System.IO.File.Delete(file.Path);
+            }
+            catch (Exception) { }
+        }
+        _pendingFiles.Clear();
+        PaintAttachments();
+        return list.Count > 0 ? list : null;
+    }
+
+    /// <summary>El texto que va al modelo por una pregunta con adjuntos: la pregunta y, detras, cada fichero de texto (recortado).</summary>
+    private static string TextForModel(StoredMessage message)
+    {
+        if (message.Attachments is not { Count: > 0 }) return message.Content;
+        var sb = new System.Text.StringBuilder(message.Content);
+        foreach (var a in message.Attachments)
+        {
+            if (a.IsImage) continue;
+            string text;
+            try { text = DocumentIndex.ReadText(a.Path); }
+            catch (Exception ex) { text = "[could not read: " + ex.Message + "]"; }
+            if (text.Length > 40_000) text = text[..40_000] + "\n[… cut]";
+            sb.Append("\n\n[Attached file: ").Append(a.Name).Append("]\n```\n").Append(text).Append("\n```");
+        }
+        var images = message.Attachments.Count(a => a.IsImage);
+        if (images > 0 && !App.Engine.Vision)
+            sb.Append("\n\n[The user attached ").Append(images).Append(" image(s), but this AI has no vision: say you cannot see them.]");
+        return sb.ToString();
+    }
+
+    /// <summary>Las imagenes de una pregunta como data URL (reducidas a 1024 px como mucho) para el modelo con vision.</summary>
+    private static List<string>? ImagesForModel(StoredMessage message)
+    {
+        if (!App.Engine.Vision || message.Attachments is not { Count: > 0 }) return null;
+        var list = new List<string>();
+        foreach (var a in message.Attachments.Where(a => a.IsImage))
+        {
+            try
+            {
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.DecodePixelWidth = 1024;
+                bitmap.UriSource = new Uri(a.Path);
+                bitmap.EndInit();
+                var encoder = new JpegBitmapEncoder { QualityLevel = 85 };
+                encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                using var ms = new System.IO.MemoryStream();
+                encoder.Save(ms);
+                list.Add("data:image/jpeg;base64," + Convert.ToBase64String(ms.ToArray()));
+            }
+            catch (Exception) { }
+        }
+        return list.Count > 0 ? list : null;
+    }
+
+    /// <summary>
+    /// Hay una imagen adjunta y la IA no ve: si su repositorio tiene la parte de vision, se ofrece
+    /// descargarla (una vez) y el motor se reinicia con ella; si no, se avisa y se sigue sin imagen.
+    /// </summary>
+    private async Task EnsureVisionAsync(ChatThread thread, CancellationToken cancel)
+    {
+        var settings = AppSettings.Current;
+        if (EngineHost.VisionAvailable(settings) || settings.ModelPath is null) return;
+        var last = thread.Messages.LastOrDefault(m => m.Role == "user");
+        if (last?.Attachments is null || !last.Attachments.Any(a => a.IsImage)) return;
+        var installed = settings.Installed.FirstOrDefault(i => string.Equals(i.Path, settings.ModelPath, StringComparison.OrdinalIgnoreCase))
+                        ?? new InstalledModel { Name = settings.ModelName ?? string.Empty, Path = settings.ModelPath };
+        var repo = installed.Repo ?? ModelCatalog.All.FirstOrDefault(m => m.Name == installed.Name)?.Repo;
+        if (repo is null || _visionDeclined)
+        {
+            if (!_visionDeclined) Messages.Children.Add(Bubble("assistant", Loc.Get("NoVisionModel"), null));
+            return;
+        }
+        if (!PromptWindow.Confirm(this, Loc.Get("VisionTitle"), Loc.Format("VisionOffer", installed.Name)))
+        {
+            _visionDeclined = true;
+            return;
+        }
+        _imageStatus = Loc.Get("VisionDownloading");
+        PaintEngineStatus();
+        try
+        {
+            installed.Repo = repo;
+            var path = await ModelCatalog.DownloadMmprojAsync(installed, new Progress<Downloader.Progress>(PaintDownload), cancel);
+            if (path is null)
+                Messages.Children.Add(Bubble("assistant", Loc.Get("NoVisionModel"), null));
+            else
+                App.Engine.Stop();   // la siguiente arrancada lleva --mmproj
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            Messages.Children.Add(Bubble("assistant", Loc.Format("AnswerFailed", ex.Message), null));
+        }
+        finally
+        {
+            _imageStatus = null;
+            PaintEngineStatus();
+        }
+    }
+
+    private bool _visionDeclined;
 
     private void OnAskMode(object sender, RoutedEventArgs e) => SetMode(agent: false);
 
@@ -279,18 +559,40 @@ public partial class MainWindow : Window
 
     private void OnComposerKey(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        if ((e.Key == Key.Enter || e.Key == Key.Return) && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
         {
             e.Handled = true;
             OnSend(sender, e);
+            return;
+        }
+        // Ctrl+V con una imagen o ficheros (sin texto) en el portapapeles: el cuadro de texto no lo
+        // pegaria; se adjuntan aqui.
+        if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            try
+            {
+                if (Clipboard.ContainsFileDropList())
+                {
+                    foreach (var file in Clipboard.GetFileDropList()) if (file is not null) AddPendingFile(file);
+                    e.Handled = true;
+                }
+                else if (!Clipboard.ContainsText() && Clipboard.ContainsImage() && Clipboard.GetImage() is { } image)
+                {
+                    AddPendingImage(image);
+                    e.Handled = true;
+                }
+            }
+            catch (Exception) { }
         }
     }
 
     private async void OnSend(object sender, RoutedEventArgs e)
     {
         var text = Composer.Text.Trim();
-        if (text.Length == 0)
+        if (text.Length == 0 && _pendingFiles.Count == 0)
             return;
+        if (text.Length == 0)
+            text = Loc.Get("AttachedOnly");
         if (!AppSettings.Current.HasModel)
         {
             OpenSettings();
@@ -307,10 +609,11 @@ public partial class MainWindow : Window
             RefreshThreadList();
         }
         var thread = _current;
-        thread.Messages.Add(new StoredMessage { Role = "user", Content = text });
+        var message = new StoredMessage { Role = "user", Content = text, Attachments = TakePendingAttachments(_current) };
+        thread.Messages.Add(message);
         ThreadStore.Save(thread);
         EmptyState.Visibility = Visibility.Collapsed;
-        Messages.Children.Add(Bubble("user", text, null));
+        Messages.Children.Add(Bubble("user", text, null, message.Attachments));
         ScrollToEnd();
         if (_answering is not null)
         {
@@ -333,6 +636,7 @@ public partial class MainWindow : Window
             var cancel = _answering.Token;
             try
             {
+                await EnsureVisionAsync(thread, cancel);
                 var baseUrl = await App.Engine.EnsureReadyAsync(new Progress<Downloader.Progress>(PaintDownload), cancel);
                 await AnswerLoopAsync(thread, baseUrl, cancel);
             }
@@ -424,6 +728,8 @@ public partial class MainWindow : Window
                     messages.Add(new ChatMessage("tool", m.Content, m.ToolCallId));
                 else if (m.ToolCalls is { Length: > 0 } storedCalls)
                     messages.Add(new ChatMessage(m.Role, m.Content, null, JsonNode.Parse(storedCalls) as JsonArray));
+                else if (m.Role == "user" && m.Attachments is { Count: > 0 })
+                    messages.Add(new ChatMessage(m.Role, TextForModel(m), null, null, ImagesForModel(m)));
                 else
                     messages.Add(new ChatMessage(m.Role, m.Content));
             }
@@ -590,8 +896,37 @@ public partial class MainWindow : Window
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Margin = new Thickness(0, 4, 0, 0),
         };
-        panel.Children.Add(new Expander { Header = Loc.Get("CommandOutput"), Foreground = (Brush)FindResource("TextSecondary"), FontSize = fontSize - 2, Content = body, IsExpanded = output.Length < 600 });
-        if (output.StartsWith("Saved: ", StringComparison.Ordinal) && System.IO.File.Exists(output[7..].Trim()))
+        if (!output.StartsWith("Image: ", StringComparison.Ordinal))
+            panel.Children.Add(new Expander { Header = Loc.Get("CommandOutput"), Foreground = (Brush)FindResource("TextSecondary"), FontSize = fontSize - 2, Content = body, IsExpanded = output.Length < 600 });
+        if (output.StartsWith("Image: ", StringComparison.Ordinal) && System.IO.File.Exists(output[7..].Trim()))
+        {
+            // Una imagen generada: se ve en la conversacion, con abrir y guardar.
+            var path = output[7..].Trim();
+            try
+            {
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.UriSource = new Uri(path);
+                bitmap.EndInit();
+                var image = new Image { Source = bitmap, MaxWidth = 512, MaxHeight = 512, Margin = new Thickness(0, 8, 0, 4), HorizontalAlignment = HorizontalAlignment.Left, Cursor = System.Windows.Input.Cursors.Hand };
+                image.MouseLeftButtonUp += (_, _) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); } catch (Exception) { } };
+                panel.Children.Add(image);
+            }
+            catch (Exception) { }
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+            var open = new Button { Style = (Style)FindResource("OutlineButton"), Content = Loc.Get("OpenImage"), Margin = new Thickness(0, 0, 8, 0) };
+            open.Click += (_, _) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); } catch (Exception) { } };
+            var save = new Button { Style = (Style)FindResource("OutlineButton"), Content = Loc.Get("SaveImage") };
+            save.Click += (_, _) =>
+            {
+                var dialog = new Microsoft.Win32.SaveFileDialog { FileName = System.IO.Path.GetFileName(path), Filter = "PNG|*.png", DefaultExt = ".png" };
+                if (dialog.ShowDialog(this) == true) { try { System.IO.File.Copy(path, dialog.FileName, overwrite: true); } catch (Exception ex) { PromptWindow.Alert(this, Loc.Get("SaveImage"), ex.Message); } }
+            };
+            row.Children.Add(open); row.Children.Add(save);
+            panel.Children.Add(row);
+        }
+        else if (output.StartsWith("Saved: ", StringComparison.Ordinal) && System.IO.File.Exists(output[7..].Trim()))
         {
             // Un documento recien creado: abrirlo con su programa.
             var path = output[7..].Trim();
@@ -625,6 +960,7 @@ public partial class MainWindow : Window
 
     public async void RunToolForTest(string name, string json)
     {
+        Log($"prueba de herramienta: {name} {json}");
         _current ??= new ChatThread { Title = "prueba de herramientas", WorkMode = true, AutoApprove = _pendingAutoApprove };
         if (!_threads.Contains(_current)) { _threads.Insert(0, _current); RefreshThreadList(); }
         EmptyState.Visibility = Visibility.Collapsed;
@@ -641,7 +977,7 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------------ burbujas
 
-    private Border Bubble(string role, string content, string? reasoning)
+    private Border Bubble(string role, string content, string? reasoning, List<Attachment>? attachments = null)
     {
         var user = role == "user";
         var border = new Border
@@ -653,6 +989,13 @@ public partial class MainWindow : Window
             Background = user ? (Brush)FindResource("Primary") : (Brush)FindResource("CardBackground"),
         };
         RepaintBubble(border, content, reasoning, streaming: false, user);
+        if (attachments is { Count: > 0 } && border.Child is StackPanel panel)
+        {
+            var wrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
+            foreach (var a in attachments)
+                wrap.Children.Add(AttachmentChip(a.Name, a.Path, a.IsImage, removable: false));
+            panel.Children.Insert(0, wrap);
+        }
         return border;
     }
 

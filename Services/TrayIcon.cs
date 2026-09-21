@@ -42,6 +42,16 @@ public sealed class TrayIcon : IDisposable
 
     public bool Hidden => _shown && !_window.IsVisible;
 
+    /// <summary>Mensaje «enseñate» que manda una segunda instancia a la que ya esta abierta.</summary>
+    private static readonly int WmShowMe = RegisterWindowMessage("sOCLucia.Show");
+
+    /// <summary>Desde una instancia nueva: pide a la abierta que se ponga delante (le cede el derecho a hacerlo).</summary>
+    public static void AskExistingToShow()
+    {
+        AllowSetForegroundWindow(-1 /* ASFW_ANY */);
+        PostMessage(new IntPtr(0xFFFF) /* HWND_BROADCAST */, (uint)WmShowMe, IntPtr.Zero, IntPtr.Zero);
+    }
+
     /// <summary>Un globo en el area de notificacion (solo tiene sentido con la ventana escondida).</summary>
     public void Notify(string title, string text)
     {
@@ -75,6 +85,10 @@ public sealed class TrayIcon : IDisposable
             case WmCommand when (int)((long)wParam & 0xFFFF) == IdExit:
                 Remove();
                 _exit();
+                handled = true;
+                break;
+            case var m when m == WmShowMe:
+                Restore();
                 handled = true;
                 break;
         }
@@ -170,6 +184,9 @@ public sealed class TrayIcon : IDisposable
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Point { public int X, Y; }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int RegisterWindowMessage(string message);
+    [DllImport("user32.dll")] private static extern bool AllowSetForegroundWindow(int processId);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern bool Shell_NotifyIcon(int message, ref NotifyIconData data);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);

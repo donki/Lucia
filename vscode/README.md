@@ -10,8 +10,12 @@ Program with the private AI that [sOC Lucia](https://github.com/donki/Lucia) run
 
 ## What it does
 
-- **sOC Lucia: Open chat** (`Ctrl+Alt+L`): a chat panel beside the editor. Answers stream in; every code block has an **Insert** button that puts it at the cursor (or replaces the selection). "Include the current selection" attaches the selected code to the question.
-- **It sees your workspace.** In the chat panel the AI can list, read and search the files of the open folder and look at the active editor by itself (tools `list_files`, `read_file`, `search_text`, `active_editor`), so "analyse this project" works without pasting code; each step is shown in the panel. `write_file` always asks before writing. Turn it off with `socLucia.workspaceTools`.
+- **The chat lives in the activity bar** (the Lucia icon on the left, like the other add-ons; `Ctrl+Alt+L` or **sOC Lucia: Open chat** brings it up). It has what the desktop chat has:
+  - **Conversations** kept between sessions (pick, new, rename, delete).
+  - **Questions / Agent** modes and the **Think** switch (the model reasons first; the reasoning shows folded above the answer).
+  - **Attachments**: the open file, a file of the workspace, a file on disk, the selection ("Include the current selection") and **pasted images** (Ctrl+V; needs an AI with vision in the app).
+  - Streaming answers, **Stop**, copy / edit / resend a question, and for every code block **Copy**, **Insert** (at the cursor, or replacing the selection) and **Save…** as a file.
+- **Agent mode sees and changes your workspace.** The AI can list, read and search the files of the open folder and look at the active editor by itself (`list_files`, `read_file`, `search_text`, `active_editor`), so "analyse this project" works without pasting code; each step and its output are shown in the chat. `write_file` and `run_command` (PowerShell in the workspace folder) always ask before doing anything. Turn the tools off with `socLucia.workspaceTools`.
 - Right-click on a selection → **sOC Lucia ›** *Ask about the selection*, *Explain*, *Improve*, *Write tests*.
 - **Copilot Chat and other model consumers**: the extension registers the app as a language model provider (vendor `soclucia`). In Copilot Chat, *Manage models…* shows "*<your AI> (sOC Lucia)*". Needs VS Code 1.104 or newer.
 

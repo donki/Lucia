@@ -16,6 +16,17 @@ public sealed class StoredMessage
     public string? ToolCallId { get; set; }
     public string? Command { get; set; }
     public DateTimeOffset At { get; set; } = DateTimeOffset.Now;
+    /// <summary>Ficheros e imagenes que acompañan a la pregunta (copiados a <c>threads\&lt;id&gt;\</c>).</summary>
+    public List<Attachment>? Attachments { get; set; }
+}
+
+/// <summary>Un adjunto de una pregunta: la copia que guarda la aplicacion y si es una imagen (va al modelo como tal) o un texto (va dentro de la pregunta).</summary>
+public sealed class Attachment
+{
+    public string Name { get; set; } = string.Empty;
+    public string Path { get; set; } = string.Empty;
+    public bool IsImage { get; set; }
+    public long Bytes { get; set; }
 }
 
 public sealed class ChatThread
@@ -72,7 +83,34 @@ public static class ThreadStore
         var path = Path.Combine(Paths.Threads, thread.Id + ".json");
         if (File.Exists(path))
             File.Delete(path);
+        try { if (Directory.Exists(FilesFolder(thread))) Directory.Delete(FilesFolder(thread), recursive: true); } catch (Exception) { }
     }
+
+    /// <summary>Carpeta de los adjuntos de una conversacion.</summary>
+    public static string FilesFolder(ChatThread thread) => Path.Combine(Paths.Threads, thread.Id);
+
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
+
+    /// <summary>Copia un fichero a la carpeta de la conversacion y devuelve su ficha.</summary>
+    public static Attachment Attach(ChatThread thread, string sourcePath)
+    {
+        Directory.CreateDirectory(FilesFolder(thread));
+        var name = Path.GetFileName(sourcePath);
+        var target = Path.Combine(FilesFolder(thread), $"{DateTime.Now:HHmmssfff}-{name}");
+        File.Copy(sourcePath, target, overwrite: true);
+        return new Attachment { Name = name, Path = target, IsImage = ImageExtensions.Contains(Path.GetExtension(name)), Bytes = new FileInfo(target).Length };
+    }
+
+    /// <summary>Guarda una imagen pegada del portapapeles como PNG en la conversacion.</summary>
+    public static Attachment AttachImage(ChatThread thread, byte[] png)
+    {
+        Directory.CreateDirectory(FilesFolder(thread));
+        var target = Path.Combine(FilesFolder(thread), $"{DateTime.Now:HHmmssfff}-pegado.png");
+        File.WriteAllBytes(target, png);
+        return new Attachment { Name = "imagen.png", Path = target, IsImage = true, Bytes = png.Length };
+    }
+
+    public static bool IsImageFile(string path) => ImageExtensions.Contains(Path.GetExtension(path));
 
     /// <summary>Titulo a partir de la primera pregunta: la primera linea, recortada.</summary>
     public static string TitleFrom(string text)

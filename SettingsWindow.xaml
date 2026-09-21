@@ -61,8 +61,6 @@
                         <TextBlock x:Name="InstructionsHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
                         <TextBox x:Name="InstructionsBox" Style="{StaticResource Field}" Height="90" AcceptsReturn="True" TextWrapping="Wrap"
                                  VerticalContentAlignment="Top" Padding="8,6" VerticalScrollBarVisibility="Auto" LostFocus="OnInstructionsChanged" />
-                        <CheckBox x:Name="ThinkingCheck" Style="{StaticResource Check}" Margin="0,12,0,0" Click="OnThinkingChanged" />
-                        <TextBlock x:Name="ThinkingHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
                         <CheckBox x:Name="InternetCheck" Style="{StaticResource Check}" Margin="0,12,0,0" Click="OnInternetChanged" />
                         <TextBlock x:Name="InternetHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
                         <DockPanel Margin="0,12,0,0">
@@ -125,6 +123,20 @@
                         <TextBlock x:Name="PermHint" Style="{StaticResource HintText}" Margin="0,0,0,6" />
                         <StackPanel x:Name="PermList" />
                         <Button x:Name="OpenCommandLogButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnOpenCommandLog" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Imagenes generadas (stable-diffusion.cpp + Stable Diffusion 1.5) -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="ImagesTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="ImagesHint" Style="{StaticResource HintText}" Margin="0,0,0,8" TextWrapping="Wrap" />
+                        <TextBlock x:Name="ImagesStatus" Style="{StaticResource BodyText}" Margin="0,0,0,8" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="ImagesInstallButton" Style="{StaticResource OutlineButton}" Click="OnImagesInstall" />
+                            <Button x:Name="ImagesFolderButton" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" Click="OnImagesFolder" />
+                            <Button x:Name="ImagesRemoveButton" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" Click="OnImagesRemove" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

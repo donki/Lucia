@@ -102,19 +102,29 @@
                 </Border>
                 <!-- La IA de esta sesion: las instaladas, para cambiar sin pasar por Ajustes -->
                 <ComboBox x:Name="ModelCombo" Style="{StaticResource DeviceCombo}" Height="34" MinWidth="180" Margin="10,0,0,6" VerticalAlignment="Center" SelectionChanged="OnModelPicked" />
+                <!-- Pensar antes de responder: aqui, en el chat, para encenderlo o apagarlo pregunta a pregunta -->
+                <Border Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource Separator}" BorderThickness="1" CornerRadius="10" Padding="2" Margin="10,0,0,6" VerticalAlignment="Center">
+                    <ToggleButton x:Name="ThinkButton" Style="{StaticResource SegmentButton}" Click="OnThinkToggled">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE9D9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" /><TextBlock x:Name="ThinkText" VerticalAlignment="Center" /></StackPanel>
+                    </ToggleButton>
+                </Border>
                 </StackPanel>
+                <!-- Adjuntos a punto de enviarse: nombre (o miniatura) y quitar -->
+                <WrapPanel x:Name="AttachmentsPanel" Margin="0,0,0,6" Visibility="Collapsed" />
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Border Background="{DynamicResource CardBackground}" CornerRadius="12" BorderBrush="{DynamicResource Separator}" BorderThickness="1" Padding="10,6">
+                    <Border Background="{DynamicResource CardBackground}" CornerRadius="12" BorderBrush="{DynamicResource Separator}" BorderThickness="1" Padding="10,6"
+                            AllowDrop="True" Drop="OnComposerDrop" DragOver="OnComposerDragOver">
                         <TextBox x:Name="Composer" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" MaxHeight="180"
                                  VerticalScrollBarVisibility="Auto" BorderThickness="0" Background="Transparent"
                                  Foreground="{DynamicResource TextPrimary}" CaretBrush="{DynamicResource TextPrimary}"
-                                 PreviewKeyDown="OnComposerKey" />
+                                 PreviewKeyDown="OnComposerKey" AllowDrop="True" PreviewDrop="OnComposerDrop" PreviewDragOver="OnComposerDragOver" />
                     </Border>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="8,0,0,0">
+                        <Button x:Name="AttachButton" Style="{StaticResource GhostIconButton}" Content="&#xE723;" Width="40" Height="40" Click="OnAttach" />
                         <Button x:Name="StopButton" Style="{StaticResource DangerIconButton}" Content="&#xE71A;" Width="40" Height="40" Click="OnStop" Visibility="Collapsed" />
                         <Button x:Name="SendButton" Style="{StaticResource IconButton}" Content="&#xE724;" Width="44" Height="40" Click="OnSend" />
                     </StackPanel>

@@ -7,7 +7,7 @@ using System.Text.Json.Nodes;
 namespace SocLucia.Engine;
 
 /// <summary>Un mensaje tal como va al modelo. Los de herramienta llevan <see cref="ToolCallId"/>; los del asistente que pidieron herramientas, <see cref="ToolCalls"/>.</summary>
-public sealed record ChatMessage(string Role, string Content, string? ToolCallId = null, JsonArray? ToolCalls = null);
+public sealed record ChatMessage(string Role, string Content, string? ToolCallId = null, JsonArray? ToolCalls = null, IReadOnlyList<string>? Images = null);
 
 /// <summary>Una llamada a herramienta que pide el modelo (ya juntada de sus trozos).</summary>
 public sealed class ToolCall
@@ -119,6 +119,15 @@ public static class ChatClient
         {
             o["content"] = m.Content.Length > 0 ? m.Content : null;
             o["tool_calls"] = JsonNode.Parse(m.ToolCalls.ToJsonString());
+        }
+        else if (m.Images is { Count: > 0 })
+        {
+            // Texto e imagenes en partes (formato OpenAI); las imagenes van en base64 (data URL).
+            var parts = new JsonArray();
+            foreach (var image in m.Images)
+                parts.Add(new JsonObject { ["type"] = "image_url", ["image_url"] = new JsonObject { ["url"] = image } });
+            parts.Add(new JsonObject { ["type"] = "text", ["text"] = m.Content });
+            o["content"] = parts;
         }
         else
             o["content"] = m.Content;

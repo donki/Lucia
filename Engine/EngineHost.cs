@@ -85,6 +85,12 @@ public sealed class EngineHost : IDisposable
     }
 
     public string BaseUrl => $"http://127.0.0.1:{_port}";
+
+    /// <summary>El modelo cargado entiende imagenes (arranco con su mmproj).</summary>
+    public bool Vision { get; private set; }
+
+    /// <summary>Si el modelo activo tiene su parte de vision descargada (sin arrancar nada).</summary>
+    public static bool VisionAvailable(AppSettings settings) => settings.ModelPath is { Length: > 0 } p && File.Exists(ModelCatalog.MmprojPathFor(p));
     public string Accelerator => _archive?.Accelerator ?? "-";
 
     private async Task<string> EnsureBinariesAsync(EnginePin.Archive archive, IProgress<Downloader.Progress>? progress, CancellationToken cancel)
@@ -142,6 +148,16 @@ public sealed class EngineHost : IDisposable
             "-ngl", gpuLayers.ToString(), "-fa", flash, "--jinja", "--reasoning-format", "auto", "--no-webui",
         })
             info.ArgumentList.Add(arg);
+        // Con la parte de vision al lado, el modelo entiende las imagenes que se adjuntan.
+        var mmproj = ModelCatalog.MmprojPathFor(settings.ModelPath!);
+        if (File.Exists(mmproj))
+        {
+            info.ArgumentList.Add("--mmproj");
+            info.ArgumentList.Add(mmproj);
+            Vision = true;
+        }
+        else
+            Vision = false;
         Log($"arrancando llama-server ({archive.Accelerator}) con {Path.GetFileName(settings.ModelPath)} en :{_port}");
         var process = Process.Start(info) ?? throw new InvalidOperationException("No se ha podido arrancar llama-server");
         ChildJob.Add(process);   // muere con la aplicacion, pase lo que pase

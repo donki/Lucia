@@ -58,6 +58,7 @@ public static class ToolBox
     public const string ScheduleTask = "schedule_task";
     public const string ListTasks = "list_tasks";
     public const string DeleteTask = "delete_task";
+    public const string GenerateImage = "generate_image";
 
     private const int MaxChars = 12_000;
 
@@ -141,7 +142,27 @@ public static class ToolBox
             "Read one of the user's documents by its relative name as listed by list_documents (long documents are cut).",
             Params(("name", "Relative name from list_documents.")),
             (a, _) => Task.FromResult(ReadDocumentText(Tool.Arg(a, "name")))),
+        new(GenerateImage, Resource.Free,
+            "Generate a picture from a text description with a local Stable Diffusion model (no internet). Use it whenever the user asks for an image, drawing, illustration, photo-like picture, logo idea or wallpaper. Write the prompt in English, concrete and visual (subject, style, lighting, colors); put what to avoid in negative_prompt. It takes 15-60 seconds. The result line `Image: <path>` is shown to the user as the picture: do not repeat the path, just describe briefly what you made.",
+            Params(("prompt", "Visual description in English."), ("negative_prompt", "What to avoid (optional), e.g. blurry, text, watermark."), ("shape", "square, wide or tall (optional, default square).")),
+            GenerateImageAsync),
     ];
+
+    /// <summary>La imagen se genera en el PC; el resultado «Image: ruta» lo pinta la burbuja de la herramienta.</summary>
+    private static async Task<string> GenerateImageAsync(JsonObject args, CancellationToken cancel)
+    {
+        var prompt = Tool.Arg(args, "prompt").Trim();
+        if (prompt.Length == 0) return "[error] empty prompt";
+        var shape = Tool.Arg(args, "shape").Trim().ToLowerInvariant();
+        var (w, h) = shape switch { "wide" => (768, 448), "tall" => (448, 768), _ => (512, 512) };
+        var negative = Tool.Arg(args, "negative_prompt").Trim();
+        if (negative.Length == 0) negative = "blurry, low quality, deformed, text, watermark";
+        var path = await Engine.ImageEngine.GenerateAsync(new Engine.ImageEngine.Request(prompt, negative, w, h), ImageProgress, cancel);
+        return "Image: " + path;
+    }
+
+    /// <summary>Progreso de la descarga del motor o del modelo de imagenes (la ventana lo enseña en la barra de estado).</summary>
+    public static IProgress<Engine.Downloader.Progress>? ImageProgress { get; set; }
 
     public static Tool? Find(string name) => name == SystemInfo ? Info : All.FirstOrDefault(t => t.Name == name) ?? Free.FirstOrDefault(t => t.Name == name);
 

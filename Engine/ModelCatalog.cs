@@ -96,6 +96,49 @@ public static class ModelCatalog
         return files.OrderBy(f => f.Size ?? long.MaxValue).FirstOrDefault() ?? throw new FileNotFoundException("El repositorio no tiene ningún GGUF");
     }
 
+    /// <summary>
+    /// La parte de vision del modelo (el «mmproj»), si el repositorio la publica: con ella llama.cpp
+    /// entiende imagenes. Se guarda al lado del modelo como <c>&lt;modelo&gt;.mmproj.gguf</c>.
+    /// </summary>
+    public static async Task<RepoFile?> PickMmprojAsync(string repo, CancellationToken cancel)
+    {
+        using var response = await Downloader.Http.GetAsync($"https://huggingface.co/api/models/{repo}/tree/main", cancel);
+        if (!response.IsSuccessStatusCode)
+            return null;
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancel));
+        var files = new List<RepoFile>();
+        foreach (var entry in doc.RootElement.EnumerateArray())
+        {
+            var path = entry.GetProperty("path").GetString() ?? string.Empty;
+            if (!path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase) || !path.Contains("mmproj", StringComparison.OrdinalIgnoreCase))
+                continue;
+            long? size = entry.TryGetProperty("lfs", out var lfs) && lfs.TryGetProperty("size", out var ls) && ls.ValueKind == JsonValueKind.Number ? ls.GetInt64() : null;
+            files.Add(new RepoFile(path, size));
+        }
+        return files.FirstOrDefault(f => f.Name.Contains("F16", StringComparison.OrdinalIgnoreCase))
+            ?? files.FirstOrDefault(f => f.Name.Contains("BF16", StringComparison.OrdinalIgnoreCase))
+            ?? files.OrderBy(f => f.Size ?? long.MaxValue).FirstOrDefault();
+    }
+
+    /// <summary>Ruta del mmproj que acompaña a un modelo (exista o no).</summary>
+    public static string MmprojPathFor(string modelPath) => modelPath + ".mmproj.gguf";
+
+    /// <summary>Descarga la parte de vision de un modelo instalado (si su repositorio la tiene). Devuelve la ruta, o null si no hay.</summary>
+    public static async Task<string?> DownloadMmprojAsync(InstalledModel model, IProgress<Downloader.Progress> progress, CancellationToken cancel)
+    {
+        var repo = model.Repo ?? All.FirstOrDefault(m => m.Name == model.Name)?.Repo;
+        if (repo is null)
+            return null;
+        var file = await PickMmprojAsync(repo, cancel);
+        if (file is null)
+            return null;
+        var destination = MmprojPathFor(model.Path);
+        if (File.Exists(destination) && (file.Size is null || new FileInfo(destination).Length == file.Size))
+            return destination;
+        await Downloader.DownloadAsync($"https://huggingface.co/{repo}/resolve/main/{file.Name}?download=true", destination, null, progress, cancel);
+        return destination;
+    }
+
     /// <summary>Descarga el fichero elegido a la carpeta de modelos y devuelve su ruta.</summary>
     public static async Task<string> DownloadAsync(CatalogModel model, RepoFile file, IProgress<Downloader.Progress> progress, CancellationToken cancel)
     {
