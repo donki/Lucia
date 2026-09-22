@@ -28,6 +28,7 @@ public partial class App : Application
         Paths.Ensure();
         ChildJob.KillStale(Paths.Engine);
         AppSettings.Load();
+        WindowsStartup.Refresh();
         if (AppSettings.Current.Language is { } language)
             Loc.Use(language);
         ThemeManager.Apply();

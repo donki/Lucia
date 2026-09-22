@@ -1,5 +1,13 @@
 # Changelog — sOC Lucia
 
+## 2026.9.22.0 — «Arrancar con Windows» siempre apunta a la aplicación que se usa
+
+- **Ventana negra al arrancar con Windows.** La entrada de arranque se quedó apuntando a una
+  compilación de pruebas vieja (`bin\Debug`), que abría una ventana negra y parecía colgada
+  «cargando la IA»; la aplicación de OneDrive cargaba Qwen3.5 4B en menos de 30 s. Ahora, al
+  arrancar, si «Arrancar con Windows» está puesto, la entrada pasa a apuntar al exe que se está
+  ejecutando (las compilaciones Debug no la tocan). Corregida a mano la entrada de Josep.
+
 ## 2026.9.21.0 — Imágenes generadas, adjuntos y visión, «Pensar» en el chat y VS Code en la barra lateral
 
 - **Imágenes en el chat**: «dibuja un faro al atardecer» y la IA la genera en este PC con

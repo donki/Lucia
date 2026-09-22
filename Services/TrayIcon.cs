@@ -225,6 +225,29 @@ public static class WindowsStartup
         catch (Exception) { return false; }
     }
 
+    /// <summary>
+    /// Al arrancar: si «Arrancar con Windows» esta puesto, la entrada pasa a apuntar a ESTE exe. Asi
+    /// no se queda clavada en una copia vieja (una compilacion de pruebas, una carpeta que ya no
+    /// existe) cuando la aplicacion se mueve o se actualiza. Las compilaciones Debug no tocan nada:
+    /// si no, cada prueba secuestraria el arranque del usuario.
+    /// </summary>
+    public static void Refresh()
+    {
+#if !DEBUG
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey);
+            var current = key?.GetValue(ValueName) as string;
+            if (string.IsNullOrEmpty(current) || Environment.ProcessPath is not { Length: > 0 } exe)
+                return;
+            var wanted = "\"" + exe + "\" --tray";
+            if (!string.Equals(current, wanted, StringComparison.OrdinalIgnoreCase))
+                Set(true);
+        }
+        catch (Exception) { }
+#endif
+    }
+
     public static void Set(bool enabled)
     {
         try
