@@ -2,7 +2,7 @@
   "name": "soc-lucia-code",
   "displayName": "sOC Lucia Code",
   "description": "Program with the private AI running in sOC Lucia on this computer: a chat in the activity bar with conversations, Questions/Agent modes, reasoning, attachments and images, without anything leaving the PC.",
-  "version": "2026.9.22",
+  "version": "2026.9.221",
   "publisher": "socratic",
   "license": "MIT",
   "icon": "icon.png",

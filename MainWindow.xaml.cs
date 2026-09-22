@@ -711,6 +711,10 @@ public partial class MainWindow : Window
         for (var round = 0; round < 12; round++)
         {
             cancel.ThrowIfCancellationRequested();
+            // Generar una imagen mata el motor de texto (no caben los dos en la grafica) y al volver
+            // el puerto es otro: se vuelve a pedir la direccion en cada vuelta. Si el motor sigue en
+            // pie esto no cuesta nada; si no, lo levanta otra vez.
+            baseUrl = await App.Engine.EnsureReadyAsync(new Progress<Downloader.Progress>(PaintDownload), cancel);
             var messages = new List<ChatMessage>();
             var system = settings.Instructions.Trim();
             if (thread.WorkMode)

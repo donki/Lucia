@@ -1,5 +1,16 @@
 # Changelog — sOC Lucia
 
+## 2026.9.22.1 — Arreglo: la respuesta tras generar una imagen; y los botones se notan al pulsarlos
+
+- **«No se ha podido responder: … 127.0.0.1:puerto»** después de dibujar. Generar una imagen mata el
+  motor de texto (no caben los dos en la gráfica) y al volver escucha en **otro puerto**, pero la
+  conversación seguía hablando con el viejo. Ahora, en cada vuelta de la respuesta, se vuelve a pedir
+  la dirección del motor: si sigue en pie no cuesta nada y, si lo mató la imagen, lo levanta otra vez
+  y la respuesta continúa. Probado: dibujo + frase en la misma conversación, sin error.
+- **Los botones acusan el clic**: los de icono (copiar, editar, reenviar, los de la lista de
+  conversaciones, los de la barra), los de contorno y los de estado se oscurecen y encogen un poco
+  mientras están pulsados. Antes solo cambiaban al pasar por encima y no parecía que se hiciera clic.
+
 ## 2026.9.22.0 — «Arrancar con Windows» siempre apunta a la aplicación que se usa
 
 - **Ventana negra al arrancar con Windows.** La entrada de arranque se quedó apuntando a una
