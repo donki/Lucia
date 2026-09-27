@@ -69,9 +69,9 @@ public static class ToolBox
             Params(("command", "The PowerShell command line to run.")),
             async (a, c) => { var r = await CommandTool.RunAsync(Tool.Arg(a, "command"), AppSettings.Current.WorkFolder, c); return (r.TimedOut ? "[timed out after 3 minutes]\n" : $"[exit code {r.ExitCode}]\n") + r.Output; }),
         new(ReadFile, Resource.FilesRead,
-            "Read a text file from the PC and return its content (UTF-8, long files are cut).",
+            "Read a text file from the PC and return its content (UTF-8, long files are cut). PDF and Word (.docx) files come back as their text.",
             Params(("path", "Full path, or relative to the working folder.")),
-            (a, _) => Task.FromResult(Cut(File.ReadAllText(Full(Tool.Arg(a, "path")))))),
+            (a, _) => Task.FromResult(Cut(ReadAnyText(Full(Tool.Arg(a, "path")))))),
         new(ListFolder, Resource.FilesRead,
             "List the files and subfolders of a folder with sizes.",
             Params(("path", "Folder path, or relative to the working folder.")),
@@ -342,6 +342,10 @@ public static class ToolBox
         else File.WriteAllText(path, content, new UTF8Encoding(false));
         return $"Saved: {path}";
     }
+
+    /// <summary>Un fichero como texto: PDF y .docx por su extractor; lo demas tal cual.</summary>
+    private static string ReadAnyText(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() is ".pdf" or ".docx" ? DocumentIndex.ReadText(path) : File.ReadAllText(path);
 
     private static string ReadDocumentText(string name)
     {

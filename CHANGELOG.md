@@ -1,5 +1,21 @@
 # Changelog — sOC Lucia
 
+## 2026.9.27.0 — PDF en tus documentos, Copilot Chat con herramientas e imágenes, y los errores ya no cierran la aplicación
+
+- **PDF en la carpeta de documentos** (y como adjunto, y con `read_file`): el texto se saca con
+  [PdfPig](https://github.com/UglyToad/PdfPig) (Apache 2.0), página a página y en orden de lectura.
+  Un PDF escaneado, sin capa de texto, se dice como tal para que la IA no se invente lo que pone.
+  Hasta 64 MB y 1000 páginas por fichero. Probado con un libro de 4,5 MB: «según mis documentos PDF,
+  ¿qué es un lakehouse?» lo lee y responde citando el fichero.
+- **Copilot Chat con herramientas e imágenes.** El proveedor de modelo de la extensión de VS Code
+  declara `toolCalling` (ya se puede elegir en el modo agente de Copilot: las llamadas y sus
+  resultados van al modelo como `tool_calls` y mensajes `tool`) e `imageInput` cuando la IA cargada
+  tiene visión. La puerta (`/v1/models`) dice ahora el contexto y si el modelo admite herramientas y
+  visión; el tamaño de entrada que ve Copilot sale del contexto de Ajustes. Probado con Qwen3.5 4B:
+  pide la herramienta, contesta con su resultado y lee una imagen.
+- **Un error inesperado ya no cierra Lucia**: se apunta con su traza en `logs\engine.log`, sale un
+  aviso en tu idioma y la aplicación sigue (también los errores de tareas en segundo plano).
+
 ## 2026.9.22.1 — Arreglo: la respuesta tras generar una imagen; y los botones se notan al pulsarlos
 
 - **«No se ha podido responder: … 127.0.0.1:puerto»** después de dibujar. Generar una imagen mata el

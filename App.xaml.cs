@@ -16,6 +16,7 @@ public partial class App : Application
 
     private void OnStartup(object sender, StartupEventArgs e)
     {
+        GuardAgainstCrashes();
         // Una sola instancia: dos aplicaciones cargarian el modelo dos veces.
         _single = new Mutex(true, "sOCLucia.SingleInstance." + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(Paths.Root.ToLowerInvariant())))[..12], out var first);
         if (!first)
@@ -74,6 +75,34 @@ public partial class App : Application
                 WhenLoaded(window, () => new AboutWindow { Owner = window }.Show());
         }
 #endif
+    }
+
+    private static bool _alerting;
+
+    /// <summary>
+    /// Gestor global de excepciones (constitucion General 6.12): un error que no se esperaba no cierra
+    /// la aplicacion; se apunta con su traza en logs\engine.log y se avisa en el idioma del usuario.
+    /// </summary>
+    private void GuardAgainstCrashes()
+    {
+        DispatcherUnhandledException += (_, ex) =>
+        {
+            EngineHost.Log($"error no controlado: {ex.Exception}");
+            ex.Handled = true;
+            // Un solo aviso a la vez: un error que se repite en cada pintado no debe abrir cien ventanas.
+            if (_alerting || MainWindow is not { IsLoaded: true } owner) return;
+            _alerting = true;
+            try { PromptWindow.Alert(owner, Loc.Get("Error"), Loc.Get("UnexpectedError")); }
+            catch (Exception) { }
+            finally { _alerting = false; }
+        };
+        TaskScheduler.UnobservedTaskException += (_, ex) =>
+        {
+            EngineHost.Log($"error no controlado en tarea: {ex.Exception}");
+            ex.SetObserved();
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
+            EngineHost.Log($"error fatal: {ex.ExceptionObject}");
     }
 
 #if DEBUG

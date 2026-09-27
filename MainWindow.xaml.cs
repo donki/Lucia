@@ -259,7 +259,7 @@ public partial class MainWindow : Window
     {
         ".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".xml", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".log",
         ".cs", ".xaml", ".js", ".ts", ".jsx", ".tsx", ".py", ".java", ".kt", ".c", ".h", ".cpp", ".hpp", ".rs", ".go", ".rb", ".php", ".swift",
-        ".html", ".htm", ".css", ".scss", ".sql", ".ps1", ".psm1", ".bat", ".cmd", ".sh", ".gradle", ".csproj", ".sln", ".props", ".targets", ".tex", ".rtf", ".docx",
+        ".html", ".htm", ".css", ".scss", ".sql", ".ps1", ".psm1", ".bat", ".cmd", ".sh", ".gradle", ".csproj", ".sln", ".props", ".targets", ".tex", ".rtf", ".docx", ".pdf",
     };
 
     private void OnAttach(object sender, RoutedEventArgs e)

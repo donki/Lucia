@@ -107,6 +107,15 @@ public sealed class EditorDoor : IDisposable
                         ["owned_by"] = "soc-lucia",
                         ["name"] = settings.ModelName,
                         ["file"] = Path.GetFileName(settings.ModelPath),
+                        // Lo que el modelo sabe hacer, para que los editores lo declaren (Copilot Chat:
+                        // toolCalling e imageInput). Herramientas siempre (llama-server con --jinja); vision
+                        // si tiene su mmproj al lado, que es con lo que arranca el motor.
+                        ["context_length"] = Math.Clamp(settings.ContextTokens, 2048, 32768),
+                        ["capabilities"] = new JsonObject
+                        {
+                            ["tools"] = true,
+                            ["vision"] = settings.ModelPath is { Length: > 0 } model && File.Exists(Engine.ModelCatalog.MmprojPathFor(model)),
+                        },
                     });
                 await WriteJsonAsync(response, 200, new JsonObject { ["object"] = "list", ["data"] = data });
                 return;

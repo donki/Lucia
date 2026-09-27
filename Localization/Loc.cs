@@ -218,7 +218,7 @@ public static class Loc
         ["InternetTitle"] = "Let the AI access the internet",
         ["InternetHint"] = "In both modes it can search the web and read pages when a question needs current or verifiable information; each search and page shows up in the conversation. Nothing else leaves the PC. Unticked, the AI works offline.",
         ["DocsTitle"] = "Your documents",
-        ["DocsHint"] = "Put text files, Markdown, CSV, JSON, code, HTML or Word (.docx) in this folder and the AI takes them into account (it also saves here the documents you ask it to write, .docx included): with each question it receives the passages that match it, and it can list and read them whole. Nothing is indexed anywhere else.",
+        ["DocsHint"] = "Put text files, Markdown, CSV, JSON, code, HTML, Word (.docx) or PDF in this folder and the AI takes them into account (it also saves here the documents you ask it to write, .docx included): with each question it receives the passages that match it, and it can list and read them whole. Nothing is indexed anywhere else.",
         ["DocsPick"] = "Choose another folder",
         ["DocsOpen"] = "Open the folder",
         ["DocsCount"] = "{0} document(s) taken into account.",
@@ -254,6 +254,7 @@ public static class Loc
         ["Yes"] = "Yes",
         ["No"] = "No",
         ["Error"] = "Error",
+        ["UnexpectedError"] = "Something went wrong, but Lucia is still running. Try again; if it happens again, the details are in the engine log (Settings).",
     };
 
     private static readonly Dictionary<string, string> Spanish = new()
@@ -464,7 +465,7 @@ public static class Loc
         ["InternetTitle"] = "Permitir que la IA acceda a internet",
         ["InternetHint"] = "En los dos modos puede buscar en la web y leer p\u00e1ginas cuando una pregunta necesita informaci\u00f3n actual o comprobable; cada b\u00fasqueda y p\u00e1gina se ve en la conversaci\u00f3n. Nada m\u00e1s sale del PC. Sin marcar, la IA trabaja sin conexi\u00f3n.",
         ["DocsTitle"] = "Tus documentos",
-        ["DocsHint"] = "Deja en esta carpeta ficheros de texto, Markdown, CSV, JSON, c\u00f3digo, HTML o Word (.docx) y la IA los tiene en cuenta (aqu\u00ed guarda tambi\u00e9n los documentos que le pidas, .docx incluido): con cada pregunta recibe los pasajes que encajan con ella, y puede listarlos y leerlos enteros. No se indexa nada fuera del PC.",
+        ["DocsHint"] = "Deja en esta carpeta ficheros de texto, Markdown, CSV, JSON, c\u00f3digo, HTML, Word (.docx) o PDF y la IA los tiene en cuenta (aqu\u00ed guarda tambi\u00e9n los documentos que le pidas, .docx incluido): con cada pregunta recibe los pasajes que encajan con ella, y puede listarlos y leerlos enteros. No se indexa nada fuera del PC.",
         ["DocsPick"] = "Elegir otra carpeta",
         ["DocsOpen"] = "Abrir la carpeta",
         ["DocsCount"] = "{0} documento(s) en cuenta.",
@@ -500,6 +501,7 @@ public static class Loc
         ["Yes"] = "Sí",
         ["No"] = "No",
         ["Error"] = "Error",
+        ["UnexpectedError"] = "Algo ha fallado, pero Lucia sigue funcionando. Vuelve a intentarlo; si se repite, el detalle está en el registro del motor (Ajustes).",
     };
 
     public static string Language { get; private set; } =

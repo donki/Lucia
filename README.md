@@ -33,7 +33,7 @@ esa misma IA.
   listas, negrita, bloques de código con botón de copiar), botón de parar; cada pregunta se puede
   copiar, editar y reenviar. Encima del redactor, el modo (Preguntas/Agente) y la IA en uso, que se
   cambia entre las instaladas sin pasar por Ajustes.
-- **Adjuntos**: ficheros de texto, código o .docx (van dentro de la pregunta) e **imágenes** (botón 📎,
+- **Adjuntos**: ficheros de texto, código, .docx o PDF (van dentro de la pregunta) e **imágenes** (botón 📎,
   arrastrar o Ctrl+V). Las imágenes las entiende la IA si tiene **visión**: a las del catálogo que la
   tienen (Gemma 4, Qwen3.5, Ministral 3, Qwen3.8) se les descarga su parte de visión (`mmproj`) al
   adjuntar la primera imagen y el motor arranca con `--mmproj`.
@@ -52,7 +52,7 @@ esa misma IA.
   las usa solo si la pregunta lo pide; en **modo agente** resuelve la tarea paso a paso. Registro en
   `logs\actions.log`.
 - **Tus documentos.** Una carpeta (`Documentos\Lucia` por defecto) con texto, Markdown, CSV, JSON,
-  código, HTML o .docx que la IA tiene en cuenta: con cada pregunta recibe los pasajes que encajan y
+  código, HTML, .docx o **PDF** (texto extraído con PdfPig; un PDF escaneado sin capa de texto se avisa como tal) que la IA tiene en cuenta: con cada pregunta recibe los pasajes que encajan y
   puede listarlos y leerlos; también **genera documentos** ahí (.md, .txt, .html, .csv, **.docx**).
 - **Memoria sobre ti.** Frases que la IA guarda cuando le cuentas algo duradero; en Ajustes se ven
   y se borran (o se apaga). Solo en este PC.
@@ -72,7 +72,8 @@ esa misma IA.
   código copiar, insertar y guardar. En modo agente **ve y cambia el workspace** (lista, lee y busca
   ficheros, mira el editor activo; escribir un fichero o ejecutar una orden pide confirmación),
   acciones sobre la selección (preguntar, explicar, mejorar, tests) y un proveedor de modelo para el
-  *Manage models…* de Copilot Chat. Continue, Cline y similares funcionan con la misma dirección y
+  *Manage models…* de Copilot Chat, **con herramientas** (sirve en el modo agente de Copilot) e
+  **imágenes** cuando la IA cargada tiene visión (la puerta lo dice en `/v1/models › capabilities`). Continue, Cline y similares funcionan con la misma dirección y
   token. Detalles en [vscode/README.md](vscode/README.md).
 
 ## Privacidad
@@ -87,8 +88,10 @@ el token que se muestra en Ajustes.
 - `App.xaml`: sistema visual sOCratic (paleta índigo, tarjetas, botones con icono); `Services/ThemeManager.cs` sigue al tema de Windows.
 - `MainWindow`: conversaciones y chat. `SettingsWindow`: la IA (catálogo, importar), instrucciones, razonamiento, letra, puerta de editores, idioma, diagnóstico. `AboutWindow`: la «Acerca de» del catálogo. `PromptWindow`: los diálogos pequeños.
 - `Engine/`: `EnginePin` (versión fijada de llama.cpp y sus SHA), `EngineHost` (descarga, arranque, salud, parada; `--mmproj` si el modelo tiene visión), `ModelCatalog` (catálogo, elección del cuantizado, descarga; `PickMmprojAsync`/`DownloadMmprojAsync` para la parte de visión), `ChatClient` (SSE; imágenes como partes `image_url`), `Downloader`, `ImageEngine` (stable-diffusion.cpp fijado con SHA, modelo SD 1.5 y generación con `sd-cli`).
+- `Services/DocumentIndex.cs`: la carpeta de documentos (trozos por palabras; PDF con PdfPig, .docx a mano).
+- `App.xaml.cs`: arranque, instancia única y el gestor global de errores (un fallo inesperado se registra en `logs\engine.log`, se avisa y la aplicación sigue).
 - `Chat/`: `ThreadStore` (JSON por conversación) y `Markdown` (render a WPF).
-- `Editor/EditorDoor.cs`: la puerta para editores (`HttpListener`).
+- `Editor/EditorDoor.cs`: la puerta para editores (`HttpListener`); `/v1/models` dice el contexto y si el modelo admite herramientas y visión.
 - `Agent/`: `CommandTool` (definición de la herramienta, ejecución con PowerShell y registro) y `CommandConfirmWindow`; el bucle de vueltas vive en `MainWindow.AnswerLoopAsync`.
 - `Services/TrayIcon.cs`: icono de bandeja (Shell_NotifyIcon) y `WindowsStartup` (HKCU\Run).
 - `Localization/Loc.cs`: todos los textos, es/en.

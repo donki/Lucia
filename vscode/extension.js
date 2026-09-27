@@ -35,7 +35,14 @@ async function listModels() {
   const r = await fetch(`${baseUrl}/models`, { headers: headers() });
   if (!r.ok) throw new Error(await describeError(r));
   const j = await r.json();
-  return (j.data || []).map((m) => ({ id: m.id, name: m.name || m.id }));
+  // capabilities/context_length come from sOC Lucia 2026.9.27 on (older apps: tools yes, vision no).
+  return (j.data || []).map((m) => ({
+    id: m.id,
+    name: m.name || m.id,
+    tools: m.capabilities?.tools !== false,
+    vision: m.capabilities?.vision === true,
+    context: Number(m.context_length) || 8192,
+  }));
 }
 
 async function describeError(r) {
@@ -56,12 +63,12 @@ async function describeError(r) {
  * { content, reasoning, toolCalls, finish }. `thinking` lets the model reason first (the door
  * turns it off unless asked); `images` (data URLs) go with the last user message.
  */
-async function chat(messages, onDelta, signal, tools, thinking) {
+async function chat(messages, onDelta, signal, tools, thinking, toolChoice) {
   const { baseUrl, maxTokens, temperature } = config();
   const body = { model: "local", messages, stream: true, max_tokens: thinking ? maxTokens * 3 : maxTokens, temperature, chat_template_kwargs: { enable_thinking: !!thinking } };
   if (tools && tools.length) {
     body.tools = tools;
-    body.tool_choice = "auto";
+    body.tool_choice = toolChoice || "auto";
   }
   let r;
   try {
@@ -699,6 +706,7 @@ async function checkConnection() {
     const names = models.map((m) => m.name).join(", ") || "no AI installed yet";
     vscode.window.showInformationMessage(`${APP} is reachable. AI: ${names}.`);
     provider?.refreshModel();
+    lmInfoChanged.fire(); // the AI (or its vision) may have changed in the app: Copilot asks again
   } catch (e) {
     const pick = await vscode.window.showErrorMessage(`${APP}: ${e.message}`, "Open settings");
     if (pick) vscode.commands.executeCommand("workbench.action.openSettings", "socLucia");
@@ -707,10 +715,87 @@ async function checkConnection() {
 
 // ------------------------------------------------------------------ Language Model provider (Copilot Chat "Manage models" and other lm consumers)
 
+// Copilot Chat (and any lm consumer) can use the AI loaded in the app, with tool calling (agent
+// mode) and images when that model has vision. VS Code parts are translated to the OpenAI format
+// the door speaks: tool calls/results become tool_calls / role "tool", image data parts become
+// image_url data URLs, and the tool calls the model makes go back as LanguageModelToolCallPart.
+
+const lmInfoChanged = new vscode.EventEmitter();
+
+/** Text of a tool result or other part (TextPart, PromptTsxPart, DataPart with text/json...). */
+function partText(p) {
+  if (p == null) return "";
+  if (typeof p === "string") return p;
+  if (p instanceof vscode.LanguageModelTextPart) return p.value;
+  if (vscode.LanguageModelDataPart && p instanceof vscode.LanguageModelDataPart) {
+    const mime = String(p.mimeType || "");
+    return /^text\/|json|xml/.test(mime) ? Buffer.from(p.data).toString("utf8") : "";
+  }
+  if (vscode.LanguageModelPromptTsxPart && p instanceof vscode.LanguageModelPromptTsxPart) return typeof p.value === "string" ? p.value : JSON.stringify(p.value);
+  if (typeof p.value === "string") return p.value;
+  return "";
+}
+
+/** VS Code chat messages -> OpenAI messages (one system message, first: some templates insist). */
+function toOpenAi(messages, vision) {
+  const system = [config().systemPrompt].filter(Boolean);
+  const out = [];
+  const Role = vscode.LanguageModelChatMessageRole;
+  for (const m of messages) {
+    const parts = Array.isArray(m.content) ? m.content : [m.content];
+    if (Role.System !== undefined && m.role === Role.System) {
+      system.push(parts.map(partText).join(""));
+      continue;
+    }
+    if (m.role === Role.Assistant) {
+      const text = parts.filter((p) => !(p instanceof vscode.LanguageModelToolCallPart)).map(partText).join("");
+      const calls = parts.filter((p) => p instanceof vscode.LanguageModelToolCallPart).map((p) => ({
+        id: p.callId,
+        type: "function",
+        function: { name: p.name, arguments: JSON.stringify(p.input ?? {}) },
+      }));
+      out.push(calls.length ? { role: "assistant", content: text || null, tool_calls: calls } : { role: "assistant", content: text });
+      continue;
+    }
+    // User: tool results first, each as its own "tool" message; then the text and the images.
+    const rest = [];
+    for (const p of parts) {
+      if (p instanceof vscode.LanguageModelToolResultPart) out.push({ role: "tool", tool_call_id: p.callId, content: (p.content || []).map(partText).join("") || "(no output)" });
+      else rest.push(p);
+    }
+    const images = [];
+    let text = "";
+    for (const p of rest) {
+      const isData = vscode.LanguageModelDataPart && p instanceof vscode.LanguageModelDataPart;
+      if (isData && String(p.mimeType).startsWith("image/")) {
+        if (vision) images.push({ type: "image_url", image_url: { url: `data:${p.mimeType};base64,${Buffer.from(p.data).toString("base64")}` } });
+        else text += "\n[An image was attached, but the AI loaded in sOC Lucia has no vision: say you cannot see it.]";
+      } else text += partText(p);
+    }
+    if (images.length) out.push({ role: "user", content: [...images, { type: "text", text: text || " " }] });
+    else if (text) out.push({ role: "user", content: text });
+  }
+  return [{ role: "system", content: system.join("\n\n") }, ...out];
+}
+
+/** VS Code tool definitions -> OpenAI tools. */
+function toOpenAiTools(tools) {
+  return (tools || []).map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description || "",
+      parameters: t.inputSchema && Object.keys(t.inputSchema).length ? t.inputSchema : { type: "object", properties: {} },
+    },
+  }));
+}
+
 function registerLanguageModelProvider(context) {
   const lm = vscode.lm;
   if (!lm || typeof lm.registerLanguageModelChatProvider !== "function") return;
+  const known = new Map(); // model id -> what /v1/models said about it
   const lmProvider = {
+    onDidChangeLanguageModelChatInformation: lmInfoChanged.event,
     async provideLanguageModelChatInformation() {
       let models = [];
       try {
@@ -718,36 +803,52 @@ function registerLanguageModelProvider(context) {
       } catch {
         return [];
       }
-      return models.map((m) => ({
-        id: m.id,
-        name: `${m.name} (${APP})`,
-        family: VENDOR,
-        version: "1",
-        maxInputTokens: 6000,
-        maxOutputTokens: config().maxTokens,
-        capabilities: { toolCalling: false, imageInput: false },
-      }));
+      const maxOut = config().maxTokens;
+      return models.map((m) => {
+        known.set(m.id, m);
+        return {
+          id: m.id,
+          name: `${m.name} (${APP})`,
+          family: VENDOR,
+          version: "1",
+          maxInputTokens: Math.max(1024, m.context - maxOut),
+          maxOutputTokens: maxOut,
+          capabilities: { toolCalling: m.tools, imageInput: m.vision },
+        };
+      });
     },
-    async provideLanguageModelChatResponse(_model, messages, _options, progress, token) {
-      const converted = messages.map((m) => ({
-        role: m.role === vscode.LanguageModelChatMessageRole.Assistant ? "assistant" : "user",
-        content: (m.content || []).map((p) => (p instanceof vscode.LanguageModelTextPart ? p.value : typeof p === "string" ? p : "")).join(""),
-      }));
+    async provideLanguageModelChatResponse(model, messages, options, progress, token) {
+      const vision = known.get(model.id)?.vision ?? !!model.capabilities?.imageInput;
+      const tools = toOpenAiTools(options?.tools);
+      const required = vscode.LanguageModelChatToolMode && options?.toolMode === vscode.LanguageModelChatToolMode.Required;
       const controller = new AbortController();
-      token.onCancellationRequested(() => controller.abort());
-      await chat([{ role: "system", content: config().systemPrompt }, ...converted], (d) => { if (d.text) progress.report(new vscode.LanguageModelTextPart(d.text)); }, controller.signal, undefined, false);
+      token?.onCancellationRequested(() => controller.abort());
+      const r = await chat(toOpenAi(messages, vision), (d) => { if (d.text) progress.report(new vscode.LanguageModelTextPart(d.text)); }, controller.signal, tools, false, required ? "required" : "auto");
+      for (const c of r.toolCalls) {
+        if (!c.name) continue;
+        let input = {};
+        try {
+          input = c.arguments ? JSON.parse(c.arguments) : {};
+        } catch {
+          input = {};
+        }
+        progress.report(new vscode.LanguageModelToolCallPart(c.id, c.name, input));
+      }
     },
     async provideTokenCount(_model, text) {
-      const s = typeof text === "string" ? text : (text.content || []).map((p) => (p instanceof vscode.LanguageModelTextPart ? p.value : "")).join("");
+      const s = typeof text === "string" ? text : (Array.isArray(text.content) ? text.content : []).map(partText).join("");
       return Math.ceil(s.length / 4);
     },
   };
   try {
-    context.subscriptions.push(lm.registerLanguageModelChatProvider(VENDOR, lmProvider));
+    context.subscriptions.push(lm.registerLanguageModelChatProvider(VENDOR, lmProvider), lmInfoChanged);
   } catch (e) {
     console.warn(`${APP}: language model provider not registered:`, e.message);
   }
+  return lmProvider;
 }
+
+let lmProviderForTest;
 
 function activate(context) {
   provider = new ChatViewProvider(context);
@@ -761,7 +862,7 @@ function activate(context) {
     vscode.commands.registerCommand("socLucia.tests", selectionCommand("Write unit tests for this code using the usual test framework of the language. Return only the test code in one block.")),
     vscode.commands.registerCommand("socLucia.checkConnection", checkConnection),
   );
-  registerLanguageModelProvider(context);
+  lmProviderForTest = registerLanguageModelProvider(context);
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
   item.text = "$(hubot) Lucia";
   item.tooltip = `${APP}: open chat`;
@@ -776,4 +877,4 @@ function deactivate() {
 
 module.exports = { activate, deactivate };
 // Gancho para probar el bucle de herramientas fuera de VS Code (con un «vscode» de mentira).
-module.exports.__test = { sendForTest: async (text) => { await provider?.send(text, false); }, provider: () => provider };
+module.exports.__test = { sendForTest: async (text) => { await provider?.send(text, false); }, provider: () => provider, lmProvider: () => lmProviderForTest };

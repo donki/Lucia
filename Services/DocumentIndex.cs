@@ -7,15 +7,17 @@ namespace SocLucia.Services;
 
 /// <summary>
 /// La carpeta de documentos del usuario: lo que deje ahi (texto, Markdown, CSV, JSON, codigo,
-/// HTML, .docx) la IA lo tiene en cuenta. Sin base vectorial: los ficheros se trocean y, con cada
+/// HTML, .docx, PDF) la IA lo tiene en cuenta. Sin base vectorial: los ficheros se trocean y, con cada
 /// pregunta, se le pasan los trozos que comparten mas palabras con ella; ademas la IA puede
 /// listarlos y leerlos enteros con dos herramientas. Todo en este PC.
 /// </summary>
 public static class DocumentIndex
 {
-    private static readonly string[] Extensions = [".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".xml", ".yaml", ".yml", ".log", ".ini", ".cfg", ".toml", ".cs", ".py", ".js", ".ts", ".ps1", ".sql", ".html", ".htm", ".docx", ".rtf"];
+    private static readonly string[] Extensions = [".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".xml", ".yaml", ".yml", ".log", ".ini", ".cfg", ".toml", ".cs", ".py", ".js", ".ts", ".ps1", ".sql", ".html", ".htm", ".docx", ".rtf", ".pdf"];
     private const int MaxFiles = 300;
     private const long MaxBytes = 4L * 1024 * 1024;
+    private const long MaxPdfBytes = 64L * 1024 * 1024;   // un PDF pesa mucho mas que su texto (fuentes, imagenes)
+    private const int MaxPdfPages = 1000;
     private const int ChunkChars = 900;
     private const int MaxChunksOut = 4;
 
@@ -33,7 +35,7 @@ public static class DocumentIndex
         var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true };
         return Directory.EnumerateFiles(Folder, "*", options)
             .Select(p => new FileInfo(p))
-            .Where(f => Extensions.Contains(f.Extension.ToLowerInvariant()) && f.Length <= MaxBytes)
+            .Where(f => Extensions.Contains(f.Extension.ToLowerInvariant()) && f.Length <= (f.Extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase) ? MaxPdfBytes : MaxBytes))
             .OrderBy(f => f.FullName, StringComparer.OrdinalIgnoreCase)
             .Take(MaxFiles)
             .ToList();
@@ -41,10 +43,12 @@ public static class DocumentIndex
 
     public static string Relative(string path) => Path.GetRelativePath(Folder, path);
 
-    /// <summary>El texto de un documento (docx desempaquetado, HTML sin etiquetas).</summary>
+    /// <summary>El texto de un documento (docx desempaquetado, PDF con PdfPig, HTML sin etiquetas).</summary>
     public static string ReadText(string path)
     {
         var ext = Path.GetExtension(path).ToLowerInvariant();
+        if (ext == ".pdf")
+            return ReadPdf(path);
         if (ext == ".docx")
         {
             using var zip = ZipFile.OpenRead(path);
@@ -65,6 +69,29 @@ public static class DocumentIndex
         if (ext == ".rtf")
             text = Regex.Replace(Regex.Replace(text, @"\\par[d]?", "\n"), @"\\[a-z]+-?\d* ?|[{}]", string.Empty);
         return text;
+    }
+
+    /// <summary>
+    /// El texto de un PDF, pagina a pagina y en el orden de lectura (PdfPig, Apache 2.0). Un PDF
+    /// escaneado no tiene capa de texto: se dice asi, para que la IA no invente su contenido.
+    /// </summary>
+    private static string ReadPdf(string path)
+    {
+        using var pdf = UglyToad.PdfPig.PdfDocument.Open(path);
+        var sb = new StringBuilder();
+        var pages = Math.Min(pdf.NumberOfPages, MaxPdfPages);
+        for (var n = 1; n <= pages; n++)
+        {
+            var page = pdf.GetPage(n);
+            var text = UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor.ContentOrderTextExtractor.GetText(page).Trim();
+            if (text.Length == 0) continue;
+            if (pdf.NumberOfPages > 1) sb.Append("[page ").Append(n).AppendLine("]");
+            sb.AppendLine(text).AppendLine();
+        }
+        if (pdf.NumberOfPages > pages)
+            sb.AppendLine($"[… {pdf.NumberOfPages - pages} more page(s) not read]");
+        return sb.Length > 0 ? sb.ToString().Trim()
+            : $"[This PDF ({pdf.NumberOfPages} page(s)) has no text layer: it is probably scanned images, so its content cannot be read.]";
     }
 
     /// <summary>Los trozos de documentos que mas tienen que ver con la pregunta, listos para el system prompt; vacio si nada encaja.</summary>
