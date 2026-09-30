@@ -75,7 +75,13 @@ public static class ModelCatalog
     {
         using var response = await Downloader.Http.GetAsync($"https://huggingface.co/api/models/{model.Repo}/tree/main", cancel);
         response.EnsureSuccessStatusCode();
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancel));
+        return PickFile(await response.Content.ReadAsStringAsync(cancel));
+    }
+
+    /// <summary>De la lista de ficheros de un repositorio (JSON de la API de Hugging Face), el GGUF a bajar.</summary>
+    public static RepoFile PickFile(string treeJson)
+    {
+        using var doc = JsonDocument.Parse(treeJson);
         var files = new List<RepoFile>();
         foreach (var entry in doc.RootElement.EnumerateArray())
         {
@@ -105,7 +111,13 @@ public static class ModelCatalog
         using var response = await Downloader.Http.GetAsync($"https://huggingface.co/api/models/{repo}/tree/main", cancel);
         if (!response.IsSuccessStatusCode)
             return null;
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancel));
+        return PickMmproj(await response.Content.ReadAsStringAsync(cancel));
+    }
+
+    /// <summary>De la lista de ficheros de un repositorio, su parte de vision (F16, si no BF16, si no la mas pequeña), o null.</summary>
+    public static RepoFile? PickMmproj(string treeJson)
+    {
+        using var doc = JsonDocument.Parse(treeJson);
         var files = new List<RepoFile>();
         foreach (var entry in doc.RootElement.EnumerateArray())
         {
@@ -115,7 +127,8 @@ public static class ModelCatalog
             long? size = entry.TryGetProperty("lfs", out var lfs) && lfs.TryGetProperty("size", out var ls) && ls.ValueKind == JsonValueKind.Number ? ls.GetInt64() : null;
             files.Add(new RepoFile(path, size));
         }
-        return files.FirstOrDefault(f => f.Name.Contains("F16", StringComparison.OrdinalIgnoreCase))
+        // «F16» sin la B delante: «BF16» tambien contiene «F16» y se llevaria la preferencia.
+        return files.FirstOrDefault(f => System.Text.RegularExpressions.Regex.IsMatch(f.Name, "(?<!B)F16", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
             ?? files.FirstOrDefault(f => f.Name.Contains("BF16", StringComparison.OrdinalIgnoreCase))
             ?? files.OrderBy(f => f.Size ?? long.MaxValue).FirstOrDefault();
     }

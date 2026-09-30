@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cobertura del ensamblado de la aplicacion (sOCLucia), sin el codigo que genera el XAML. -->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Include>[sOCLucia]*</Include>
+          <ExcludeByFile>**/obj/**,**/*.g.cs,**/*.g.i.cs</ExcludeByFile>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

@@ -1,5 +1,18 @@
 # Changelog — sOC Lucia
 
+## 2026.9.30.0 — Pruebas automáticas y cinco arreglos que han salido con ellas
+
+- **Pruebas automáticas** (`Lucia.Tests`, 216): documentos y PDF, herramientas, streaming, puerta
+  de editores, descargas, catálogo, tareas, memoria, Markdown y textos. Ver el README.
+- **La respuesta ya no se corta** si el motor manda un trozo final sin `choices` (solo el uso de
+  tokens), como hacen los servidores compatibles con OpenAI: antes salía «Index was out of range».
+- **Los errores del motor con la forma `{"error":"texto"}`** se enseñan como tales; antes se
+  convertían en un error interno que tapaba el mensaje.
+- **Tareas semanales en castellano con tilde** («weekly miércoles 18:00», «sábado»): antes se
+  rechazaban. Y una hora imposible («daily 24:00», «9:60») se rechaza en vez de guardarse rara.
+- **La parte de visión** se baja en F16 aunque el repositorio liste antes la BF16.
+- **Mover los modelos** a la misma carpeta escrita con barra final ya no dice que «está dentro».
+
 ## 2026.9.27.0 — PDF en tus documentos, Copilot Chat con herramientas e imágenes, y los errores ya no cierran la aplicación
 
 - **PDF en la carpeta de documentos** (y como adjunto, y con `read_file`): el texto se saca con

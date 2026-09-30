@@ -278,7 +278,12 @@ public static class ToolBox
         request.Headers.TryAddWithoutValidation("Accept-Language", System.Globalization.CultureInfo.CurrentUICulture.Name + ",en;q=0.7");
         using var response = await Engine.Downloader.Http.SendAsync(request, cancel);
         response.EnsureSuccessStatusCode();
-        var html = await response.Content.ReadAsStringAsync(cancel);
+        return SearchResultsText(await response.Content.ReadAsStringAsync(cancel));
+    }
+
+    /// <summary>Los primeros 8 resultados de la pagina HTML de DuckDuckGo, sin anuncios y con la direccion real.</summary>
+    public static string SearchResultsText(string html)
+    {
         var sb = new StringBuilder();
         var n = 0;
         foreach (Match m in Regex.Matches(html, @"<a[^>]+class=""result__a""[^>]+href=""([^""]+)""[^>]*>(.*?)</a>.*?(?:<a[^>]+class=""result__snippet""[^>]*>(.*?)</a>|$)", RegexOptions.Singleline))

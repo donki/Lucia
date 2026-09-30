@@ -16,44 +16,14 @@ public static class HuggingFace
         public string Url => "https://huggingface.co/" + Model.Repo;
     }
 
+    /// <summary>Un repositorio de la lista de resultados, antes de mirar sus ficheros.</summary>
+    public sealed record Candidate(string Id, long Downloads, int Likes, string License, bool Gated, bool Gguf, string Kind);
+
     public static async Task<List<Hit>> SearchAsync(string query, PcProfile pc, bool onlyGguf, CancellationToken cancel)
     {
-        // Palabras clave (imagenes, video, voz…) → tipo de modelo de Hugging Face; el resto de la frase sigue siendo texto de busqueda.
-        var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-        var pipeline = words.Select(w => Kinds.TryGetValue(w, out var k) ? k : null).FirstOrDefault(k => k is not null);
-        if (pipeline is not null) words.RemoveAll(w => Kinds.TryGetValue(w, out var k) && k == pipeline);
-        var text = string.Join(' ', words);
-        var url = "https://huggingface.co/api/models?sort=downloads&direction=-1&limit=30"
-                  + (text.Length > 0 ? "&search=" + Uri.EscapeDataString(text) : string.Empty)
-                  + (pipeline is not null ? "&pipeline_tag=" + pipeline : string.Empty)
-                  + (onlyGguf ? "&filter=gguf" : string.Empty);
-        using var response = await Downloader.Http.GetAsync(url, cancel);
+        using var response = await Downloader.Http.GetAsync(SearchUrl(query, onlyGguf), cancel);
         response.EnsureSuccessStatusCode();
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancel));
-        var candidates = new List<(string Id, long Downloads, int Likes, string License, bool Gated, bool Gguf, string Kind)>();
-        foreach (var m in doc.RootElement.EnumerateArray())
-        {
-            var id = m.TryGetProperty("id", out var idNode) ? idNode.GetString() ?? string.Empty : string.Empty;
-            if (id.Length == 0) continue;
-            var license = "?";
-            var gguf = false;
-            var library = string.Empty;
-            if (m.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Array)
-                foreach (var t in tags.EnumerateArray())
-                {
-                    var tag = t.GetString() ?? string.Empty;
-                    if (tag.StartsWith("license:", StringComparison.Ordinal)) license = tag[8..];
-                    else if (tag == "gguf") gguf = true;
-                    else if (tag is "diffusers" or "transformers" or "safetensors" or "onnx" or "mlx") library = library.Length == 0 ? tag : library;
-                }
-            var kind = m.TryGetProperty("pipeline_tag", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? string.Empty : string.Empty;
-            if (kind.Length == 0) kind = library;
-            var gated = m.TryGetProperty("gated", out var g) && g.ValueKind is not (JsonValueKind.False or JsonValueKind.Null);
-            candidates.Add((id,
-                m.TryGetProperty("downloads", out var d) && d.ValueKind == JsonValueKind.Number ? d.GetInt64() : 0,
-                m.TryGetProperty("likes", out var l) && l.ValueKind == JsonValueKind.Number ? l.GetInt32() : 0,
-                license, gated, gguf, kind));
-        }
+        var candidates = Candidates(await response.Content.ReadAsStringAsync(cancel));
         // De los GGUF, la lista de ficheros a la vez; el resto se enseña tal cual (no se ejecuta aqui).
         var tasks = candidates.Take(24).Select(async c =>
         {
@@ -73,9 +43,56 @@ public static class HuggingFace
                 return new Hit(model, string.Empty, c.Downloads, c.Likes, c.Gated, false, "gguf-sharded");
             }
         });
-        var hits = (await Task.WhenAll(tasks)).ToList();
-        // Primero las que Lucia ejecuta y van bien en este PC; luego las demas por descargas.
-        return hits.OrderBy(h => h.Runnable ? (int)ModelCatalog.FitOf(h.Model, pc) : 9).ThenByDescending(h => h.Downloads).ToList();
+        return Rank(await Task.WhenAll(tasks), pc);
+    }
+
+    /// <summary>Primero las que Lucia ejecuta y van bien en este PC; luego las demas por descargas.</summary>
+    public static List<Hit> Rank(IEnumerable<Hit> hits, PcProfile pc)
+        => hits.OrderBy(h => h.Runnable ? (int)ModelCatalog.FitOf(h.Model, pc) : 9).ThenByDescending(h => h.Downloads).ToList();
+
+    /// <summary>La direccion de busqueda en la API de Hugging Face.</summary>
+    public static string SearchUrl(string query, bool onlyGguf)
+    {
+        // Palabras clave (imagenes, video, voz…) → tipo de modelo de Hugging Face; el resto de la frase sigue siendo texto de busqueda.
+        var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        var pipeline = words.Select(w => Kinds.TryGetValue(w, out var k) ? k : null).FirstOrDefault(k => k is not null);
+        if (pipeline is not null) words.RemoveAll(w => Kinds.TryGetValue(w, out var k) && k == pipeline);
+        var text = string.Join(' ', words);
+        return "https://huggingface.co/api/models?sort=downloads&direction=-1&limit=30"
+               + (text.Length > 0 ? "&search=" + Uri.EscapeDataString(text) : string.Empty)
+               + (pipeline is not null ? "&pipeline_tag=" + pipeline : string.Empty)
+               + (onlyGguf ? "&filter=gguf" : string.Empty);
+    }
+
+    /// <summary>Los repositorios de la respuesta de la API: id, descargas, licencia, si es GGUF y su tipo.</summary>
+    public static List<Candidate> Candidates(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var candidates = new List<Candidate>();
+        foreach (var m in doc.RootElement.EnumerateArray())
+        {
+            var id = m.TryGetProperty("id", out var idNode) ? idNode.GetString() ?? string.Empty : string.Empty;
+            if (id.Length == 0) continue;
+            var license = "?";
+            var gguf = false;
+            var library = string.Empty;
+            if (m.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Array)
+                foreach (var t in tags.EnumerateArray())
+                {
+                    var tag = t.GetString() ?? string.Empty;
+                    if (tag.StartsWith("license:", StringComparison.Ordinal)) license = tag[8..];
+                    else if (tag == "gguf") gguf = true;
+                    else if (tag is "diffusers" or "transformers" or "safetensors" or "onnx" or "mlx") library = library.Length == 0 ? tag : library;
+                }
+            var kind = m.TryGetProperty("pipeline_tag", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? string.Empty : string.Empty;
+            if (kind.Length == 0) kind = library;
+            var gated = m.TryGetProperty("gated", out var g) && g.ValueKind is not (JsonValueKind.False or JsonValueKind.Null);
+            candidates.Add(new Candidate(id,
+                m.TryGetProperty("downloads", out var d) && d.ValueKind == JsonValueKind.Number ? d.GetInt64() : 0,
+                m.TryGetProperty("likes", out var l) && l.ValueKind == JsonValueKind.Number ? l.GetInt32() : 0,
+                license, gated, gguf, kind));
+        }
+        return candidates;
     }
 
     /// <summary>Tipos de modelo por palabra clave, en español e ingles (los nombres de pipeline de Hugging Face).</summary>
@@ -93,10 +110,10 @@ public static class HuggingFace
     };
 
     /// <summary>Lo que llama-server ejecuta: modelos de texto (y de texto+imagen con mmproj).</summary>
-    private static bool TextModel(string kind) => kind is "" or "text-generation" or "text2text-generation" or "image-text-to-text" or "conversational";
+    public static bool TextModel(string kind) => kind is "" or "text-generation" or "text2text-generation" or "image-text-to-text" or "conversational";
 
     /// <summary>«unsloth/Qwen3.5-4B-GGUF» → «Qwen3.5 4B (unsloth)».</summary>
-    private static string NameFor(string repo)
+    public static string NameFor(string repo)
     {
         var slash = repo.IndexOf('/');
         var owner = slash > 0 ? repo[..slash] : string.Empty;

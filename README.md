@@ -110,6 +110,28 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `sOCLucia.exe --ask "pregunta"` envía esa pregunta al abrir, `--work` (y `--auto`) activa el modo trabajo (sin confirmaciones), `--move-models <carpeta>` mueve la carpeta de modelos y `--settings` abre Ajustes (para probar y capturar; no existe en Release). `--tray` existe también en Release: arranca escondida en la bandeja.
 
+## Pruebas
+
+`Lucia.Tests` (xUnit, 2026-09-30): **216 pruebas**, todas pasan; el banco tarda **unos 8 s**
+(sin contar la compilación). Cobertura de líneas: **46,4 %** del ensamblado `sOCLucia` según
+ReportGenerator y **52,7 %** sobre toda la app (2080 de 3947 líneas ejecutables de C#). Se prueba la
+lógica: documentos (texto, HTML, RTF, .docx y PDF sintéticos con PdfPig) y su búsqueda por
+fragmentos, herramientas del agente (ficheros, documentos, memoria, tareas, órdenes, búsqueda),
+el cliente de chat en streaming (SSE, llamadas a herramientas troceadas, razonamiento, errores),
+la puerta de editores en un puerto libre de 127.0.0.1 (token, rutas, errores, sin arrancar el
+motor), descargas con reanudación y SHA-256 contra un servidor local, catálogo y búsqueda de
+Hugging Face con JSON de ejemplo, Markdown y textos es/en. No se prueban las ventanas ni el motor
+(llama-server, stable-diffusion). Los datos van a una carpeta temporal (`SOC_LUCIA_ROOT`, por eso
+en Debug), nunca a los de verdad.
+
+```powershell
+dotnet build Lucia.Tests\Lucia.Tests.csproj
+dotnet test Lucia.Tests\Lucia.Tests.csproj --no-build
+# cobertura
+dotnet test Lucia.Tests\Lucia.Tests.csproj --no-build --collect:"XPlat Code Coverage" --settings Lucia.Tests\coverage.runsettings --results-directory cov
+dotnet tool restore; dotnet tool run reportgenerator -reports:"cov\*\coverage.cobertura.xml" -targetdir:cov\informe -reporttypes:TextSummary
+```
+
 ## Licencia
 
 [MIT](LICENSE). Componentes de terceros en [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

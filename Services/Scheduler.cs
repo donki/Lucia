@@ -76,19 +76,20 @@ public static class Scheduler
         else if ((m = Regex.Match(w, @"^daily\s+(\d{1,2}):(\d{2})$")).Success)
         {
             task.Kind = "daily";
-            task.Time = new TimeSpan(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), 0);
+            task.Time = TimeOfDay(m.Groups[1].Value, m.Groups[2].Value);
         }
-        else if ((m = Regex.Match(w, @"^weekly\s+([a-z]{3})\w*\s+(\d{1,2}):(\d{2})$")).Success)
+        else if ((m = Regex.Match(w, @"^weekly\s+(\p{L}{3})\p{L}*\s+(\d{1,2}):(\d{2})$")).Success)
         {
+            // \p{L}: los dias en castellano llevan tilde («miércoles», «sábado»).
             task.Kind = "weekly";
             task.Day = DayFrom(m.Groups[1].Value);
-            task.Time = new TimeSpan(int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value), 0);
+            task.Time = TimeOfDay(m.Groups[2].Value, m.Groups[3].Value);
         }
         else if ((m = Regex.Match(w, @"^(?:once\s+)?(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})$")).Success)
         {
             task.Kind = "once";
             task.Date = new DateOnly(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value));
-            task.Time = new TimeSpan(int.Parse(m.Groups[4].Value), int.Parse(m.Groups[5].Value), 0);
+            task.Time = TimeOfDay(m.Groups[4].Value, m.Groups[5].Value);
         }
         else
             throw new ArgumentException("when must be: once YYYY-MM-DD HH:MM | daily HH:MM | weekly mon HH:MM | every 30m");
@@ -150,6 +151,15 @@ public static class Scheduler
             default:
                 return new DateTimeOffset(t.Date.ToDateTime(TimeOnly.FromTimeSpan(t.Time)));
         }
+    }
+
+    /// <summary>Una hora del dia valida (00:00 a 23:59); «24:00» o «9:60» no se aceptan en silencio.</summary>
+    private static TimeSpan TimeOfDay(string hours, string minutes)
+    {
+        var h = int.Parse(hours);
+        var m = int.Parse(minutes);
+        if (h > 23 || m > 59) throw new ArgumentException("time must be HH:MM between 00:00 and 23:59");
+        return new TimeSpan(h, m, 0);
     }
 
     private static DayOfWeek DayFrom(string s) => s switch

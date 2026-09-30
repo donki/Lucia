@@ -74,9 +74,11 @@ public static class ChatClient
             JsonNode? node;
             try { node = JsonNode.Parse(payload); }
             catch (JsonException) { continue; }
-            if (node?["choices"]?[0]?["finish_reason"]?.GetValue<string>() is { Length: > 0 } reason)
+            // El ultimo trozo puede traer «choices» vacio (solo el uso de tokens): no es un error.
+            var choice = node?["choices"] is JsonArray { Count: > 0 } choices ? choices[0] : null;
+            if (choice?["finish_reason"]?.GetValue<string>() is { Length: > 0 } reason)
                 finish = reason;
-            var delta = node?["choices"]?[0]?["delta"];
+            var delta = choice?["delta"];
             if (delta is null)
                 continue;
             if (delta["tool_calls"] is JsonArray fragments)
@@ -139,8 +141,11 @@ public static class ChatClient
         try
         {
             using var doc = JsonDocument.Parse(text);
-            if (doc.RootElement.TryGetProperty("error", out var error))
-                return error.TryGetProperty("message", out var m) ? m.GetString() ?? text : error.ToString();
+            // {"error":{"message":…}} o {"error":"…"}: cualquier otra forma se enseña tal cual.
+            if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("error", out var error))
+                return error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var m) ? m.GetString() ?? text
+                     : error.ValueKind == JsonValueKind.String ? error.GetString() ?? text
+                     : error.ToString();
         }
         catch (JsonException) { }
         return text.Length > 300 ? text[..300] : text;

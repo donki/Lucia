@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Pruebas de la logica de sOC Lucia (xUnit). Se referencia la aplicacion entera (WPF, net10.0-windows):
+    la interfaz no se prueba, pero asi la cobertura se mide sobre todo el ensamblado sOCLucia.
+    Los datos van a una carpeta temporal (SOC_LUCIA_ROOT, solo en Debug): ver Sandbox.cs.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>SocLucia.Tests</RootNamespace>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\sOCLucia.csproj" />
+  </ItemGroup>
+
+</Project>

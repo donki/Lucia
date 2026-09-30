@@ -16,8 +16,8 @@ public static class ModelLibrary
     public static async Task MoveAsync(string newFolder, IProgress<MoveProgress>? progress, CancellationToken cancel)
     {
         var settings = AppSettings.Current;
-        var oldFolder = Path.GetFullPath(Paths.Models);
-        newFolder = Path.GetFullPath(newFolder);
+        var oldFolder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Paths.Models));
+        newFolder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(newFolder));
         if (string.Equals(oldFolder, newFolder, StringComparison.OrdinalIgnoreCase))
             return;
         if (newFolder.StartsWith(oldFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
