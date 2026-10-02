@@ -46,7 +46,7 @@ public partial class AboutWindow : Window
     {
         try
         {
-            Process.Start(new ProcessStartInfo(ContactAddress) { UseShellExecute = true });
+            Desktop.Current.Open(ContactAddress);
         }
         catch (Exception ex)
         {

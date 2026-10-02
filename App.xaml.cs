@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using SocLucia.Editor;
 using SocLucia.Engine;
 using SocLucia.Localization;
@@ -14,8 +14,16 @@ public partial class App : Application
     public static EngineHost Engine { get; } = new();
     public static EditorDoor Door { get; } = new(Engine);
 
+    /// <summary>
+    /// Las pruebas crean la App solo por sus recursos: WPF lanza Startup en cuanto corre el
+    /// Dispatcher, y ellas abren las ventanas cuando y como quieren.
+    /// </summary>
+    internal static bool HostedByTests { get; set; }
+
     private void OnStartup(object sender, StartupEventArgs e)
     {
+        if (HostedByTests)
+            return;
         GuardAgainstCrashes();
         // Una sola instancia: dos aplicaciones cargarian el modelo dos veces.
         _single = new Mutex(true, "sOCLucia.SingleInstance." + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(Paths.Root.ToLowerInvariant())))[..12], out var first);
@@ -26,6 +34,12 @@ public partial class App : Application
             Shutdown();
             return;
         }
+        Launch(e.Args);
+    }
+
+    /// <summary>Carpetas, ajustes, idioma, tema, puerta de editores y la ventana (las pruebas lo llaman directamente).</summary>
+    internal MainWindow Launch(string[] args)
+    {
         Paths.Ensure();
         ChildJob.KillStale(Paths.Engine);
         AppSettings.Load();
@@ -40,41 +54,42 @@ public partial class App : Application
         // Una descarga que quedo a medias al cerrar se retoma sola (el .part sigue en la carpeta de modelos).
         window.Dispatcher.BeginInvoke(ModelDownloads.ResumePending, System.Windows.Threading.DispatcherPriority.ApplicationIdle);   // tambien con --tray, que no llega a Loaded
         // --tray (arranque con Windows): escondida en el area de notificacion desde el principio.
-        if (e.Args.Contains("--tray"))
+        if (args.Contains("--tray"))
             window.Dispatcher.BeginInvoke(() => window.Tray?.HideToTray(), System.Windows.Threading.DispatcherPriority.Loaded);
 #if DEBUG
         // Solo en Debug, para probar y capturar sin teclear: --ask "pregunta" la envia al abrir; --settings abre Ajustes.
-        for (var i = 0; i < e.Args.Length; i++)
+        for (var i = 0; i < args.Length; i++)
         {
-            if (e.Args[i] == "--ask" && i + 1 < e.Args.Length)
+            if (args[i] == "--ask" && i + 1 < args.Length)
             {
-                var question = e.Args[++i];
+                var question = args[++i];
                 WhenLoaded(window, () => window.SendText(question));
             }
-            else if (e.Args[i] == "--work")
-                window.SetPendingWorkMode(auto: e.Args.Contains("--auto"));
-            else if (e.Args[i] == "--move-models" && i + 1 < e.Args.Length)
+            else if (args[i] == "--work")
+                window.SetPendingWorkMode(auto: args.Contains("--auto"));
+            else if (args[i] == "--move-models" && i + 1 < args.Length)
             {
-                var target = e.Args[++i];
+                var target = args[++i];
                 WhenLoaded(window, async () => { await SocLucia.Engine.ModelLibrary.MoveAsync(target, null, CancellationToken.None); Shutdown(); });
             }
-            else if (e.Args[i] == "--settings")
+            else if (args[i] == "--settings")
                 WhenLoaded(window, () => window.OpenSettingsForTest());
-            else if (e.Args[i] == "--tool" && i + 2 < e.Args.Length)
+            else if (args[i] == "--tool" && i + 2 < args.Length)
             {
                 // Prueba de una herramienta sin modelo: --tool read_file {"path":"x"} (con --auto no pregunta)
-                var name = e.Args[++i]; var json = e.Args[++i];
+                var name = args[++i]; var json = args[++i];
                 WhenLoaded(window, () => window.RunToolForTest(name, json));
             }
-            else if (e.Args[i] == "--search" && i + 1 < e.Args.Length)
+            else if (args[i] == "--search" && i + 1 < args.Length)
             {
-                var query = e.Args[++i];
+                var query = args[++i];
                 WhenLoaded(window, () => window.OpenSettingsForTest().SearchForTest(query));
             }
-            else if (e.Args[i] == "--about")
+            else if (args[i] == "--about")
                 WhenLoaded(window, () => new AboutWindow { Owner = window }.Show());
         }
 #endif
+        return window;
     }
 
     private static bool _alerting;
@@ -87,14 +102,8 @@ public partial class App : Application
     {
         DispatcherUnhandledException += (_, ex) =>
         {
-            EngineHost.Log($"error no controlado: {ex.Exception}");
             ex.Handled = true;
-            // Un solo aviso a la vez: un error que se repite en cada pintado no debe abrir cien ventanas.
-            if (_alerting || MainWindow is not { IsLoaded: true } owner) return;
-            _alerting = true;
-            try { PromptWindow.Alert(owner, Loc.Get("Error"), Loc.Get("UnexpectedError")); }
-            catch (Exception) { }
-            finally { _alerting = false; }
+            OnUnexpected(ex.Exception);
         };
         TaskScheduler.UnobservedTaskException += (_, ex) =>
         {
@@ -103,6 +112,18 @@ public partial class App : Application
         };
         AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
             EngineHost.Log($"error fatal: {ex.ExceptionObject}");
+    }
+
+    /// <summary>Un error que nadie esperaba: al registro con su traza y un aviso; la aplicacion sigue.</summary>
+    internal void OnUnexpected(Exception exception)
+    {
+        EngineHost.Log($"error no controlado: {exception}");
+        // Un solo aviso a la vez: un error que se repite en cada pintado no debe abrir cien ventanas.
+        if (_alerting || MainWindow is not { IsLoaded: true } owner) return;
+        _alerting = true;
+        try { PromptWindow.Alert(owner, Loc.Get("Error"), Loc.Get("UnexpectedError")); }
+        catch (Exception) { }
+        finally { _alerting = false; }
     }
 
 #if DEBUG

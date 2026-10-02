@@ -112,17 +112,30 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-09-30): **216 pruebas**, todas pasan; el banco tarda **unos 8 s**
-(sin contar la compilación). Cobertura de líneas: **46,4 %** del ensamblado `sOCLucia` según
-ReportGenerator y **52,7 %** sobre toda la app (2080 de 3947 líneas ejecutables de C#). Se prueba la
-lógica: documentos (texto, HTML, RTF, .docx y PDF sintéticos con PdfPig) y su búsqueda por
-fragmentos, herramientas del agente (ficheros, documentos, memoria, tareas, órdenes, búsqueda),
-el cliente de chat en streaming (SSE, llamadas a herramientas troceadas, razonamiento, errores),
-la puerta de editores en un puerto libre de 127.0.0.1 (token, rutas, errores, sin arrancar el
-motor), descargas con reanudación y SHA-256 contra un servidor local, catálogo y búsqueda de
-Hugging Face con JSON de ejemplo, Markdown y textos es/en. No se prueban las ventanas ni el motor
-(llama-server, stable-diffusion). Los datos van a una carpeta temporal (`SOC_LUCIA_ROOT`, por eso
-en Debug), nunca a los de verdad.
+`Lucia.Tests` (xUnit, 2026-10-03): **252 pruebas**, todas pasan; el banco tarda **unos 18 s** (sin
+contar la compilación). Cobertura de líneas: **91,5 %** de lo instrumentado (se instrumenta el
+ensamblado `sOCLucia` entero) y **91,5 %** sobre toda la app (3152 de 3444 líneas ejecutables de
+C#; antes 49,2 % con la misma medida).
+
+Se prueba la lógica (documentos de texto, HTML, RTF, .docx y PDF; herramientas del agente; el
+cliente de chat en streaming; la puerta de editores; descargas con reanudación y SHA-256; catálogo
+y búsqueda de Hugging Face; tareas; memoria; Markdown; textos es/en) y **las ventanas de verdad**
+en un hilo STA: el chat contra un **llama-server de mentira** (`FakeLlama`, un exe que solo se
+queda vivo donde `EngineHost` busca el motor) y una **red de mentira** (`Downloader.Http`) que
+contesta `/health` y el chat en streaming como llama-server, con razonamiento y llamadas a
+herramientas; permisos, tareas desatendidas, adjuntos, visión (se baja su parte y la imagen va al
+modelo), Ajustes entero, «Acerca de», avisos, bandeja y el arranque con sus opciones. Lo que se
+pide a Windows (abrir, diálogos, portapapeles, registro) pasa por `Services/Desktop.cs`, que en las
+pruebas es un doble. Los datos van a una carpeta temporal (`SOC_LUCIA_ROOT`, por eso en Debug),
+nunca a los de verdad, y nada sale a la red.
+
+**Cómo se cuenta «toda la app»** (`tools/cobertura-app.py`, General §8.6): todos los `.cs` de la
+aplicación salvo `obj/`, `bin/`, generados y el proyecto de pruebas; solo las líneas con
+sentencias (fuera llaves sueltas, `using`, declaraciones sin cuerpo, campos sin inicializar,
+atributos, interfaces y comentarios). Lo instrumentado cuenta lo que marca coverlet, sin excluir
+`CompilerGeneratedAttribute`. Sin cubrir quedan sobre todo el motor de imágenes (stable-diffusion,
+que necesita la GPU y 1,7 GB), los diálogos de Windows de la plataforma de verdad, el menú nativo
+de la bandeja y el caso de una segunda copia abierta.
 
 ```powershell
 dotnet build Lucia.Tests\Lucia.Tests.csproj
@@ -130,6 +143,7 @@ dotnet test Lucia.Tests\Lucia.Tests.csproj --no-build
 # cobertura
 dotnet test Lucia.Tests\Lucia.Tests.csproj --no-build --collect:"XPlat Code Coverage" --settings Lucia.Tests\coverage.runsettings --results-directory cov
 dotnet tool restore; dotnet tool run reportgenerator -reports:"cov\*\coverage.cobertura.xml" -targetdir:cov\informe -reporttypes:TextSummary
+python tools\cobertura-app.py cov --app . --detalle
 ```
 
 ## Licencia

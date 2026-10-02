@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -27,20 +27,31 @@ public partial class MainWindow : Window
         SourceInitialized += (_, _) =>
         {
             ThemeManager.ApplyToWindow(this);
-            Tray = new TrayIcon(this, Loc.Get, () => Application.Current.Shutdown()) { MinimizeToTray = AppSettings.Current.TrayOnMinimize };
+            Tray = new TrayIcon(this, Loc.Get, () => Desktop.Current.Shutdown()) { MinimizeToTray = AppSettings.Current.TrayOnMinimize };
         };
         EmptyLogo.Source = new BitmapImage(new Uri("pack://application:,,,/Assets/logo.png"));
         _threads = ThreadStore.LoadAll();
         ApplyTexts();
         Loc.LanguageChanged += ApplyTexts;
-        App.Engine.StateChanged += () => Dispatcher.BeginInvoke(PaintEngineStatus);
+        App.Engine.StateChanged += OnEngineStateChanged;
         // La IA de imagenes: su estado (descargando, generando) y el progreso van a la misma barra.
-        ImageEngine.Status += s => Dispatcher.BeginInvoke(() => { _imageStatus = s; PaintEngineStatus(); });
+        ImageEngine.Status += OnImageStatus;
         ToolBox.ImageProgress = new Progress<Downloader.Progress>(PaintDownload);
         // Pegar una imagen o ficheros en el redactor los adjunta.
         DataObject.AddPastingHandler(Composer, OnComposerPaste);
         ModelDownloads.Changed += PaintEngineStatus;
-        ModelDownloads.Finished += (_, error) => { if (error is null) ModelChanged(); else PaintEngineStatus(); };
+        ModelDownloads.Finished += OnModelDownloadFinished;
+        // Lo enganchado a piezas estaticas se suelta al cerrar (la aplicacion solo cierra al salir,
+        // pero asi una ventana cerrada no sigue pintando).
+        Closed += (_, _) =>
+        {
+            Loc.LanguageChanged -= ApplyTexts;
+            App.Engine.StateChanged -= OnEngineStateChanged;
+            ImageEngine.Status -= OnImageStatus;
+            ModelDownloads.Changed -= PaintEngineStatus;
+            ModelDownloads.Finished -= OnModelDownloadFinished;
+            _scheduleTimer?.Stop();
+        };
         RefreshThreadList();
         ShowThread(null);   // al abrir, conversacion nueva; las anteriores quedan en la lista
         Loaded += (_, _) =>
@@ -53,6 +64,15 @@ public partial class MainWindow : Window
         };
         Closing += (_, _) => _answering?.Cancel();
         StartScheduler();
+    }
+
+    private void OnEngineStateChanged() => Dispatcher.BeginInvoke(PaintEngineStatus);
+
+    private void OnImageStatus(string? s) => Dispatcher.BeginInvoke(() => { _imageStatus = s; PaintEngineStatus(); });
+
+    private void OnModelDownloadFinished(CatalogModel model, Exception? error)
+    {
+        if (error is null) ModelChanged(); else PaintEngineStatus();
     }
 
     private void ApplyTexts()
@@ -264,9 +284,8 @@ public partial class MainWindow : Window
 
     private void OnAttach(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = Loc.Get("Attach"), Filter = Loc.Get("AttachFilter") };
-        if (dialog.ShowDialog(this) != true) return;
-        foreach (var file in dialog.FileNames) AddPendingFile(file);
+        if (Desktop.Current.PickFiles(this, Loc.Get("Attach"), Loc.Get("AttachFilter"), multiselect: true) is not { } files) return;
+        foreach (var file in files) AddPendingFile(file);
     }
 
     private void OnComposerDragOver(object sender, DragEventArgs e)
@@ -294,7 +313,7 @@ public partial class MainWindow : Window
                 foreach (var file in files) AddPendingFile(file);
                 e.CancelCommand();
             }
-            else if (!e.DataObject.GetDataPresent(DataFormats.UnicodeText) && Clipboard.ContainsImage() && Clipboard.GetImage() is { } image)
+            else if (!e.DataObject.GetDataPresent(DataFormats.UnicodeText) && Desktop.Current.ClipboardImage() is { } image)
             {
                 AddPendingImage(image);
                 e.CancelCommand();
@@ -362,7 +381,7 @@ public partial class MainWindow : Window
         DockPanel.SetDock(action, Dock.Right);
         dock.Children.Add(action);
         if (!removable)
-            action.Click += (_, _) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); } catch (Exception) { } };
+            action.Click += (_, _) => { try { Desktop.Current.Open(path); } catch (Exception) { } };
         if (isImage && System.IO.File.Exists(path))
         {
             try
@@ -567,23 +586,28 @@ public partial class MainWindow : Window
         }
         // Ctrl+V con una imagen o ficheros (sin texto) en el portapapeles: el cuadro de texto no lo
         // pegaria; se adjuntan aqui.
-        if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control)
+        if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && PasteAttachments())
+            e.Handled = true;
+    }
+
+    /// <summary>Ficheros o una imagen (sin texto) en el portapapeles: se adjuntan. Verdadero si habia algo que adjuntar.</summary>
+    internal bool PasteAttachments()
+    {
+        try
         {
-            try
+            if (Desktop.Current.ClipboardFiles() is { } files)
             {
-                if (Clipboard.ContainsFileDropList())
-                {
-                    foreach (var file in Clipboard.GetFileDropList()) if (file is not null) AddPendingFile(file);
-                    e.Handled = true;
-                }
-                else if (!Clipboard.ContainsText() && Clipboard.ContainsImage() && Clipboard.GetImage() is { } image)
-                {
-                    AddPendingImage(image);
-                    e.Handled = true;
-                }
+                foreach (var file in files) AddPendingFile(file);
+                return true;
             }
-            catch (Exception) { }
+            if (!Desktop.Current.ClipboardHasText() && Desktop.Current.ClipboardImage() is { } image)
+            {
+                AddPendingImage(image);
+                return true;
+            }
         }
+        catch (Exception) { }
+        return false;
     }
 
     private async void OnSend(object sender, RoutedEventArgs e)
@@ -914,18 +938,17 @@ public partial class MainWindow : Window
                 bitmap.UriSource = new Uri(path);
                 bitmap.EndInit();
                 var image = new Image { Source = bitmap, MaxWidth = 512, MaxHeight = 512, Margin = new Thickness(0, 8, 0, 4), HorizontalAlignment = HorizontalAlignment.Left, Cursor = System.Windows.Input.Cursors.Hand };
-                image.MouseLeftButtonUp += (_, _) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); } catch (Exception) { } };
+                image.MouseLeftButtonUp += (_, _) => { try { Desktop.Current.Open(path); } catch (Exception) { } };
                 panel.Children.Add(image);
             }
             catch (Exception) { }
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
             var open = new Button { Style = (Style)FindResource("OutlineButton"), Content = Loc.Get("OpenImage"), Margin = new Thickness(0, 0, 8, 0) };
-            open.Click += (_, _) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); } catch (Exception) { } };
+            open.Click += (_, _) => { try { Desktop.Current.Open(path); } catch (Exception) { } };
             var save = new Button { Style = (Style)FindResource("OutlineButton"), Content = Loc.Get("SaveImage") };
             save.Click += (_, _) =>
             {
-                var dialog = new Microsoft.Win32.SaveFileDialog { FileName = System.IO.Path.GetFileName(path), Filter = "PNG|*.png", DefaultExt = ".png" };
-                if (dialog.ShowDialog(this) == true) { try { System.IO.File.Copy(path, dialog.FileName, overwrite: true); } catch (Exception ex) { PromptWindow.Alert(this, Loc.Get("SaveImage"), ex.Message); } }
+                if (Desktop.Current.PickSave(this, System.IO.Path.GetFileName(path), "PNG|*.png", ".png") is { } target) { try { System.IO.File.Copy(path, target, overwrite: true); } catch (Exception ex) { PromptWindow.Alert(this, Loc.Get("SaveImage"), ex.Message); } }
             };
             row.Children.Add(open); row.Children.Add(save);
             panel.Children.Add(row);
@@ -935,7 +958,7 @@ public partial class MainWindow : Window
             // Un documento recien creado: abrirlo con su programa.
             var path = output[7..].Trim();
             var open = new Button { Style = (Style)FindResource("OutlineButton"), Content = Loc.Format("OpenDocument", System.IO.Path.GetFileName(path)), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0) };
-            open.Click += (_, _) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); } catch (Exception) { } };
+            open.Click += (_, _) => { try { Desktop.Current.Open(path); } catch (Exception) { } };
             panel.Children.Add(open);
         }
         return new Border
@@ -1028,7 +1051,7 @@ public partial class MainWindow : Window
             panel.Children.Add(new TextBox { Text = content, TextWrapping = TextWrapping.Wrap, FontSize = fontSize, Foreground = foreground, IsReadOnly = true, BorderThickness = new Thickness(0), Background = Brushes.Transparent, Padding = new Thickness(0), SelectionBrush = (Brush)FindResource("OnPrimary"), SelectionOpacity = 0.35 });
             // Lo que preguntaste se puede copiar, retocar en el redactor o volver a enviar tal cual.
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, -6, -4) };
-            actions.Children.Add(UserAction("\uE8C8", Loc.Get("Copy"), () => { try { Clipboard.SetText(content); } catch (Exception) { } }));
+            actions.Children.Add(UserAction("\uE8C8", Loc.Get("Copy"), () => { try { Desktop.Current.SetClipboardText(content); } catch (Exception) { } }));
             actions.Children.Add(UserAction("\uE70F", Loc.Get("EditQuestion"), () => { Composer.Text = content; Composer.CaretIndex = content.Length; Composer.Focus(); }));
             actions.Children.Add(UserAction("\uE72C", Loc.Get("ResendQuestion"), () => { if (_answering is null) { Composer.Text = content; OnSend(this, new RoutedEventArgs()); } }));
             panel.Children.Add(actions);
@@ -1040,7 +1063,7 @@ public partial class MainWindow : Window
         if (!user && !streaming && content.Length > 0)
         {
             var copy = new Button { Content = "", ToolTip = Loc.Get("Copy"), Style = (Style)FindResource("GhostIconButton"), Width = 28, Height = 28, FontSize = 13, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-6, 4, 0, -4) };
-            copy.Click += (_, _) => { try { Clipboard.SetText(content); } catch (Exception) { } };
+            copy.Click += (_, _) => { try { Desktop.Current.SetClipboardText(content); } catch (Exception) { } };
             panel.Children.Add(copy);
         }
         bubble.Child = panel;

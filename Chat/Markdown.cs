@@ -144,7 +144,7 @@ public static class Markdown
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var head = new DockPanel { LastChildFill = false };
         var copy = new Button { Content = "", ToolTip = copyLabel, Style = (Style)Application.Current.FindResource("GhostIconButton"), Width = 28, Height = 28, FontSize = 13 };
-        copy.Click += (_, _) => { try { Clipboard.SetText(code); } catch (Exception) { } };
+        copy.Click += (_, _) => { try { Services.Desktop.Current.SetClipboardText(code); } catch (Exception) { } };
         DockPanel.SetDock(copy, Dock.Right);
         head.Children.Add(copy);
         if (saveLabel is not null)
@@ -154,9 +154,8 @@ public static class Markdown
             save.Click += (_, _) =>
             {
                 var ext = ExtensionFor(lang);
-                var dialog = new Microsoft.Win32.SaveFileDialog { FileName = "codigo" + ext, Filter = $"{(lang.Length > 0 ? lang : "txt")} (*{ext})|*{ext}|Todo|*.*", DefaultExt = ext };
-                if (dialog.ShowDialog() == true)
-                    try { System.IO.File.WriteAllText(dialog.FileName, code, new System.Text.UTF8Encoding(false)); } catch (Exception) { }
+                if (Services.Desktop.Current.PickSave(null, "codigo" + ext, $"{(lang.Length > 0 ? lang : "txt")} (*{ext})|*{ext}|Todo|*.*", ext) is { } target)
+                    try { System.IO.File.WriteAllText(target, code, new System.Text.UTF8Encoding(false)); } catch (Exception) { }
             };
             DockPanel.SetDock(save, Dock.Right);
             head.Children.Add(save);

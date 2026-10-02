@@ -208,11 +208,14 @@ public static class WindowsStartup
     /// <summary>Nombre de la entrada hasta 2026.9.20.3 (sOC AI Chat); apuntaba a un exe que ya no existe.</summary>
     private const string OldValueName = "sOCAIChat";
 
+    /// <summary>El exe que se apunta (las pruebas ponen otro).</summary>
+    internal static Func<string?> Executable { get; set; } = () => Environment.ProcessPath;
+
     public static bool IsEnabled()
     {
         try
         {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            using var key = Desktop.Current.CurrentUser.OpenSubKey(RunKey, writable: true);
             if (key is null) return false;
             if (key.GetValue(OldValueName) is string)
             {
@@ -252,9 +255,9 @@ public static class WindowsStartup
     {
         try
         {
-            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
+            using var key = Desktop.Current.CurrentUser.CreateSubKey(RunKey, writable: true);
             if (key is null) return;
-            if (enabled && Environment.ProcessPath is { Length: > 0 } exe)
+            if (enabled && Executable() is { Length: > 0 } exe)
                 key.SetValue(ValueName, "\"" + exe + "\" --tray");
             else
                 key.DeleteValue(ValueName, throwOnMissingValue: false);

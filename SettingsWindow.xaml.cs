@@ -386,9 +386,8 @@ public partial class SettingsWindow : Window
     /// <summary>Cambiar la carpeta de modelos: se elige, se mueven los GGUF que haya y se apunta el activo a su nueva ruta.</summary>
     private async void OnPickModelsFolder(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog { InitialDirectory = Paths.Models, Title = Loc.Get("ModelsFolderPick") };
-        if (dialog.ShowDialog(this) != true) return;
-        await MoveModelsAsync(dialog.FolderName);
+        if (Desktop.Current.PickFolder(this, Paths.Models, Loc.Get("ModelsFolderPick")) is not { } folder) return;
+        await MoveModelsAsync(folder);
     }
 
     public async Task MoveModelsAsync(string target)
@@ -421,13 +420,12 @@ public partial class SettingsWindow : Window
 
     private void OnImport(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "GGUF (*.gguf)|*.gguf", CheckFileExists = true };
-        if (dialog.ShowDialog(this) != true)
+        if (Desktop.Current.PickFiles(this, null, "GGUF (*.gguf)|*.gguf", multiselect: false) is not [var file])
             return;
-        var name = ModelCatalog.NameFromFile(dialog.FileName);
-        if (string.Equals(Path.GetDirectoryName(Path.GetFullPath(dialog.FileName)), Path.GetFullPath(Paths.Models).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
-            AppSettings.Current.Remember(new InstalledModel { Name = name, Path = dialog.FileName });
-        Activate(dialog.FileName, name, null);
+        var name = ModelCatalog.NameFromFile(file);
+        if (string.Equals(Path.GetDirectoryName(Path.GetFullPath(file)), Path.GetFullPath(Paths.Models).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+            AppSettings.Current.Remember(new InstalledModel { Name = name, Path = file });
+        Activate(file, name, null);
         PaintModel();
     }
 
@@ -487,7 +485,7 @@ public partial class SettingsWindow : Window
 
     private void OnImagesFolder(object sender, RoutedEventArgs e)
     {
-        try { Process.Start(new ProcessStartInfo(ImageEngine.ImagesFolder) { UseShellExecute = true }); } catch (Exception) { }
+        try { Desktop.Current.Open(ImageEngine.ImagesFolder); } catch (Exception) { }
     }
 
     private void OnImagesRemove(object sender, RoutedEventArgs e)
@@ -554,9 +552,9 @@ public partial class SettingsWindow : Window
         PaintDoor();
     }
 
-    private void OnCopyUrl(object sender, RoutedEventArgs e) { try { Clipboard.SetText(DoorUrl.Text); } catch (Exception) { } }
+    private void OnCopyUrl(object sender, RoutedEventArgs e) { try { Desktop.Current.SetClipboardText(DoorUrl.Text); } catch (Exception) { } }
 
-    private void OnCopyToken(object sender, RoutedEventArgs e) { try { Clipboard.SetText(DoorToken.Text); } catch (Exception) { } }
+    private void OnCopyToken(object sender, RoutedEventArgs e) { try { Desktop.Current.SetClipboardText(DoorToken.Text); } catch (Exception) { } }
 
     // ------------------------------------------------------------------ idioma y diagnostico
 
@@ -596,9 +594,8 @@ public partial class SettingsWindow : Window
 
     private void OnPickWorkFolder(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog { InitialDirectory = AppSettings.Current.WorkFolder };
-        if (dialog.ShowDialog(this) != true) return;
-        WorkFolderBox.Text = dialog.FolderName;
+        if (Desktop.Current.PickFolder(this, AppSettings.Current.WorkFolder, null) is not { } folder) return;
+        WorkFolderBox.Text = folder;
         OnWorkFolderChanged(sender, e);
     }
 
@@ -671,9 +668,8 @@ public partial class SettingsWindow : Window
 
     private void OnPickDocsFolder(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog { InitialDirectory = Directory.Exists(DocumentIndex.Folder) ? DocumentIndex.Folder : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), Title = Loc.Get("DocsPick") };
-        if (dialog.ShowDialog(this) != true) return;
-        AppSettings.Current.DocumentsFolder = string.Equals(Path.GetFullPath(dialog.FolderName), Path.GetFullPath(DocumentIndex.DefaultFolder), StringComparison.OrdinalIgnoreCase) ? null : dialog.FolderName;
+        if (Desktop.Current.PickFolder(this, Directory.Exists(DocumentIndex.Folder) ? DocumentIndex.Folder : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), Loc.Get("DocsPick")) is not { } folder) return;
+        AppSettings.Current.DocumentsFolder = string.Equals(Path.GetFullPath(folder), Path.GetFullPath(DocumentIndex.DefaultFolder), StringComparison.OrdinalIgnoreCase) ? null : folder;
         AppSettings.Current.Save();
         PaintDocs();
     }
@@ -758,7 +754,7 @@ public partial class SettingsWindow : Window
         try
         {
             if (File.Exists(path) || Directory.Exists(path))
-                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                Desktop.Current.Open(path);
         }
         catch (Exception ex)
         {

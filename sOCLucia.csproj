@@ -9,9 +9,9 @@
     <RootNamespace>SocLucia</RootNamespace>
     <AssemblyName>sOCLucia</AssemblyName>
     <ApplicationTitle>sOC Lucia</ApplicationTitle>
-    <Version>2026.9.30.0</Version>
-    <AssemblyVersion>2026.9.30.0</AssemblyVersion>
-    <FileVersion>2026.9.30.0</FileVersion>
+    <Version>2026.10.3.0</Version>
+    <AssemblyVersion>2026.10.3.0</AssemblyVersion>
+    <FileVersion>2026.10.3.0</FileVersion>
     <Product>sOC Lucia</Product>
     <Company>Socratic</Company>
     <Copyright>Copyright © 2026 Socratic</Copyright>
@@ -33,6 +33,10 @@
 
   <ItemGroup>
     <Resource Include="Assets\logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Lucia.Tests" />
   </ItemGroup>
 
   <ItemGroup>

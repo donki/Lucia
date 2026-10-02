@@ -7,7 +7,7 @@ namespace SocLucia.Engine;
 /// <summary>Descargas grandes (motor y modelos) con progreso, cancelacion y comprobacion opcional del SHA-256.</summary>
 public static class Downloader
 {
-    public static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = true })
+    public static HttpClient Http { get; internal set; } = new(new HttpClientHandler { AllowAutoRedirect = true })
     {
         Timeout = Timeout.InfiniteTimeSpan,
         DefaultRequestHeaders = { { "User-Agent", "sOCLucia/1.0 (+https://github.com/donki/Lucia)" } },

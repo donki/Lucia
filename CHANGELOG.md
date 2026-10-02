@@ -1,5 +1,33 @@
 # Changelog — sOC Lucia
 
+## 2026.10.3.0 — Pruebas de las ventanas / Window tests
+
+**Español**
+
+- El banco de pruebas maneja ahora también las ventanas de verdad (chat, Ajustes, «Acerca de»,
+  permisos, avisos, bandeja y el arranque) con un llama-server de mentira y una red de mentira que
+  contesta como él: preguntar, pensar, parar, herramientas con permisos, tareas programadas,
+  adjuntos, visión, conversaciones, buscar e instalar IA, carpetas, memoria y puerta de editores.
+  **252 pruebas** y **91,5 %** de cobertura sobre toda la aplicación (antes 216 y 49,2 % con la
+  misma medida).
+- Lo que las ventanas piden a Windows (abrir con su programa, elegir ficheros y carpetas,
+  portapapeles, «Arrancar con Windows») pasa por una pieza que en las pruebas se cambia por un doble.
+- Una ventana cerrada deja de escuchar los cambios de idioma, de motor y de descargas, y su
+  temporizador de tareas se para.
+- Sin cambios en lo que se ve ni en cómo se usa.
+
+**English**
+
+- The test suite now also drives the real windows (chat, Settings, About, permissions, prompts,
+  tray and startup) against a fake llama-server and a fake network that answers like it: asking,
+  thinking, stopping, tools with permissions, scheduled tasks, attachments, vision, conversations,
+  searching and installing AIs, folders, memory and the editor door. **252 tests** and **91.5 %**
+  line coverage of the whole app (was 216 and 49.2 % measured the same way).
+- What the windows ask of Windows (open with its program, pick files and folders, clipboard, start
+  with Windows) goes through one piece that tests replace with a double.
+- A closed window stops listening to language, engine and download changes, and its task timer stops.
+- Nothing changes in what you see or how you use it.
+
 ## 2026.9.30.0 — Pruebas automáticas y cinco arreglos que han salido con ellas
 
 - **Pruebas automáticas** (`Lucia.Tests`, 216): documentos y PDF, herramientas, streaming, puerta

@@ -95,15 +95,15 @@ public static class ToolBox
         new(ReadClipboard, Resource.Clipboard,
             "Read the text that is currently in the Windows clipboard.",
             Params(),
-            (_, _) => Task.FromResult(OnUi(() => Clipboard.ContainsText() ? Cut(Clipboard.GetText()) : "[the clipboard has no text]"))),
+            (_, _) => Task.FromResult(OnUi(() => Desktop.Current.ClipboardHasText() ? Cut(Desktop.Current.ClipboardText()) : "[the clipboard has no text]"))),
         new(WriteClipboard, Resource.Clipboard,
             "Put text in the Windows clipboard so the user can paste it.",
             Params(("text", "The text to copy.")),
-            (a, _) => Task.FromResult(OnUi(() => { Clipboard.SetText(Tool.Arg(a, "text")); return "Copied to the clipboard."; }))),
+            (a, _) => Task.FromResult(OnUi(() => { Desktop.Current.SetClipboardText(Tool.Arg(a, "text")); return "Copied to the clipboard."; }))),
         new(OpenItem, Resource.Apps,
             "Open a file, folder, program or web address with the program Windows uses for it (like double-clicking it).",
             Params(("target", "Path or URL to open.")),
-            (a, _) => { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Tool.Arg(a, "target")) { UseShellExecute = true }); return Task.FromResult("Opened."); }),
+            (a, _) => { Desktop.Current.Open(Tool.Arg(a, "target")); return Task.FromResult("Opened."); }),
     ];
 
     /// <summary>Informacion del PC: no toca nada, no pide permiso.</summary>

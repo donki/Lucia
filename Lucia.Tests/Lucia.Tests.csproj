@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Pruebas de la logica de sOC Lucia (xUnit). Se referencia la aplicacion entera (WPF, net10.0-windows):
-    la interfaz no se prueba, pero asi la cobertura se mide sobre todo el ensamblado sOCLucia.
+    Pruebas de sOC Lucia (xUnit). Se referencia la aplicacion entera (WPF, net10.0-windows) y se
+    prueban tambien las ventanas, en un hilo STA con una plataforma falsa (Services\Desktop.cs), un
+    llama-server de mentira (FakeLlama) y un HttpClient de mentira que contesta como llama-server.
     Los datos van a una carpeta temporal (SOC_LUCIA_ROOT, solo en Debug): ver Sandbox.cs.
   -->
   <PropertyGroup>
@@ -14,6 +15,7 @@
     <IsTestProject>true</IsTestProject>
     <RootNamespace>SocLucia.Tests</RootNamespace>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,6 +34,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\sOCLucia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- El llama-server de mentira es otro proyecto (un exe): no se compila aqui, se copia al lado. -->
+    <Compile Remove="FakeLlama\**" />
+    <None Remove="FakeLlama\**" />
+    <ProjectReference Include="FakeLlama\FakeLlama.csproj" />
   </ItemGroup>
 
 </Project>
