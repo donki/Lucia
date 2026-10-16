@@ -497,12 +497,12 @@ public sealed class MainWindowTests : UiTest
             Assert.True(w.IsVisible);
             w.WindowState = WindowState.Minimized;
             Ui.WaitFor(() => !w.IsVisible);
-            SendMessage(hwnd, 0x0111, 1, 0);   // Abrir
+            ClickTray(w.Tray, 0);   // Abrir (menu WPF con el aspecto comun, General 6.14)
             Assert.True(w.IsVisible);
             w.Tray.MinimizeToTray = false;
             SendMessage(hwnd, 0x0112, 0xF020, 0);
             w.WindowState = WindowState.Normal;
-            SendMessage(hwnd, 0x0111, 2, 0);   // Salir
+            ClickTray(w.Tray, 2);   // Salir (el 1 es el separador)
             Assert.Equal(1, Fake.Shutdowns);
             w.Tray.Dispose();
         });
@@ -565,4 +565,8 @@ public sealed class MainWindowTests : UiTest
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>Pulsa un elemento del menu de la bandeja (el mismo que se abre con el boton derecho).</summary>
+    private static void ClickTray(TrayIcon tray, int index) =>
+        ((MenuItem)tray.BuildMenu().Items[index]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 }

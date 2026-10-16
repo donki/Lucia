@@ -30,6 +30,8 @@ public static class ThemeManager
             Set(resources, "TextSecondary", "#C7C4D8");
             Set(resources, "MirrorBackground", "#000000");
             Set(resources, "WarningSurface", "#33291A");
+            Set(resources, "SelectionSurface", "#2E2A55");
+            Set(resources, "PrimaryText", "#A9A3FF");
         }
         else
         {
@@ -40,6 +42,8 @@ public static class ThemeManager
             Set(resources, "TextSecondary", "#464555");
             Set(resources, "MirrorBackground", "#1B1B22");
             Set(resources, "WarningSurface", "#FFF4E5");
+            Set(resources, "SelectionSurface", "#E4E1FF");
+            Set(resources, "PrimaryText", "#3525CD");
         }
     }
 
