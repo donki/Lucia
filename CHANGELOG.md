@@ -1,14 +1,16 @@
 # Changelog — sOC Lucia
 
-## Sin publicar
+## 2026.10.16.0 — Menú de la bandeja / Tray menu
 
 **Español**
 
-- Los menús contextuales y el de la bandeja tienen el aspecto común de las apps sOC (General 6.14).
+- El menú del icono junto al reloj tiene el mismo aspecto que en el resto de aplicaciones sOC, con
+  iconos, en tema claro y oscuro (General 6.14).
 
 **English**
 
-- Context and tray menus have the common look of the sOC apps (General 6.14).
+- The menu of the icon next to the clock looks the same as in the other sOC apps, with icons, in
+  light and dark themes (General 6.14).
 
 ## 2026.10.3.0 — Pruebas de las ventanas / Window tests
 
