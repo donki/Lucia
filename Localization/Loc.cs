@@ -58,6 +58,12 @@ public static class Loc
         ["EngineExited"] = "The engine exited with code {0}. See the engine log in Settings.",
         ["EngineTimeout"] = "The engine did not answer in time. See the engine log in Settings.",
         ["AnswerFailed"] = "Could not answer: {0}",
+        ["AnswerPreparing"] = "Getting the question ready…",
+        ["AnswerLoadingModel"] = "Loading the AI…",
+        ["AnswerDownloadingEngine"] = "Downloading the AI engine…",
+        ["AnswerWaiting"] = "Lucia is thinking…",
+        ["AnswerReasoning"] = "Reasoning…",
+        ["AnswerElapsed"] = "{0} · {1} s",
 
         // Ajustes
         ["SettingsTitle"] = "Settings",
@@ -306,6 +312,12 @@ public static class Loc
         ["EngineExited"] = "El motor ha terminado con el código {0}. Mira el registro del motor en Ajustes.",
         ["EngineTimeout"] = "El motor no ha respondido a tiempo. Mira el registro del motor en Ajustes.",
         ["AnswerFailed"] = "No se ha podido responder: {0}",
+        ["AnswerPreparing"] = "Preparando la pregunta…",
+        ["AnswerLoadingModel"] = "Cargando la IA…",
+        ["AnswerDownloadingEngine"] = "Descargando el motor de la IA…",
+        ["AnswerWaiting"] = "Lucia está pensando…",
+        ["AnswerReasoning"] = "Razonando…",
+        ["AnswerElapsed"] = "{0} · {1} s",
 
         ["SettingsTitle"] = "Ajustes",
         ["ModelTitle"] = "La IA",

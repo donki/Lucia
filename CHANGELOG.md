@@ -1,5 +1,41 @@
 # Changelog — sOC Lucia
 
+## 2026.10.21.0 — Lucia ya no se queda bloqueada al preguntar / Lucia no longer freezes when you ask
+
+**Español**
+
+- Al enviar una pregunta sale **al momento** en el chat, la casilla se vacía y debajo aparece la
+  respuesta con un **indicador de espera** que gira y dice por dónde va: «Cargando la IA…» (si el
+  modelo aún se está cargando), «Preparando la pregunta…», «Lucia está pensando…» o «Razonando…»,
+  con los segundos que lleva. En cuanto llega el primer trozo, la respuesta se va escribiendo.
+- **La ventana ya no se congela** mientras Lucia piensa o escribe: se puede mover, desplazar, cambiar
+  de conversación y seguir escribiendo. Antes, con documentos en la carpeta de Lucia (sobre todo
+  PDF), cada pregunta los volvía a leer en el hilo de la ventana y la dejaba parada unos segundos
+  antes de enseñar nada; y una respuesta larga y rápida saturaba la ventana. Ahora leer los
+  documentos y los adjuntos, arrancar el motor, recibir la respuesta y ejecutar las herramientas
+  (leer ficheros, buscar, internet) va por detrás, y la respuesta se repinta a un ritmo que se
+  adapta a su tamaño.
+- El botón de parar sigue funcionando también mientras espera: corta la respuesta y deja lo que ya
+  había escrito.
+- Banco de pruebas: **278 pruebas** (antes 252) y **91,8 %** de toda la aplicación (antes 91,5 %).
+  De paso se han arreglado tres pruebas que fallaban a veces según el orden en que se ejecutaban.
+
+**English**
+
+- When you send a question it shows up in the chat **right away**, the box is cleared and the answer
+  appears below with a spinning **waiting indicator** that says what is going on: "Loading the AI…"
+  (if the model is still loading), "Getting the question ready…", "Lucia is thinking…" or
+  "Reasoning…", with the seconds so far. As soon as the first piece arrives, the answer is written.
+- **The window no longer freezes** while Lucia thinks or writes: you can move it, scroll, switch
+  conversations and keep typing. Before, with documents in Lucia's folder (PDFs above all), every
+  question read them again on the window's thread and stalled it for a few seconds before showing
+  anything; and a long, fast answer flooded the window. Reading documents and attachments, starting
+  the engine, receiving the answer and running tools (reading files, searching, the internet) now
+  happen in the background, and the answer is repainted at a pace that adapts to its size.
+- The stop button still works while waiting: it cuts the answer and keeps what was already written.
+- Test suite: **278 tests** (was 252) and **91.8 %** of the whole app (was 91.5 %). Three tests that
+  sometimes failed depending on the order they ran in are fixed too.
+
 ## 2026.10.16.0 — Menú de la bandeja / Tray menu
 
 **Español**

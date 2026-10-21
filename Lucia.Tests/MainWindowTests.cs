@@ -69,6 +69,70 @@ public sealed class MainWindowTests : UiTest
         Assert.Single(ThreadStore.LoadAll());
     }
 
+    private static FrameworkElement? WaitIndicator(MainWindow w) =>
+        Ui.All<FrameworkElement>(Messages(w)).FirstOrDefault(e => e.Name == "WaitIndicator");
+
+    private static string? WaitText(MainWindow w) => WaitIndicator(w) is { } i ? Ui.All<TextBlock>(i).Last().Text : null;
+
+    [Fact]
+    public void AlEnviar_LaPreguntaSaleYa_ConIndicadorDeEspera_YLaVentanaNoSeBloquea()
+    {
+        Net.Answers.Enqueue(new FakeHttp.Answer("Ya está.", DelayMs: 1500));
+        Ui.Run(() =>
+        {
+            var w = Open();
+            var composer = Ui.Find<TextBox>(w, "Composer");
+            composer.Text = "una pregunta que tarda";
+            Ui.Click(Ui.Find<ButtonBase>(w, "SendButton"));
+            // Al momento, sin dar ni una vuelta al Dispatcher: la pregunta en el chat, la casilla
+            // vacia, parar a mano y la burbuja de la respuesta con su indicador.
+            Assert.Equal(string.Empty, composer.Text);
+            Assert.Contains("una pregunta que tarda", Bubbles(w));
+            Assert.Equal(Visibility.Visible, Ui.Find<FrameworkElement>(w, "StopButton").Visibility);
+            Assert.NotNull(WaitIndicator(w));
+            // Mientras la IA piensa la ventana sigue viva: cada vuelta del Dispatcher es corta y el
+            // indicador va diciendo por donde va.
+            var slowest = 0L;
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            while (WaitText(w) != Loc.Get("AnswerWaiting") && watch.ElapsedMilliseconds < 15_000)
+            {
+                var turn = System.Diagnostics.Stopwatch.StartNew();
+                Ui.DoEvents();
+                slowest = Math.Max(slowest, turn.ElapsedMilliseconds);
+                Thread.Sleep(5);
+            }
+            Assert.Equal(Loc.Get("AnswerWaiting"), WaitText(w));
+            Assert.True(Answering(w));
+            Assert.True(slowest < 1000, $"una vuelta del Dispatcher tardo {slowest} ms");
+            Ui.WaitFor(() => !Answering(w));
+            Assert.Contains("Ya está.", Bubbles(w));
+            Assert.Null(WaitIndicator(w));
+            Assert.False(Ui.Field<System.Windows.Threading.DispatcherTimer>(w, "_waitTimer").IsEnabled);
+        });
+    }
+
+    [Fact]
+    public void MientrasCargaLaIA_ElIndicadorLoDice_YLuegoContesta()
+    {
+        Net.Healthy = false;   // llama-server arrancado pero cargando el modelo
+        Net.Answers.Enqueue(new FakeHttp.Answer("Lista."));
+        Ui.Run(() =>
+        {
+            var w = new MainWindow();
+            w.Show();
+            Ui.WaitFor(() => App.Engine.State == EngineState.Starting);
+            Ui.Find<TextBox>(w, "Composer").Text = "¿estás?";
+            Ui.Click(Ui.Find<ButtonBase>(w, "SendButton"));
+            Assert.Contains("¿estás?", Bubbles(w));
+            Ui.WaitFor(() => WaitText(w) == Loc.Get("AnswerLoadingModel"));
+            Assert.Empty(Net.ChatRequests);
+            Net.Healthy = true;
+            Ui.WaitFor(() => !Answering(w));
+            Assert.Contains("Lista.", Bubbles(w));
+            Assert.Null(WaitIndicator(w));
+        });
+    }
+
     [Fact]
     public void Pensar_SoloRazonamiento_SeRepiteSinPensar_YElRazonamientoSeGuarda()
     {

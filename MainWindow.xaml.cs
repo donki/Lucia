@@ -51,6 +51,7 @@ public partial class MainWindow : Window
             ModelDownloads.Changed -= PaintEngineStatus;
             ModelDownloads.Finished -= OnModelDownloadFinished;
             _scheduleTimer?.Stop();
+            _waitTimer?.Stop();
         };
         RefreshThreadList();
         ShowThread(null);   // al abrir, conversacion nueva; las anteriores quedan en la lista
@@ -108,8 +109,19 @@ public partial class MainWindow : Window
 
     private async Task WarmUpAsync()
     {
-        try { await App.Engine.EnsureReadyAsync(new Progress<Downloader.Progress>(PaintDownload), CancellationToken.None); }
+        try { await EngineReadyAsync(CancellationToken.None); }
         catch (Exception) { /* el estado ya lo enseña la barra */ }
+    }
+
+    /// <summary>
+    /// La direccion del motor, arrancandolo si hace falta, siempre fuera del hilo de la interfaz:
+    /// descomprimir el motor, lanzar llama-server, matar el anterior y esperar a que cargue el
+    /// modelo no deben congelar la ventana. El progreso y el estado vuelven por el Dispatcher.
+    /// </summary>
+    private Task<string> EngineReadyAsync(CancellationToken cancel)
+    {
+        var progress = new Progress<Downloader.Progress>(PaintDownload);
+        return Task.Run(() => App.Engine.EnsureReadyAsync(progress, cancel), cancel);
     }
 
     private void PaintDownload(Downloader.Progress p) => Dispatcher.BeginInvoke(() =>
@@ -661,8 +673,8 @@ public partial class MainWindow : Window
             try
             {
                 await EnsureVisionAsync(thread, cancel);
-                var baseUrl = await App.Engine.EnsureReadyAsync(new Progress<Downloader.Progress>(PaintDownload), cancel);
-                await AnswerLoopAsync(thread, baseUrl, cancel);
+                // El motor se pide dentro de cada vuelta, ya con la burbuja de espera en pantalla.
+                await AnswerLoopAsync(thread, cancel);
             }
             catch (OperationCanceledException) { _pendingAnswers.Clear(); }
             catch (Exception ex)
@@ -726,93 +738,73 @@ public partial class MainWindow : Window
     /// Una vuelta de respuesta; en modo trabajo, tantas como herramientas pida el modelo: cada orden
     /// se confirma, se ejecuta, su salida vuelve al modelo y se sigue hasta que conteste sin pedir mas.
     /// </summary>
-    private async Task AnswerLoopAsync(ChatThread thread, string baseUrl, CancellationToken cancel)
+    private async Task AnswerLoopAsync(ChatThread thread, CancellationToken cancel)
     {
         var settings = AppSettings.Current;
         var tools = thread.WorkMode ? ToolBox.Definitions(settings) : ToolBox.QuestionDefinitions(settings);
         var question = thread.Messages.LastOrDefault(m => m.Role == "user")?.Content ?? string.Empty;
-        var context = ToolBox.ContextPrompt(settings, question);
+        string? context = null;
         for (var round = 0; round < 12; round++)
         {
             cancel.ThrowIfCancellationRequested();
-            // Generar una imagen mata el motor de texto (no caben los dos en la grafica) y al volver
-            // el puerto es otro: se vuelve a pedir la direccion en cada vuelta. Si el motor sigue en
-            // pie esto no cuesta nada; si no, lo levanta otra vez.
-            baseUrl = await App.Engine.EnsureReadyAsync(new Progress<Downloader.Progress>(PaintDownload), cancel);
-            var messages = new List<ChatMessage>();
-            var system = settings.Instructions.Trim();
-            if (thread.WorkMode)
-                system = (system.Length > 0 ? system + "\n\n" : string.Empty) + ToolBox.SystemPrompt(settings);
-            else
-                system = (system.Length > 0 ? system + "\n\n" : string.Empty) + ToolBox.QuestionPrompt(settings) + (settings.InternetAccess ? " " + ToolBox.InternetPrompt : string.Empty);
-            if (context.Length > 0)
-                system = (system.Length > 0 ? system + "\n\n" : string.Empty) + context;
-            if (system.Length > 0)
-                messages.Add(new ChatMessage("system", system));
-            // Las ultimas vueltas: memoria de conversacion sin pasarse del contexto. Las de herramienta van completas.
-            foreach (var m in thread.Messages.TakeLast(30))
-            {
-                if (m.Role == "tool")
-                    messages.Add(new ChatMessage("tool", m.Content, m.ToolCallId));
-                else if (m.ToolCalls is { Length: > 0 } storedCalls)
-                    messages.Add(new ChatMessage(m.Role, m.Content, null, JsonNode.Parse(storedCalls) as JsonArray));
-                else if (m.Role == "user" && m.Attachments is { Count: > 0 })
-                    messages.Add(new ChatMessage(m.Role, TextForModel(m), null, null, ImagesForModel(m)));
-                else
-                    messages.Add(new ChatMessage(m.Role, m.Content));
-            }
-
-            var answer = new StoredMessage { Role = "assistant", Content = string.Empty };
+            // La burbuja de la respuesta sale ya, con su indicador de espera, antes de nada que tarde.
+            var live = new PendingAnswer();
             var bubble = Bubble("assistant", string.Empty, null);
             Messages.Children.Add(bubble);
-            ScrollToEnd();
-            var content = new System.Text.StringBuilder();
-            var reasoning = new System.Text.StringBuilder();
-            IReadOnlyList<ToolCall>? calls = null;
-            string? finish = null;
-            var lastPaint = DateTime.UtcNow;
+            BeginWait(bubble, live);
+            RepaintBubble(bubble, string.Empty, null, streaming: true);
+            var answer = new StoredMessage { Role = "assistant", Content = string.Empty };
+            IReadOnlyList<ToolCall>? calls;
             try
             {
-                await foreach (var delta in ChatClient.StreamAsync(baseUrl, messages, settings.Thinking, settings.MaxAnswerTokens, tools, cancel))
+                // Generar una imagen mata el motor de texto (no caben los dos en la grafica) y al volver
+                // el puerto es otro: se vuelve a pedir la direccion en cada vuelta. Si el motor sigue en
+                // pie esto no cuesta nada; si no, lo levanta otra vez (fuera del hilo de la interfaz).
+                var baseUrl = await EngineReadyAsync(cancel);
+                live.Advance(AnswerPhase.Preparing);
+                // Los documentos (PDF y .docx se leen y se trocean) y los adjuntos, tambien fuera.
+                context ??= await Task.Run(() => ToolBox.ContextPrompt(settings, question), cancel);
+                var history = thread.Messages.TakeLast(30).ToList();   // copia: la conversacion puede crecer mientras
+                var system = SystemPrompt(settings, thread.WorkMode, context);
+                var messages = await Task.Run(() => MessagesFor(system, history), cancel);
+                live.Advance(AnswerPhase.Waiting);
+                await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, settings.Thinking, settings.MaxAnswerTokens, tools, live, cancel));
+                var got = live.Read();
+                answer.Content = got.Content.Trim();
+                answer.Reasoning = got.Reasoning?.Trim();
+                calls = got.Calls;
+                if (answer.Content.Length == 0 && answer.Reasoning is not null && calls is null)
                 {
-                    if (delta.Content is not null) content.Append(delta.Content);
-                    if (delta.Reasoning is not null) reasoning.Append(delta.Reasoning);
-                    if (delta.ToolCalls is not null) calls = delta.ToolCalls;
-                    if (delta.FinishReason is not null) finish = delta.FinishReason;
-                    if ((DateTime.UtcNow - lastPaint).TotalMilliseconds > 120)
-                    {
-                        RepaintBubble(bubble, content.ToString(), reasoning.Length > 0 ? reasoning.ToString() : null, streaming: true);
-                        lastPaint = DateTime.UtcNow;
-                    }
+                    // Se ha gastado el tope razonando y no ha llegado a contestar: otra vuelta sin pensar,
+                    // para que responda directo. El razonamiento se conserva plegado.
+                    Log($"respuesta vacia tras razonar (fin: {got.Finish}); se repite sin pensamiento");
+                    live = new PendingAnswer(answer.Reasoning);
+                    live.Advance(AnswerPhase.Waiting);
+                    BeginWait(bubble, live);
+                    RepaintBubble(bubble, string.Empty, answer.Reasoning, streaming: true);
+                    await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, false, settings.MaxAnswerTokens, tools, live, cancel));
+                    var again = live.Read();
+                    answer.Content = again.Content.Trim();
+                    calls = again.Calls;
                 }
             }
-            catch (OperationCanceledException)
+            catch (Exception ex) when (ex is OperationCanceledException || cancel.IsCancellationRequested)
             {
-                answer.Content = content.ToString().Trim();
+                // Parar: lo que ya se habia escrito se queda; si no habia nada, la burbuja se va.
+                EndWait();
+                answer.Content = live.Read().Content.Trim();
                 if (answer.Content.Length > 0) { RepaintBubble(bubble, answer.Content, null, false); thread.Messages.Add(answer); }
                 else Messages.Children.Remove(bubble);
+                throw new OperationCanceledException(cancel);
+            }
+            catch (Exception)
+            {
+                // El motor no arranca o el servidor falla: el aviso lo pone AnswerAsync, sin la burbuja de espera.
+                EndWait();
+                Messages.Children.Remove(bubble);
                 throw;
             }
-            answer.Content = content.ToString().Trim();
-            answer.Reasoning = reasoning.Length > 0 ? reasoning.ToString().Trim() : null;
-            if (answer.Content.Length == 0 && answer.Reasoning is not null && calls is null)
-            {
-                // Se ha gastado el tope razonando y no ha llegado a contestar: otra vuelta sin pensar,
-                // para que responda directo. El razonamiento se conserva plegado.
-                Log($"respuesta vacia tras razonar (fin: {finish}); se repite sin pensamiento");
-                RepaintBubble(bubble, string.Empty, answer.Reasoning, streaming: true);
-                await foreach (var delta in ChatClient.StreamAsync(baseUrl, messages, false, settings.MaxAnswerTokens, tools, cancel))
-                {
-                    if (delta.Content is not null) content.Append(delta.Content);
-                    if (delta.ToolCalls is not null) calls = delta.ToolCalls;
-                    if ((DateTime.UtcNow - lastPaint).TotalMilliseconds > 120)
-                    {
-                        RepaintBubble(bubble, content.ToString(), answer.Reasoning, streaming: true);
-                        lastPaint = DateTime.UtcNow;
-                    }
-                }
-                answer.Content = content.ToString().Trim();
-            }
+            EndWait();
             if (calls is { Count: > 0 })
             {
                 answer.ToolCalls = new JsonArray(calls.Select(c => (JsonNode)c.ToJson()).ToArray()).ToJsonString();
@@ -831,6 +823,69 @@ public partial class MainWindow : Window
                 Messages.Children.Remove(bubble);
             return;
         }
+    }
+
+    /// <summary>Las instrucciones del sistema: las del usuario, las del modo y el contexto (memoria y documentos).</summary>
+    private static string SystemPrompt(AppSettings settings, bool workMode, string context)
+    {
+        var system = settings.Instructions.Trim();
+        if (workMode)
+            system = (system.Length > 0 ? system + "\n\n" : string.Empty) + ToolBox.SystemPrompt(settings);
+        else
+            system = (system.Length > 0 ? system + "\n\n" : string.Empty) + ToolBox.QuestionPrompt(settings) + (settings.InternetAccess ? " " + ToolBox.InternetPrompt : string.Empty);
+        if (context.Length > 0)
+            system = (system.Length > 0 ? system + "\n\n" : string.Empty) + context;
+        return system;
+    }
+
+    /// <summary>
+    /// Lo que va al modelo: el sistema y las ultimas vueltas (memoria de conversacion sin pasarse del
+    /// contexto; las de herramienta, completas). Lee los adjuntos y reduce las imagenes, asi que se
+    /// llama fuera del hilo de la interfaz.
+    /// </summary>
+    private static List<ChatMessage> MessagesFor(string system, IReadOnlyList<StoredMessage> history)
+    {
+        var messages = new List<ChatMessage>();
+        if (system.Length > 0)
+            messages.Add(new ChatMessage("system", system));
+        foreach (var m in history)
+        {
+            if (m.Role == "tool")
+                messages.Add(new ChatMessage("tool", m.Content, m.ToolCallId));
+            else if (m.ToolCalls is { Length: > 0 } storedCalls)
+                messages.Add(new ChatMessage(m.Role, m.Content, null, JsonNode.Parse(storedCalls) as JsonArray));
+            else if (m.Role == "user" && m.Attachments is { Count: > 0 })
+                messages.Add(new ChatMessage(m.Role, TextForModel(m), null, null, ImagesForModel(m)));
+            else
+                messages.Add(new ChatMessage(m.Role, m.Content));
+        }
+        return messages;
+    }
+
+    /// <summary>
+    /// Sigue una respuesta que se lee en otro hilo: cada poco mira si hay trozos nuevos y repinta la
+    /// burbuja. El intervalo crece con lo que cuesta pintar (una respuesta larga en Markdown), para
+    /// que la ventana se pueda mover, desplazar y usar mientras escribe.
+    /// </summary>
+    private async Task FollowAsync(Border bubble, PendingAnswer live, Task pump)
+    {
+        var shown = -1;
+        var interval = PendingAnswer.MinRepaint;
+        while (true)
+        {
+            var finished = await Task.WhenAny(pump, Task.Delay(interval)) == pump;
+            if (finished)
+                break;
+            var now = live.Read();
+            if (now.Version == shown || (now.Content.Length == 0 && now.Reasoning is null))
+                continue;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            RepaintBubble(bubble, now.Content, now.Reasoning, streaming: true);
+            bubble.UpdateLayout();   // medir tambien la maquetacion, que es lo que mas pesa
+            interval = PendingAnswer.NextRepaint(clock.Elapsed);
+            shown = now.Version;
+        }
+        await pump;   // errores y cancelacion
     }
 
     /// <summary>
@@ -882,7 +937,9 @@ public partial class MainWindow : Window
                 ScrollToEnd();
                 try
                 {
-                    output = await tool.Run(args, cancel);
+                    // Leer un PDF, buscar ficheros o sacar el texto de una web no congela la ventana; lo
+                    // que tiene que ir en el hilo de la interfaz (el portapapeles) ya vuelve a el solo.
+                    output = await Task.Run(() => tool.Run(args, cancel), cancel);
                     ToolBox.Log(tool, detail, "ok");
                 }
                 catch (OperationCanceledException) { Messages.Children.Remove(running); ToolBox.Log(tool, detail, "cancelled"); throw; }
@@ -1057,7 +1114,7 @@ public partial class MainWindow : Window
             panel.Children.Add(actions);
         }
         else if (content.Length == 0 && streaming)
-            panel.Children.Add(new TextBlock { Text = "…", FontSize = fontSize, Foreground = foreground });
+            panel.Children.Add(WaitIndicatorFor(bubble));
         else
             panel.Children.Add(Markdown.Render(content, fontSize, foreground, (Brush)FindResource("PageBackground"), (Brush)FindResource("Accent"), Loc.Get("Copy"), Loc.Get("SaveCode")));
         if (!user && !streaming && content.Length > 0)
@@ -1069,6 +1126,101 @@ public partial class MainWindow : Window
         bubble.Child = panel;
         if (streaming)
             ScrollToEnd();
+    }
+
+    // ------------------------------------------------------------------ indicador de espera
+
+    /// <summary>La respuesta que se espera: su burbuja, lo que lleva, desde cuando y el indicador que se le enseña.</summary>
+    private sealed class Waiting(Border bubble, PendingAnswer live, FrameworkElement indicator, TextBlock text)
+    {
+        public Border Bubble { get; } = bubble;
+        public PendingAnswer Live { get; set; } = live;
+        public FrameworkElement Indicator { get; } = indicator;
+        public TextBlock Text { get; } = text;
+        public System.Diagnostics.Stopwatch Clock { get; } = System.Diagnostics.Stopwatch.StartNew();
+    }
+
+    private Waiting? _waiting;
+    private System.Windows.Threading.DispatcherTimer? _waitTimer;
+
+    /// <summary>
+    /// Empieza (o sigue, si es la misma burbuja) la espera de una respuesta: el indicador gira y su
+    /// texto dice por donde va (cargando la IA, pensando, razonando…) con los segundos que lleva. Que
+    /// gire es tambien la prueba de que el hilo de la interfaz esta libre.
+    /// </summary>
+    private void BeginWait(Border bubble, PendingAnswer live)
+    {
+        if (_waiting?.Bubble == bubble)
+            _waiting.Live = live;
+        else
+        {
+            var indicator = WaitIndicator(out var text);
+            _waiting = new Waiting(bubble, live, indicator, text);
+        }
+        PaintWait();
+        if (_waitTimer is null)
+        {
+            _waitTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
+            _waitTimer.Tick += (_, _) => PaintWait();
+        }
+        _waitTimer.Start();
+    }
+
+    private void EndWait()
+    {
+        _waitTimer?.Stop();
+        _waiting = null;
+    }
+
+    private void PaintWait()
+    {
+        if (_waiting is not { } w) return;
+        var text = PendingAnswer.Status(w.Live.Phase, App.Engine.State, w.Clock.Elapsed);
+        if (w.Text.Text != text) w.Text.Text = text;
+    }
+
+    /// <summary>El indicador de la burbuja que se espera (el mismo cada vez que se repinta, para que el giro no salte).</summary>
+    private FrameworkElement WaitIndicatorFor(Border bubble)
+    {
+        if (_waiting?.Bubble != bubble)
+            return WaitIndicator(out _);
+        (_waiting.Indicator.Parent as Panel)?.Children.Remove(_waiting.Indicator);
+        return _waiting.Indicator;
+    }
+
+    /// <summary>Un arco que gira sobre su pista (colores del tema, claro y oscuro) y el texto de lo que esta haciendo.</summary>
+    private static FrameworkElement WaitIndicator(out TextBlock text)
+    {
+        var fontSize = AppSettings.Current.FontSize;
+        var size = Math.Round(fontSize + 4);
+        var track = new System.Windows.Shapes.Ellipse { Width = size, Height = size, StrokeThickness = 2 };
+        track.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Separator");
+        var arc = new System.Windows.Shapes.Ellipse
+        {
+            Width = size,
+            Height = size,
+            StrokeThickness = 2,
+            StrokeDashCap = PenLineCap.Round,
+            // En unidades del grosor: el perimetro es pi * (size - 2) / 2; el arco, algo mas de un cuarto.
+            StrokeDashArray = [Math.PI * (size - 2) / 2 * 0.3, 1000],
+            RenderTransformOrigin = new Point(0.5, 0.5),
+        };
+        arc.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "PrimaryText");
+        var rotate = new RotateTransform();
+        arc.RenderTransform = rotate;
+        // Con las animaciones de Windows apagadas (accesibilidad) el arco se queda quieto; el texto sigue avanzando.
+        if (SystemParameters.ClientAreaAnimation)
+            rotate.BeginAnimation(RotateTransform.AngleProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever });
+        var spinner = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        spinner.Children.Add(track);
+        spinner.Children.Add(arc);
+        text = new TextBlock { FontSize = fontSize - 1, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Text = Loc.Get("AnswerPreparing") };
+        text.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondary");
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Name = "WaitIndicator", Margin = new Thickness(0, 2, 0, 2) };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(row, "WaitIndicator");
+        row.Children.Add(spinner);
+        row.Children.Add(text);
+        return row;
     }
 
     private Button UserAction(string glyph, string tooltip, Action action)

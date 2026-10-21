@@ -29,7 +29,10 @@ esa misma IA.
   puede cambiar de sitio (otro disco): al cambiarla se mueven los que ya hay y el activo se apunta
   a su nueva ruta.
 - **Conversaciones** guardadas en el PC (`%LOCALAPPDATA%\sOCLucia\threads`), con renombrar y
-  borrar en cada fila; al abrir se empieza una nueva. Respuestas en streaming, Markdown (títulos,
+  borrar en cada fila; al abrir se empieza una nueva. La pregunta sale al momento y la respuesta
+  espera con un indicador que dice por dónde va («Cargando la IA…», «Lucia está pensando…»,
+  «Razonando…»); la ventana no se bloquea nunca: motor, documentos, adjuntos, streaming y
+  herramientas van fuera del hilo de la interfaz. Respuestas en streaming, Markdown (títulos,
   listas, negrita, bloques de código con botón de copiar), botón de parar; cada pregunta se puede
   copiar, editar y reenviar. Encima del redactor, el modo (Preguntas/Agente) y la IA en uso, que se
   cambia entre las instaladas sin pasar por Ajustes.
@@ -90,7 +93,7 @@ el token que se muestra en Ajustes.
 - `Engine/`: `EnginePin` (versión fijada de llama.cpp y sus SHA), `EngineHost` (descarga, arranque, salud, parada; `--mmproj` si el modelo tiene visión), `ModelCatalog` (catálogo, elección del cuantizado, descarga; `PickMmprojAsync`/`DownloadMmprojAsync` para la parte de visión), `ChatClient` (SSE; imágenes como partes `image_url`), `Downloader`, `ImageEngine` (stable-diffusion.cpp fijado con SHA, modelo SD 1.5 y generación con `sd-cli`).
 - `Services/DocumentIndex.cs`: la carpeta de documentos (trozos por palabras; PDF con PdfPig, .docx a mano).
 - `App.xaml.cs`: arranque, instancia única y el gestor global de errores (un fallo inesperado se registra en `logs\engine.log`, se avisa y la aplicación sigue).
-- `Chat/`: `ThreadStore` (JSON por conversación) y `Markdown` (render a WPF).
+- `Chat/`: `ThreadStore` (JSON por conversación), `Markdown` (render a WPF) y `PendingAnswer` (la respuesta que llega: la llena el hilo del streaming, la lee la interfaz al repintar, con el texto del indicador de espera y el ritmo de repintado).
 - `Editor/EditorDoor.cs`: la puerta para editores (`HttpListener`); `/v1/models` dice el contexto y si el modelo admite herramientas y visión.
 - `Agent/`: `CommandTool` (definición de la herramienta, ejecución con PowerShell y registro) y `CommandConfirmWindow`; el bucle de vueltas vive en `MainWindow.AnswerLoopAsync`.
 - `Services/TrayIcon.cs`: icono de bandeja (Shell_NotifyIcon) y `WindowsStartup` (HKCU\Run).
@@ -112,10 +115,10 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-10-03): **252 pruebas**, todas pasan; el banco tarda **unos 18 s** (sin
-contar la compilación). Cobertura de líneas: **91,5 %** de lo instrumentado (se instrumenta el
-ensamblado `sOCLucia` entero) y **91,5 %** sobre toda la app (3152 de 3444 líneas ejecutables de
-C#; antes 49,2 % con la misma medida).
+`Lucia.Tests` (xUnit, 2026-10-21): **278 pruebas**, todas pasan; el banco tarda **unos 30 s** (sin
+contar la compilación). Cobertura de líneas: **91,8 %** de lo instrumentado (se instrumenta el
+ensamblado `sOCLucia` entero) y **91,8 %** sobre toda la app (3288 de 3582 líneas ejecutables de
+C#; el 2026-10-03, 91,5 %).
 
 Se prueba la lógica (documentos de texto, HTML, RTF, .docx y PDF; herramientas del agente; el
 cliente de chat en streaming; la puerta de editores; descargas con reanudación y SHA-256; catálogo

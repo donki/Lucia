@@ -348,6 +348,8 @@ public abstract class UiTest : IDisposable
         Desktop.Current = Fake;
         Downloader.Http = new HttpClient(Net);
         var settings = Sandbox.ResetSettings();
+        // Las pruebas de documentos dejan ficheros; xUnit baraja el orden, asi que cada ventana empieza sin ninguno.
+        Sandbox.ClearDocuments();
         settings.Thinking = false;
         settings.Instructions = string.Empty;
         settings.TrayOnMinimize = true;
@@ -383,6 +385,9 @@ public abstract class UiTest : IDisposable
     {
         Ui.Run(() =>
         {
+            // Una descarga de modelo que siga viva (es estatica) pintaria su progreso en la prueba siguiente.
+            ModelDownloads.Cancel();
+            Ui.WaitFor(() => !ModelDownloads.Busy);
             App.Engine.Stop();
             Loc.Use(_language);
         });

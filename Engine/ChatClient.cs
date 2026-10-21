@@ -30,6 +30,20 @@ public sealed record ChatDelta(string? Content, string? Reasoning, IReadOnlyList
 /// <summary>Cliente del <c>/v1/chat/completions</c> de llama-server, en streaming (SSE), con herramientas.</summary>
 public static class ChatClient
 {
+    /// <summary>
+    /// Lee la respuesta entera en un hilo del pool y deja cada trozo en <paramref name="target"/>.
+    /// Nada de esto pasa por el hilo de la interfaz: ni la peticion HTTP ni el troceado del SSE ni
+    /// el JSON de cada trozo. La interfaz solo lee <paramref name="target"/> cuando repinta. Los
+    /// errores y la cancelacion salen por la tarea devuelta.
+    /// </summary>
+    public static Task PumpAsync(string baseUrl, IReadOnlyList<ChatMessage> messages, bool thinking, int maxTokens, JsonArray? tools,
+        Chat.PendingAnswer target, CancellationToken cancel)
+        => Task.Run(async () =>
+        {
+            await foreach (var delta in StreamAsync(baseUrl, messages, thinking, maxTokens, tools, cancel).ConfigureAwait(false))
+                target.Add(delta);
+        }, cancel);
+
     public static async IAsyncEnumerable<ChatDelta> StreamAsync(string baseUrl, IEnumerable<ChatMessage> messages, bool thinking, int maxTokens, JsonArray? tools,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancel)
     {

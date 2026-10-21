@@ -74,12 +74,11 @@ public class MarkdownTests
     });
 
     [Fact]
-    public void Code_blocks_keep_their_text_language_and_buttons() => Sandbox.Sta(() =>
+    public void Code_blocks_keep_their_text_language_and_buttons() => Ui.Run(() =>
     {
-        // Los bloques de codigo buscan el estilo del boton en los recursos de la aplicacion.
-        var app = Application.Current ?? new Application();
-        app.Resources["GhostIconButton"] = new Style(typeof(Button));
-
+        // Los bloques de codigo buscan el estilo del boton en los recursos de la aplicacion: la App de
+        // verdad del arnes de ventanas. Crear aqui otra Application tumbaba el banco entero si esta
+        // prueba salia antes que las de ventanas (solo puede haber una por proceso).
         var panel = Render("antes\n```python\nprint('hola')\n  x = 1\n```\ndespues", save: "Guardar");
         Assert.Equal(3, panel.Children.Count);
         var grid = (Grid)((Border)panel.Children[1]).Child;
