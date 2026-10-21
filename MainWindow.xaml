@@ -82,6 +82,7 @@
                 <DockPanel>
                     <ProgressBar x:Name="EngineProgress" DockPanel.Dock="Right" Width="140" Height="6" Margin="12,0,0,0" Visibility="Collapsed"
                                  Foreground="{DynamicResource Primary}" Background="{DynamicResource Separator}" BorderThickness="0" />
+                    <ContentControl x:Name="EngineSpinner" DockPanel.Dock="Left" Visibility="Collapsed" VerticalAlignment="Center" Focusable="False" />
                     <TextBlock x:Name="EngineStatus" Style="{StaticResource HintText}" VerticalAlignment="Center" />
                 </DockPanel>
             </Border>

@@ -280,6 +280,74 @@ public sealed class MainWindowTests : UiTest
         }
     }
 
+    /// <summary>
+    /// El modelo atascado pide una y otra vez la misma accion, que siempre falla. Antes se ejecutaba sin
+    /// fin; ahora se ejecuta una vez, la repeticion no se ejecuta (ni pide permiso), y a la siguiente se para
+    /// y se dice. La ventana sigue respondiendo todo el rato.
+    /// </summary>
+    [Fact]
+    public void ModoAgente_UnaAccionQueFallaNoSeRepiteSinFin_YLaVentanaResponde()
+    {
+        var missing = new JsonObject { ["path"] = Path.Combine(Sandbox.Work, "no-existe.txt"), ["reason"] = "leerlo" }.ToJsonString();
+        for (var i = 0; i < 20; i++)
+            Net.Answers.Enqueue(new FakeHttp.Answer(Tools: [(ToolBox.ReadFile, missing)]));
+        Ui.Run(() =>
+        {
+            var w = Open();
+            Ui.Click(Ui.Find<ButtonBase>(w, "WorkModeButton"));
+            var asked = 0;
+            Ui.Expect<PermissionWindow>(p => { asked++; Ui.Click(Ui.All<Button>(p).Single(b => Equals(b.ToolTip, Loc.Get("PermAllow")))); });   // una vez
+            Ui.Find<TextBox>(w, "Composer").Text = "lee ese fichero";
+            Ui.Click(Ui.Find<ButtonBase>(w, "SendButton"));
+            var slowest = 0L;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (Answering(w) && clock.ElapsedMilliseconds < 20_000)
+            {
+                var turn = System.Diagnostics.Stopwatch.StartNew();
+                Ui.DoEvents();
+                slowest = Math.Max(slowest, turn.ElapsedMilliseconds);
+                Thread.Sleep(5);
+            }
+            Assert.False(Answering(w));
+            Assert.Equal(1, asked);                        // el permiso, una sola vez
+            Assert.Equal(3, Net.ChatRequests.Count);       // ejecuta, avisa de la repeticion, y para
+            Assert.True(slowest < 1000, $"una vuelta del Dispatcher tardo {slowest} ms");
+            var text = Bubbles(w);
+            Assert.Contains(Loc.Get("AgentRepeatBlocked"), text);
+            Assert.Contains(Loc.Format("AgentStoppedRepeats", "", "")[..20], text);
+        });
+        var thread = ThreadStore.LoadAll().Single();
+        var tools = thread.Messages.Where(m => m.Role == "tool").ToList();
+        Assert.Equal(3, tools.Count);                       // cada peticion de herramienta tiene su respuesta
+        Assert.Single(tools, t => t.Content.StartsWith("[error]", StringComparison.Ordinal));   // ejecutada una sola vez
+        Assert.StartsWith(Loc.Format("AgentStoppedRepeats", "", "")[..20], thread.Messages.Last().Content);
+        Assert.Contains("respuesta parada: Repeats", File.ReadAllText(DiagLog.Current));
+    }
+
+    [Fact]
+    public void ModoAgente_ElTopeDeAccionesPara_YLoDice()
+    {
+        AppSettings.Current.AgentMaxActions = 3;
+        try
+        {
+            for (var i = 0; i < 10; i++)
+                Net.Answers.Enqueue(new FakeHttp.Answer(Tools: [(ToolBox.SystemInfo, "{}")]));
+            Ui.Run(() =>
+            {
+                var w = Open();
+                Ui.Click(Ui.Find<ButtonBase>(w, "WorkModeButton"));
+                Ask(w, "dime cosas del PC sin parar");
+                Assert.Contains(Loc.Format("AgentStoppedCap", 3), Bubbles(w));
+            });
+            Assert.Equal(4, Net.ChatRequests.Count);
+            Assert.Equal(3, ThreadStore.LoadAll().Single().Messages.Count(m => m.Role == "tool" && m.Content.Contains("Windows")));
+        }
+        finally
+        {
+            AppSettings.Current.AgentMaxActions = ToolLoopGuard.DefaultMaxCalls;
+        }
+    }
+
     [Fact]
     public void MientrasCargaLaIA_ElIndicadorLoDice_YLuegoContesta()
     {

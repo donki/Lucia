@@ -1,5 +1,45 @@
 # Changelog — sOC Lucia
 
+## 2026.10.21.4 — El modo agente no se atasca, y esperas con indicador / The agent no longer gets stuck, and waits with an indicator
+
+**Español**
+
+- **El modo agente ya no se queda en bucle.** Si una acción falla (por ejemplo una orden con un error
+  de sintaxis), la IA no la repite igual una y otra vez: una acción idéntica que ya falló no se vuelve
+  a ejecutar, y si insiste, Lucia para y lo explica. Hay un **máximo de acciones por respuesta**
+  (Ajustes › Modo trabajo, 15 por defecto); al llegar, para y te dice qué intentó. Esto es lo que
+  dejaba la ventana en «No responde».
+- **Reconoce los callejones sin salida.** Si una orden apunta a un **programa de ventana** (una
+  aplicación con interfaz, no de línea de órdenes), leer sus bytes o ejecutarla no da ninguna salida:
+  Lucia lo detecta, se lo dice a la IA y esta propone otra vía en vez de repetir.
+- **`run_command` sigue pidiendo permiso** en cada orden, y el modo agente sigue apagado hasta que lo
+  enciendes: el freno no cambia nada de eso.
+- **Indicador de espera en toda la aplicación.** Lo que tarda más de un momento muestra el mismo arco
+  que gira de la respuesta, con un texto de lo que hace, y la ventana nunca parece muerta: abrir Ajustes
+  (lee la IA y cuenta los documentos por detrás), «Probar la conexión» de MLflow, «Copiar registros»,
+  mover la carpeta de modelos, buscar en Hugging Face, instalar el motor de imágenes, arrancar o cargar
+  la IA. Los botones que lanzan un proceso se desactivan mientras dura.
+- Banco de pruebas: **388 pruebas** y **92,7 %** de toda la aplicación.
+
+**English**
+
+- **The agent no longer loops.** If an action fails (for example a command with a syntax error), the AI
+  does not repeat it unchanged over and over: an identical action that already failed is not run again,
+  and if it insists, Lucia stops and explains. There is a **limit of actions per answer** (Settings ›
+  Work mode, 15 by default); on reaching it, it stops and tells you what it tried. This is what left the
+  window «Not responding».
+- **It recognises dead ends.** If a command targets a **window program** (a GUI application, not a
+  command-line tool), reading its bytes or running it produces no output: Lucia detects it, tells the AI,
+  and the AI proposes another way instead of repeating.
+- **`run_command` still asks permission** for each command, and agent mode is still off until you turn
+  it on: the brake changes none of that.
+- **Wait indicator across the whole app.** Anything that takes more than a moment shows the same spinning
+  arc as the reply, with text saying what it is doing, and the window never looks dead: opening Settings
+  (it reads the AI and counts the documents in the background), MLflow «Test connection», «Copy logs»,
+  moving the models folder, searching Hugging Face, installing the image engine, starting or loading the
+  AI. Buttons that launch a process are disabled while it runs.
+- Test suite: **388 tests** and **92.7 %** of the whole app.
+
 ## 2026.10.21.3 — MLflow: cada pregunta como traza en GenAI / MLflow: each question as a GenAI trace
 
 **Español**

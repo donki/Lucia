@@ -29,6 +29,31 @@ public partial class SettingsWindow : Window
         PaintDownload();
     }
 
+    /// <summary>
+    /// Ejecuta un trabajo fuera del hilo de la interfaz con un indicador de espera (el que tarda mas de
+    /// ~300 ms se ve) y, si hay boton, lo desactiva mientras tanto y lo reactiva al acabar aunque falle.
+    /// El resultado del trabajo se pinta de vuelta en el hilo de la interfaz.
+    /// </summary>
+    private async Task RunBusyAsync<T>(Controls.BusyIndicator busy, string text, Func<T> work, Action<T> paint, System.Windows.Controls.Primitives.ButtonBase? button = null)
+    {
+        busy.Start(text);
+        if (button is not null) button.IsEnabled = false;
+        try
+        {
+            var result = await Task.Run(work);
+            paint(result);
+        }
+        catch (Exception ex)
+        {
+            DiagLog.Write("ajustes", "tarea de Ajustes fallida: " + DiagLog.Describe(ex));
+        }
+        finally
+        {
+            busy.Stop();
+            if (button is not null) button.IsEnabled = true;
+        }
+    }
+
     private void ApplyTexts()
     {
         var s = AppSettings.Current;
@@ -83,6 +108,9 @@ public partial class SettingsWindow : Window
         WorkFolderBox.Text = s.WorkFolder;
         WorkFolderButton.ToolTip = Loc.Get("WorkFolderPick");
         OpenCommandLogButton.Content = Loc.Get("OpenCommandLog");
+        AgentMaxLabel.Text = Loc.Get("AgentMaxActions");
+        AgentMaxBox.Text = s.AgentMaxActions.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        AgentMaxHint.Text = Loc.Format("AgentMaxActionsHint", ToolLoopGuard.MinMaxCalls, ToolLoopGuard.MaxMaxCalls, ToolLoopGuard.DefaultMaxCalls);
         PermTitle.Text = Loc.Get("PermSection");
         PermHint.Text = Loc.Get("PermSectionHint");
         PaintPermissions();
@@ -133,21 +161,24 @@ public partial class SettingsWindow : Window
             ModelCurrent.Text = Loc.Get("ModelNone");
             ModelDetail.Text = string.Empty;
         }
-        var pc = _pc ??= PcProfile.Detect(App.Engine.Accelerator);
-        ModelRam.Text = (pc.HasUsableGpu
-            ? Loc.Format("PcWithGpu", pc.Cpu, pc.Cores, Human(pc.RamBytes), pc.Gpu, Human(pc.VramBytes))
-            : Loc.Format("PcNoGpu", pc.Cpu, pc.Cores, Human(pc.RamBytes)))
-            + Environment.NewLine + Loc.Get("PcStarHint");
-        CatalogList.Children.Clear();
-        var installed = ModelCatalog.InstalledFiles();
-        var recommended = ModelCatalog.Recommended(pc);
-        foreach (var model in ModelCatalog.Fitting(pc.RamBytes))
-            CatalogList.Children.Add(CatalogRow(model, ModelCatalog.FitOf(model, pc), model == recommended, s.ModelName == model.Name || installed.Any(i => i.Name == model.Name)));
-        if (_hits is not null) PaintSearch();
-        InstalledList.Children.Clear();
-        InstalledLabel.Visibility = installed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var model in installed)
-            InstalledList.Children.Add(InstalledRow(model, string.Equals(s.ModelPath, model.Path, StringComparison.OrdinalIgnoreCase)));
+        // El PC (registro/VRAM) y las IA instaladas (disco) se leen fuera del hilo: con un disco lento la ventana no se queda muerta.
+        _ = RunBusyAsync(ModelBusy, Loc.Get("ModelLoading"),
+            () => { var pc = _pc ??= PcProfile.Detect(App.Engine.Accelerator); return (pc, installed: ModelCatalog.InstalledFiles(), recommended: ModelCatalog.Recommended(pc)); },
+            r =>
+            {
+                ModelRam.Text = (r.pc.HasUsableGpu
+                    ? Loc.Format("PcWithGpu", r.pc.Cpu, r.pc.Cores, Human(r.pc.RamBytes), r.pc.Gpu, Human(r.pc.VramBytes))
+                    : Loc.Format("PcNoGpu", r.pc.Cpu, r.pc.Cores, Human(r.pc.RamBytes)))
+                    + Environment.NewLine + Loc.Get("PcStarHint");
+                CatalogList.Children.Clear();
+                foreach (var model in ModelCatalog.Fitting(r.pc.RamBytes))
+                    CatalogList.Children.Add(CatalogRow(model, ModelCatalog.FitOf(model, r.pc), model == r.recommended, s.ModelName == model.Name || r.installed.Any(i => i.Name == model.Name)));
+                if (_hits is not null) PaintSearch();
+                InstalledList.Children.Clear();
+                InstalledLabel.Visibility = r.installed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                foreach (var model in r.installed)
+                    InstalledList.Children.Add(InstalledRow(model, string.Equals(s.ModelPath, model.Path, StringComparison.OrdinalIgnoreCase)));
+            });
     }
 
     // ------------------------------------------------------------------ buscador de Hugging Face
@@ -170,8 +201,9 @@ public partial class SettingsWindow : Window
         _search = new CancellationTokenSource();
         var token = _search.Token;
         SearchButton.IsEnabled = false;
-        SearchHint.Text = Loc.Get("SearchHfSearching");
+        SearchHint.Text = string.Empty;
         SearchList.Children.Clear();
+        SearchBusy.Start(Loc.Get("SearchHfSearching"));
         try
         {
             _hits = await HuggingFace.SearchAsync(query, _pc ??= PcProfile.Detect(App.Engine.Accelerator), OnlyGgufCheck.IsChecked == true, token);
@@ -184,6 +216,7 @@ public partial class SettingsWindow : Window
         }
         finally
         {
+            SearchBusy.Stop();
             if (!token.IsCancellationRequested) SearchButton.IsEnabled = true;
         }
     }
@@ -410,20 +443,19 @@ public partial class SettingsWindow : Window
         var count = Directory.Exists(Paths.Models) ? Directory.GetFiles(Paths.Models, "*.gguf").Length : 0;
         if (count > 0 && !PromptWindow.Confirm(this, Loc.Get("ModelsFolder"), Loc.Format("ModelsFolderMoveConfirm", count, target))) return;
         ModelsFolderButton.IsEnabled = false;
-        MoveStatus.Visibility = Visibility.Visible;
-        MoveStatus.Text = Loc.Get("ModelsFolderMoving");
+        MoveStatus.Visibility = Visibility.Collapsed;
+        MoveBusy.Start(Loc.Get("ModelsFolderMoving"));
         try
         {
-            var progress = new Progress<ModelLibrary.MoveProgress>(p => MoveStatus.Text = Loc.Format("ModelsFolderMovingFile", p.File, p.Total > 0 ? $"{p.Done * 100 / p.Total}%" : "…"));
+            var progress = new Progress<ModelLibrary.MoveProgress>(p => MoveBusy.Update(Loc.Format("ModelsFolderMovingFile", p.File, p.Total > 0 ? $"{p.Done * 100 / p.Total}%" : "…")));
             await ModelLibrary.MoveAsync(target, progress, CancellationToken.None);
-            MoveStatus.Text = Loc.Get("ModelsFolderMoved");
+            MoveBusy.Update(Loc.Get("ModelsFolderMoved"));
             ModelsFolderBox.Text = Paths.Models;
             PaintModel();
             (Owner as MainWindow)?.ModelChanged();
         }
         catch (Exception ex)
         {
-            MoveStatus.Text = string.Empty;
             PromptWindow.Alert(this, Loc.Get("Error"), ex.Message);
         }
         finally
@@ -488,13 +520,14 @@ public partial class SettingsWindow : Window
         if (_imagesInstall is not null) { _imagesInstall.Cancel(); return; }
         _imagesInstall = new CancellationTokenSource();
         PaintImages();
+        ImagesBusy.Start(Loc.Get("ImagesInstalling"));
         try
         {
-            await ImageEngine.EnsureInstalledAsync(new Progress<Downloader.Progress>(p => ImagesStatus.Text = Loc.Get("ImagesInstalling") + (p.Fraction is { } f ? $" {f:P0}" : string.Empty)), _imagesInstall.Token);
+            await ImageEngine.EnsureInstalledAsync(new Progress<Downloader.Progress>(p => ImagesBusy.Update(Loc.Get("ImagesInstalling") + (p.Fraction is { } f ? $" {f:P0}" : string.Empty))), _imagesInstall.Token);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { PromptWindow.Alert(this, Loc.Get("ImagesTitle"), ex.Message); }
-        finally { _imagesInstall.Dispose(); _imagesInstall = null; PaintImages(); }
+        finally { ImagesBusy.Stop(); _imagesInstall.Dispose(); _imagesInstall = null; PaintImages(); }
     }
 
     private void OnImagesFolder(object sender, RoutedEventArgs e)
@@ -688,6 +721,7 @@ public partial class SettingsWindow : Window
     private async void OnCopyLogs(object sender, RoutedEventArgs e)
     {
         CopyLogsButton.IsEnabled = false;
+        LogsBusy.Start(Loc.Get("LogsZipping"));
         try
         {
             DiagLog.Write("app", "se copian los registros");
@@ -703,6 +737,7 @@ public partial class SettingsWindow : Window
         }
         finally
         {
+            LogsBusy.Stop();
             CopyLogsButton.IsEnabled = true;
         }
     }
@@ -861,8 +896,8 @@ public partial class SettingsWindow : Window
     private async void OnMlflowTest(object sender, RoutedEventArgs e)
     {
         MlflowTestButton.IsEnabled = false;
-        MlflowTestStatus.Text = Loc.Get("MlflowTesting");
-        MlflowTestStatus.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondary");
+        MlflowTestStatus.Text = string.Empty;
+        MlflowBusy.Start(Loc.Get("MlflowTesting"));
         try
         {
             var uri = MlflowUriBox.Text;
@@ -882,6 +917,7 @@ public partial class SettingsWindow : Window
         }
         finally
         {
+            MlflowBusy.Stop();
             MlflowTestButton.IsEnabled = true;
         }
     }
@@ -891,16 +927,19 @@ public partial class SettingsWindow : Window
     private void PaintLimits()
     {
         var s = AppSettings.Current;
-        var range = TokenLimits.RangeFor(s);
         var culture = System.Globalization.CultureInfo.InvariantCulture;
         AnswerTokensBox.Text = TokenLimits.Answer(s).ToString(culture);
         AnswerTokensHint.Text = Loc.Format("AnswerTokensHint", TokenLimits.AnswerMin, TokenLimits.AnswerMax, TokenLimits.AnswerDefault);
         ContextTokensBox.Text = s.ContextTokens.ToString(culture);
-        var hint = Loc.Format("ContextTokensHint", TokenLimits.ContextMin, range.Max, TokenLimits.ContextDefault);
-        if (range.Fast is { } fast) hint += " " + Loc.Format("ContextFast", fast);
-        if (range.Trained is { } trained) hint += " " + Loc.Format("ContextTrained", trained);
-        if (s.ContextTokens > range.Max) hint += " " + Loc.Format("ContextCapped", range.Max);
-        ContextTokensHint.Text = hint + " " + Loc.Get("ContextRestart");
+        // El maximo depende de la cabecera del GGUF (se lee del disco): fuera del hilo de la interfaz.
+        _ = RunBusyAsync(LimitsBusy, Loc.Get("LimitsLoading"), () => TokenLimits.RangeFor(s), range =>
+        {
+            var hint = Loc.Format("ContextTokensHint", TokenLimits.ContextMin, range.Max, TokenLimits.ContextDefault);
+            if (range.Fast is { } fast) hint += " " + Loc.Format("ContextFast", fast);
+            if (range.Trained is { } trained) hint += " " + Loc.Format("ContextTrained", trained);
+            if (s.ContextTokens > range.Max) hint += " " + Loc.Format("ContextCapped", range.Max);
+            ContextTokensHint.Text = hint + " " + Loc.Get("ContextRestart");
+        });
     }
 
     private void OnLimitKey(object sender, System.Windows.Input.KeyEventArgs e)
@@ -908,6 +947,7 @@ public partial class SettingsWindow : Window
         if (e.Key is not (System.Windows.Input.Key.Enter or System.Windows.Input.Key.Return)) return;
         e.Handled = true;
         if (sender == AnswerTokensBox) OnAnswerTokensChanged(sender, e);
+        else if (sender == AgentMaxBox) OnAgentMaxChanged(sender, e);
         else OnContextTokensChanged(sender, e);
     }
 
@@ -929,6 +969,24 @@ public partial class SettingsWindow : Window
             DiagLog.Write("ajustes", $"tokens por respuesta: {value}");
         }
         PaintLimits();
+    }
+
+    /// <summary>El tope de acciones del modo agente: al salir de la casilla o con Intro; si no vale, se dice y se deja el de antes.</summary>
+    private void OnAgentMaxChanged(object sender, RoutedEventArgs e)
+    {
+        var s = AppSettings.Current;
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        if (AgentMaxBox.Text.Trim() == s.AgentMaxActions.ToString(culture)) return;
+        if (TokenLimits.Parse(AgentMaxBox.Text, ToolLoopGuard.MinMaxCalls, ToolLoopGuard.MaxMaxCalls) is not { } value)
+        {
+            PromptWindow.Alert(this, Loc.Get("AgentMaxActions"), Loc.Format("NumberOutOfRange", AgentMaxBox.Text.Trim(), ToolLoopGuard.MinMaxCalls, ToolLoopGuard.MaxMaxCalls));
+            AgentMaxBox.Text = s.AgentMaxActions.ToString(culture);
+            return;
+        }
+        s.AgentMaxActions = value;
+        s.Save();
+        AgentMaxBox.Text = value.ToString(culture);
+        DiagLog.Write("ajustes", $"acciones como mucho por respuesta: {value}");
     }
 
     private void OnContextTokensChanged(object sender, RoutedEventArgs e)
@@ -959,8 +1017,9 @@ public partial class SettingsWindow : Window
     private void PaintDocs()
     {
         DocsFolderBox.Text = DocumentIndex.Folder;
-        var n = DocumentIndex.Files().Count;
-        DocsCount.Text = Directory.Exists(DocumentIndex.Folder) ? Loc.Format("DocsCount", n) : Loc.Get("DocsMissing");
+        if (!Directory.Exists(DocumentIndex.Folder)) { DocsCount.Text = Loc.Get("DocsMissing"); return; }
+        // Contar los documentos recorre la carpeta (puede ser grande): fuera del hilo.
+        _ = RunBusyAsync(DocsBusy, Loc.Get("DocsCounting"), () => DocumentIndex.Files().Count, n => DocsCount.Text = Loc.Format("DocsCount", n));
     }
 
     private void OnPickDocsFolder(object sender, RoutedEventArgs e)
@@ -1064,6 +1123,7 @@ public partial class SettingsWindow : Window
         OnInstructionsChanged(sender, e);
         OnAnswerTokensChanged(sender, e);
         OnContextTokensChanged(sender, e);
+        OnAgentMaxChanged(sender, e);
         OnMlflowUriChanged(sender, e);
         OnMlflowExperimentChanged(sender, e);
         OnMlflowUserChanged(sender, e);

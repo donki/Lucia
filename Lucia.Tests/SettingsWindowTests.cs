@@ -28,6 +28,32 @@ public sealed class SettingsWindowTests : UiTest
     private static ButtonBase Button(DependencyObject root, string name) => Ui.Find<ButtonBase>(root, name);
 
     [Fact]
+    public void Ajustes_SeAbreAlMomento_ConIndicadoresEnLoQueCarga()
+    {
+        // Un modelo de verdad con cabecera: PaintModel/PaintLimits leen del disco fuera del hilo.
+        var model = Path.Combine(Sandbox.NewFolder("m"), "Prueba-Q4_K_M.gguf");
+        File.WriteAllBytes(model, FakeGguf.Llama(32768));
+        AppSettings.Current.ModelPath = model;
+        AppSettings.Current.ModelName = "Prueba";
+        Ui.Run(() => Settings(w =>
+        {
+            var slowest = 0L;
+            // Mientras carga, ninguna vuelta del Dispatcher se bloquea.
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (Ui.All<Controls.BusyIndicator>(w).Any(b => b.IsBusy) && clock.ElapsedMilliseconds < 10_000)
+            {
+                var turn = System.Diagnostics.Stopwatch.StartNew();
+                Ui.DoEvents();
+                slowest = Math.Max(slowest, turn.ElapsedMilliseconds);
+                Thread.Sleep(5);
+            }
+            Assert.True(slowest < 1000, $"una vuelta del Dispatcher tardó {slowest} ms al abrir Ajustes");
+            Ui.WaitFor(() => Ui.Find<TextBlock>(w, "ContextTokensHint").Text.Contains("32"));   // el máximo leído del GGUF
+            Assert.NotEmpty(Ui.Find<StackPanel>(w, "CatalogList").Children);
+        }));
+    }
+
+    [Fact]
     public void Ajustes_EnseñanLaIAElPC_YLasCarpetas()
     {
         Ui.Run(() => Settings(s =>
@@ -73,18 +99,19 @@ public sealed class SettingsWindowTests : UiTest
             main.Show();
             Settings(s =>
             {
+                Ui.WaitFor(() => Ui.Find<StackPanel>(s, "InstalledList").Children.Count == 2);
                 var list = Ui.Find<StackPanel>(s, "InstalledList");
-                Assert.Equal(2, list.Children.Count);
                 var use = Ui.All<Button>(list).Where(b => Equals(b.ToolTip, Loc.Get("ModelUse")) && b.IsEnabled).Single();
                 Ui.Click(use);
                 Assert.Equal(other, AppSettings.Current.ModelPath);
+                Ui.WaitFor(() => Ui.Find<StackPanel>(s, "InstalledList").Children.Count == 2);
                 list = Ui.Find<StackPanel>(s, "InstalledList");
                 Ui.Answer("Cancel");
                 Ui.Click(Ui.All<Button>(list).First(b => Equals(b.ToolTip, Loc.Get("ModelDelete"))));
                 Assert.True(File.Exists(ModelFile) && File.Exists(other));
                 Ui.Answer("Yes");
                 Ui.Click(Ui.All<Button>(Ui.Find<StackPanel>(s, "InstalledList")).First(b => Equals(b.ToolTip, Loc.Get("ModelDelete"))));
-                Assert.Single(Ui.Find<StackPanel>(s, "InstalledList").Children);
+                Ui.WaitFor(() => Ui.Find<StackPanel>(s, "InstalledList").Children.Count == 1);
             }, main);
         });
     }
@@ -128,9 +155,10 @@ public sealed class SettingsWindowTests : UiTest
                 Ui.Click(Button(s, "ModelsFolderButton"));
                 Assert.False(Directory.Exists(target) && Directory.GetFiles(target).Length > 0);
                 Ui.Answer("Yes");
+                var busy = Ui.Find<Controls.BusyIndicator>(s, "MoveBusy");
                 Ui.Wait(s.MoveModelsAsync(target));
                 Assert.Equal(target, Ui.Find<TextBox>(s, "ModelsFolderBox").Text);
-                Assert.Equal(Loc.Get("ModelsFolderMoved"), Ui.Find<TextBlock>(s, "MoveStatus").Text);
+                Assert.Equal(Loc.Get("ModelsFolderMoved"), busy.Text);
                 Assert.Equal(Path.Combine(target, "Prueba-Q4_K_M.gguf"), AppSettings.Current.ModelPath);
             }, main);
         });

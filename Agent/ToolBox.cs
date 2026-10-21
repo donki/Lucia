@@ -67,7 +67,14 @@ public static class ToolBox
         new(RunCommand, Resource.Commands,
             "Run one PowerShell command line on the user's Windows PC and return its output (stdout and stderr). Use it for programs, git, dotnet, python, etc.",
             Params(("command", "The PowerShell command line to run.")),
-            async (a, c) => { var r = await CommandTool.RunAsync(Tool.Arg(a, "command"), AppSettings.Current.WorkFolder, c); return (r.TimedOut ? "[timed out after 3 minutes]\n" : $"[exit code {r.ExitCode}]\n") + r.Output; }),
+            async (a, c) =>
+            {
+                var command = Tool.Arg(a, "command");
+                var folder = AppSettings.Current.WorkFolder;
+                var r = await CommandTool.RunAsync(command, folder, c);
+                var head = r.TimedOut ? "[timed out after 3 minutes]\n" : $"[exit code {r.ExitCode}]\n";
+                return head + r.Output + ProgramInfo.Note(command, head + r.Output, folder);
+            }),
         new(ReadFile, Resource.FilesRead,
             "Read a text file from the PC and return its content (UTF-8, long files are cut). PDF and Word (.docx) files come back as their text.",
             Params(("path", "Full path, or relative to the working folder.")),
@@ -220,6 +227,7 @@ public static class ToolBox
         return $"You can use this Windows PC through tools: {names}. The working folder is `{settings.WorkFolder}` (relative paths start there). " +
                "Prefer the specific tools (read_file, list_folder, write_file, fetch_url) over run_command when they fit; one step per call, read the result before the next. " +
                "The user sees and approves each action, so give a short reason. Never destroy data (delete, format, overwrite, force push) unless the user asked for exactly that. " +
+               "If an action fails, read the error and change your approach; never repeat the same failing command unchanged. If one path cannot work (for example, a program with a window gives no console output, so reading its bytes will not reveal what it does), say so and propose a real alternative or ask the user, instead of trying it again. " +
                "When you are done, answer the user in their language and summarise what you did.";
     }
 

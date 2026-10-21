@@ -67,7 +67,11 @@ esa misma IA.
   PC. En Ajustes › Permisos cada recurso se pone en **Preguntar, Siempre o Nunca**; cada acción se
   muestra con su motivo y se aprueba (una vez, en la conversación o siempre). En **modo preguntas**
   las usa solo si la pregunta lo pide; en **modo agente** resuelve la tarea paso a paso. Registro en
-  `logs\actions.log`.
+  `logs\actions.log`. El modo agente tiene **freno** (`Agent/ToolLoopGuard.cs`): un máximo de acciones
+  por respuesta (Ajustes › Modo trabajo) y nunca repite una acción idéntica que ya falló; tras dos
+  repeticiones o tres fallos seguidos para y lo explica. Reconoce un **programa de ventana** por su
+  cabecera PE (`Agent/ProgramInfo.cs`) y avisa de que leer sus bytes no da salida, para que la IA no
+  insista. Nada de esto cambia los permisos: `run_command` sigue pidiéndolos.
 - **Tus documentos.** Una carpeta (`Documentos\Lucia` por defecto) con texto, Markdown, CSV, JSON,
   código, HTML, .docx o **PDF** (texto extraído con PdfPig; un PDF escaneado sin capa de texto se avisa como tal) que la IA tiene en cuenta: con cada pregunta recibe los pasajes que encajan y
   puede listarlos y leerlos; también **genera documentos** ahí (.md, .txt, .html, .csv, **.docx**).
@@ -157,9 +161,9 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-10-21): **370 pruebas**, todas pasan; el banco tarda **unos 38 s** (sin
-contar la compilación). Cobertura de líneas: **92,8 %** de lo instrumentado (se instrumenta el
-ensamblado `sOCLucia` entero) y **92,8 %** sobre toda la app (4549 de 4903 líneas ejecutables de
+`Lucia.Tests` (xUnit, 2026-10-21): **388 pruebas**, todas pasan; el banco tarda **unos 36 s** (sin
+contar la compilación). Cobertura de líneas: **92,7 %** de lo instrumentado (se instrumenta el
+ensamblado `sOCLucia` entero) y **92,7 %** sobre toda la app (4713 de 5083 líneas ejecutables de
 C#; el 2026-10-03, 91,5 %).
 
 Se prueba la lógica (documentos de texto, HTML, RTF, .docx y PDF; herramientas del agente; el

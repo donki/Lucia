@@ -31,6 +31,7 @@ public partial class MainWindow : Window
             Tray = new TrayIcon(this, Loc.Get, () => Desktop.Current.Shutdown()) { MinimizeToTray = AppSettings.Current.TrayOnMinimize };
         };
         EmptyLogo.Source = new BitmapImage(new Uri("pack://application:,,,/Assets/logo.png"));
+        EngineSpinner.Content = Controls.BusyIndicator.Spinner(12);
         _threads = ThreadStore.LoadAll();
         ApplyTexts();
         Loc.LanguageChanged += ApplyTexts;
@@ -141,6 +142,9 @@ public partial class MainWindow : Window
         var engine = App.Engine;
         var settings = AppSettings.Current;
         var model = settings.ModelName is { Length: > 0 } name ? name : null;
+        // Mientras se descarga o arranca el motor, se baja una IA o se dibuja: el arco de espera junto al estado.
+        EngineSpinner.Visibility = _imageStatus is { Length: > 0 } || ModelDownloads.Current is not null || engine.State is EngineState.DownloadingEngine or EngineState.Starting
+            ? Visibility.Visible : Visibility.Collapsed;
         if (_imageStatus is { Length: > 0 })
         {
             EngineStatus.Text = _imageStatus;
@@ -786,8 +790,16 @@ public partial class MainWindow : Window
         var tools = thread.WorkMode ? ToolBox.Definitions(settings) : ToolBox.QuestionDefinitions(settings);
         var question = thread.Messages.LastOrDefault(m => m.Role == "user")?.Content ?? string.Empty;
         string? context = null;
-        for (var round = 0; round < 12; round++)
+        // El freno del modo agente: tope de acciones y nada de repetir lo que ya fallo igual (Agent/ToolLoopGuard).
+        var guard = new ToolLoopGuard(settings.AgentMaxActions);
+        for (var round = 0; ; round++)
         {
+            if (round >= guard.MaxCalls + ToolLoopGuard.MaxRepeats + 2)
+            {
+                // Vueltas sin fin aunque cada una pida poco: tambien se para y se dice.
+                StopTurn(thread, guard, GuardStop.Cap);
+                return;
+            }
             cancel.ThrowIfCancellationRequested();
             // La burbuja de la respuesta sale ya, con su indicador de espera, antes de nada que tarde.
             var live = new PendingAnswer();
@@ -894,8 +906,32 @@ public partial class MainWindow : Window
                 if (answer.Content.Length > 0) RepaintBubble(bubble, answer.Content, answer.Reasoning, false);
                 else Messages.Children.Remove(bubble);
                 foreach (var call in calls)
-                    await RunToolAsync(thread, call, cancel);
+                {
+                    var verdict = guard.Stopped == GuardStop.None ? guard.Before(call) : GuardVerdict.Stop;
+                    if (verdict == GuardVerdict.Run)
+                    {
+                        var (output, label) = await RunToolAsync(thread, call, cancel);
+                        guard.After(call, label, output);
+                    }
+                    else
+                    {
+                        // Sin ejecutar (ni pedir permiso): el modelo recibe por que, y en el chat se ve.
+                        var answerToModel = verdict == GuardVerdict.Repeat ? guard.RepeatAnswer(call) : "Not run: the answer was stopped.";
+                        thread.Messages.Add(new StoredMessage { Role = "tool", ToolCallId = call.Id, Command = call.Name, Content = answerToModel });
+                        if (verdict == GuardVerdict.Repeat)
+                        {
+                            Messages.Children.Add(ToolBubble(ToolBox.Find(call.Name)?.Resource ?? Resource.Commands, call.Name, Loc.Get("AgentRepeatBlocked")));
+                            DiagLog.Write("agente", $"{call.Name}: repeticion de una accion que ya fallo; no se ejecuta");
+                            _trace?.Event("agente", $"{call.Name}: repeated failing action not run");
+                        }
+                    }
+                }
                 ThreadStore.Save(thread);
+                if (guard.Stopped != GuardStop.None)
+                {
+                    StopTurn(thread, guard, guard.Stopped);
+                    return;
+                }
                 continue;   // otra vuelta con las salidas
             }
             RepaintBubble(bubble, answer.Content, answer.Reasoning, streaming: false);
@@ -978,7 +1014,28 @@ public partial class MainWindow : Window
     /// Pide permiso segun el recurso (Ajustes › Permisos, o lo aprobado en esta conversacion),
     /// ejecuta la herramienta y deja lo hecho en el hilo, en pantalla y en el registro.
     /// </summary>
-    private async Task RunToolAsync(ChatThread thread, ToolCall call, CancellationToken cancel)
+    /// <summary>Corta la respuesta del modo agente y dice por que, en el idioma del usuario.</summary>
+    private void StopTurn(ChatThread thread, ToolLoopGuard guard, GuardStop reason)
+    {
+        var text = reason switch
+        {
+            GuardStop.Repeats => Loc.Format("AgentStoppedRepeats", guard.LastFailedLabel ?? "?", guard.LastError ?? string.Empty),
+            GuardStop.Failures => Loc.Format("AgentStoppedFailures", guard.LastFailedLabel ?? "?", guard.LastError ?? string.Empty),
+            _ => Loc.Format("AgentStoppedCap", guard.Calls),
+        };
+        DiagLog.Write("agente", $"respuesta parada: {reason} tras {guard.Calls} acciones");
+        _trace?.Event("agente", $"stopped: {reason} after {guard.Calls} actions");
+        var message = new StoredMessage { Role = "assistant", Content = text };
+        thread.Messages.Add(message);
+        ThreadStore.Save(thread);
+        if (thread == _current)
+        {
+            Messages.Children.Add(Bubble("assistant", text, null));
+            ScrollToEnd();
+        }
+    }
+
+    private async Task<(string Output, string Label)> RunToolAsync(ChatThread thread, ToolCall call, CancellationToken cancel)
     {
         var tool = ToolBox.Find(call.Name);
         JsonObject args;
@@ -1005,7 +1062,7 @@ public partial class MainWindow : Window
                 if (toolTrace is not null) _trace!.EndTool(toolTrace, output, "declined");
                 thread.Messages.Add(new StoredMessage { Role = "tool", ToolCallId = call.Id, Command = label, Content = output });
                 Messages.Children.Add(ToolBubble(tool.Resource, label, output));
-                return;
+                return (output, label);
             }
             if (!approved)
             {
@@ -1056,6 +1113,7 @@ public partial class MainWindow : Window
         thread.Messages.Add(new StoredMessage { Role = "tool", ToolCallId = call.Id, Command = label, Content = output });
         Messages.Children.Add(ToolBubble(tool?.Resource ?? Resource.Commands, label, output));
         ScrollToEnd();
+        return (output, label);
     }
 
     private static Resource ResourceOf(string? label)
@@ -1300,28 +1358,7 @@ public partial class MainWindow : Window
     private static FrameworkElement WaitIndicator(out TextBlock text)
     {
         var fontSize = AppSettings.Current.FontSize;
-        var size = Math.Round(fontSize + 4);
-        var track = new System.Windows.Shapes.Ellipse { Width = size, Height = size, StrokeThickness = 2 };
-        track.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Separator");
-        var arc = new System.Windows.Shapes.Ellipse
-        {
-            Width = size,
-            Height = size,
-            StrokeThickness = 2,
-            StrokeDashCap = PenLineCap.Round,
-            // En unidades del grosor: el perimetro es pi * (size - 2) / 2; el arco, algo mas de un cuarto.
-            StrokeDashArray = [Math.PI * (size - 2) / 2 * 0.3, 1000],
-            RenderTransformOrigin = new Point(0.5, 0.5),
-        };
-        arc.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "PrimaryText");
-        var rotate = new RotateTransform();
-        arc.RenderTransform = rotate;
-        // Con las animaciones de Windows apagadas (accesibilidad) el arco se queda quieto; el texto sigue avanzando.
-        if (SystemParameters.ClientAreaAnimation)
-            rotate.BeginAnimation(RotateTransform.AngleProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever });
-        var spinner = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-        spinner.Children.Add(track);
-        spinner.Children.Add(arc);
+        var spinner = Controls.BusyIndicator.Spinner(Math.Round(fontSize + 4));   // el mismo arco en toda la aplicacion
         text = new TextBlock { FontSize = fontSize - 1, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Text = Loc.Get("AnswerPreparing") };
         text.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondary");
         var row = new StackPanel { Orientation = Orientation.Horizontal, Name = "WaitIndicator", Margin = new Thickness(0, 2, 0, 2) };

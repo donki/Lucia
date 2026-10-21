@@ -28,6 +28,9 @@ public sealed class AppSettings
     /// <summary>Longitud maxima de una respuesta, en tokens.</summary>
     public int MaxAnswerTokens { get; set; } = 2048;
 
+    /// <summary>Modo agente: acciones (herramientas) como mucho por respuesta; luego para y lo dice.</summary>
+    public int AgentMaxActions { get; set; } = Agent.ToolLoopGuard.DefaultMaxCalls;
+
     /// <summary>Idioma de la interfaz: «es», «en» o null (el del sistema).</summary>
     public string? Language { get; set; }
 
