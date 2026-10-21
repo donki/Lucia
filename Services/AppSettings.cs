@@ -140,6 +140,10 @@ public sealed class MlflowSettings
     public string ProtectedToken { get; set; } = string.Empty;
     /// <summary>Mandar tambien el texto de las preguntas y respuestas. Apagado por defecto.</summary>
     public bool SendText { get; set; }
+    /// <summary>Id aleatorio de esta instalacion (user.id de las trazas, para agrupar): no dice nada de nadie.</summary>
+    public string InstallId { get; set; } = string.Empty;
+
+    public static string NewInstallId() => "lucia-" + Guid.NewGuid().ToString("N")[..12];
 }
 
 public sealed class EditorDoorSettings

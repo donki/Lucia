@@ -17,6 +17,9 @@ public sealed class MlflowException(int status, string? code, string message) : 
 /// <summary>Lo que dice la prueba de conexion.</summary>
 public enum MlflowCheck { Ok, OkWillCreate, BadAddress, Unreachable, Timeout, Unauthorized, Forbidden, NotMlflow, ServerError }
 
+/// <summary>Como se mandan las interacciones: trazas de GenAI (MLflow 3.6 o mas) o ejecuciones con metricas (antes).</summary>
+public enum MlflowMode { Unknown, Traces, Runs }
+
 /// <summary>
 /// La API REST de seguimiento de MLflow (<c>/api/2.0/mlflow/…</c>), la misma de cualquier servidor
 /// de MLflow y de Databricks, sin Python ni librerias: experimentos, ejecuciones (runs), lotes de
@@ -177,36 +180,90 @@ public sealed class MlflowApi
         throw Error(response.StatusCode, await response.Content.ReadAsStringAsync(cancel).ConfigureAwait(false));
     }
 
+    /// <summary>La version del servidor (<c>GET /version</c>, texto «3.7.0»); null si no la dice (Databricks, un proxy).</summary>
+    public async Task<Version?> GetVersionAsync(CancellationToken cancel)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(_base, "version"));
+            if (_auth is not null) request.Headers.Authorization = _auth;
+            using var response = await _http.SendAsync(request, cancel).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return null;
+            return ParseVersion(await response.Content.ReadAsStringAsync(cancel).ConfigureAwait(false));
+        }
+        catch (HttpRequestException) { return null; }
+    }
+
+    /// <summary>«3.7.0», «"2.17.2"», «3.8.0rc1» → la version numerica; null si no lo parece.</summary>
+    public static Version? ParseVersion(string? text)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text ?? string.Empty, @"^\s*""?(\d+)\.(\d+)(?:\.(\d+))?");
+        return m.Success ? new Version(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), m.Groups[3].Success ? int.Parse(m.Groups[3].Value) : 0) : null;
+    }
+
+    /// <summary>Desde la 3.6.0 el servidor acepta trazas OpenTelemetry (OTLP/HTTP en protobuf) en <c>/v1/traces</c>.</summary>
+    public static readonly Version TracesSince = new(3, 6, 0);
+
+    /// <summary>El modo segun la version: trazas desde la 3.6; ejecuciones antes; sin version, se prueban las trazas.</summary>
+    public static MlflowMode ModeFor(Version? version) => version is null ? MlflowMode.Unknown : version >= TracesSince ? MlflowMode.Traces : MlflowMode.Runs;
+
+    /// <summary>
+    /// Manda trazas OTLP (protobuf) al experimento, opcionalmente enlazadas a una ejecucion. Devuelve false si el
+    /// servidor no las admite (404, 405, 415, 501 o un 400 por el tipo de contenido): entonces se usan ejecuciones.
+    /// </summary>
+    public async Task<bool> ExportTracesAsync(string experimentId, string? runId, byte[] otlp, CancellationToken cancel)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_base, "v1/traces"))
+        {
+            Content = new ByteArrayContent(otlp) { Headers = { ContentType = new MediaTypeHeaderValue("application/x-protobuf") } },
+        };
+        request.Headers.Add("x-mlflow-experiment-id", experimentId);
+        if (runId is not null) request.Headers.Add("x-mlflow-run-id", runId);
+        if (_auth is not null) request.Headers.Authorization = _auth;
+        using var response = await _http.SendAsync(request, cancel).ConfigureAwait(false);
+        if (response.IsSuccessStatusCode) return true;
+        var text = await response.Content.ReadAsStringAsync(cancel).ConfigureAwait(false);
+        if ((int)response.StatusCode is 404 or 405 or 415 or 501
+            || ((int)response.StatusCode == 400 && text.Contains("Content-Type", StringComparison.OrdinalIgnoreCase)))
+            return false;
+        throw Error(response.StatusCode, text);
+    }
+
     /// <summary>
     /// La prueba de conexion: se busca el experimento (sin crear nada). Dice si se llega, si las
     /// credenciales valen, si es un servidor MLflow y si el experimento existe o se creara.
     /// </summary>
     public static async Task<(MlflowCheck Result, string? Detail)> CheckAsync(HttpClient http, string? trackingUri, string experiment, string? username, string? password, string? token, CancellationToken cancel)
+        => (await CheckFullAsync(http, trackingUri, experiment, username, password, token, cancel).ConfigureAwait(false)) is var r ? (r.Result, r.Detail) : default;
+
+    /// <summary>La prueba de conexion con la version del servidor y el modo que se usara.</summary>
+    public static async Task<(MlflowCheck Result, string? Detail, Version? Version, MlflowMode Mode)> CheckFullAsync(HttpClient http, string? trackingUri, string experiment, string? username, string? password, string? token, CancellationToken cancel)
     {
-        if (!TryUri(trackingUri, out var uri)) return (MlflowCheck.BadAddress, null);
+        if (!TryUri(trackingUri, out var uri)) return (MlflowCheck.BadAddress, null, null, MlflowMode.Unknown);
         var api = new MlflowApi(http, uri, username, password, token);
         try
         {
             var id = await api.FindExperimentAsync(experiment, cancel).ConfigureAwait(false);
-            return (id is null ? MlflowCheck.OkWillCreate : MlflowCheck.Ok, id);
+            var version = await api.GetVersionAsync(cancel).ConfigureAwait(false);
+            return (id is null ? MlflowCheck.OkWillCreate : MlflowCheck.Ok, id, version, ModeFor(version));
         }
         catch (MlflowException ex)
         {
             return ex.Status switch
             {
-                401 => (MlflowCheck.Unauthorized, null),
-                403 => (MlflowCheck.Forbidden, null),
-                >= 500 => (MlflowCheck.ServerError, $"HTTP {ex.Status}"),
-                _ => (MlflowCheck.NotMlflow, $"HTTP {ex.Status}"),
+                401 => (MlflowCheck.Unauthorized, null, null, MlflowMode.Unknown),
+                403 => (MlflowCheck.Forbidden, null, null, MlflowMode.Unknown),
+                >= 500 => (MlflowCheck.ServerError, $"HTTP {ex.Status}", null, MlflowMode.Unknown),
+                _ => (MlflowCheck.NotMlflow, $"HTTP {ex.Status}", null, MlflowMode.Unknown),
             };
         }
         catch (TaskCanceledException) when (!cancel.IsCancellationRequested)
         {
-            return (MlflowCheck.Timeout, null);
+            return (MlflowCheck.Timeout, null, null, MlflowMode.Unknown);
         }
         catch (HttpRequestException ex)
         {
-            return (MlflowCheck.Unreachable, ex.HttpRequestError.ToString());
+            return (MlflowCheck.Unreachable, ex.HttpRequestError.ToString(), null, MlflowMode.Unknown);
         }
     }
 }

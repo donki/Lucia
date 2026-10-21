@@ -663,6 +663,23 @@ public partial class MainWindow : Window
 
     private readonly List<ChatThread> _pendingAnswers = [];
 
+    // La traza de la interaccion en curso (solo con MLflow activado) y sus totales.
+    private Services.Mlflow.InteractionTrace? _trace;
+    private double? _traceTtft;
+    private ChatUsage? _traceUsage;
+    private int _traceTools;
+
+    private void OnDiagForTrace(string area, string line) => _trace?.Event(area, line);
+
+    /// <summary>Suma lo que gasto una vuelta del modelo a los totales de la interaccion.</summary>
+    private void AddToTrace(PendingAnswer live)
+    {
+        _traceTtft ??= live.FirstPieceDelay?.TotalMilliseconds;
+        if (live.Usage is not { } u) return;
+        _traceUsage = _traceUsage is null ? u
+            : new ChatUsage((_traceUsage.PromptTokens ?? 0) + (u.PromptTokens ?? 0), (_traceUsage.CompletionTokens ?? 0) + (u.CompletionTokens ?? 0), u.TokensPerSecond ?? _traceUsage.TokensPerSecond);
+    }
+
     /// <summary>Responde a la conversacion y, si mientras tanto se enviaron mas preguntas, las va contestando.</summary>
     private async Task AnswerAsync(ChatThread thread)
     {
@@ -674,15 +691,25 @@ public partial class MainWindow : Window
             var question = thread.Messages.LastOrDefault(m => m.Role == "user");
             DiagLog.Write("chat", $"pregunta enviada en la conversacion {thread.Id}: {question?.Content.Length ?? 0} caracteres, {question?.Attachments?.Count ?? 0} adjuntos" + (thread.TaskId is not null ? ", tarea programada" : string.Empty));
             DiagLog.SetPhase("preparando la vision");
+            var telemetry = Services.Mlflow.MlflowTelemetry.Current;
+            _trace = telemetry.Enabled
+                ? new Services.Mlflow.InteractionTrace("chat", thread.Id, telemetry.InstallId, App.RunConfig(), telemetry.SendText, question?.Content, question?.Content.Length ?? 0, question?.Attachments?.Count ?? 0)
+                : null;
+            _traceTtft = null; _traceUsage = null; _traceTools = 0;
+            if (_trace is not null) DiagLog.Written += OnDiagForTrace;
+            var outcome = "ok";
+            string? failure = null;
             try
             {
                 await EnsureVisionAsync(thread, cancel);
                 // El motor se pide dentro de cada vuelta, ya con la burbuja de espera en pantalla.
                 await AnswerLoopAsync(thread, cancel);
             }
-            catch (OperationCanceledException) { _pendingAnswers.Clear(); }
+            catch (OperationCanceledException) { _pendingAnswers.Clear(); outcome = "cancelled"; }
             catch (Exception ex)
             {
+                outcome = "error";
+                failure = DiagLog.Describe(ex);
                 var failed = new StoredMessage { Role = "assistant", Content = Loc.Format("AnswerFailed", ex.Message) };
                 thread.Messages.Add(failed);
                 if (thread == _current) Messages.Children.Add(Bubble("assistant", failed.Content, null));
@@ -694,6 +721,16 @@ public partial class MainWindow : Window
                 StopButton.Visibility = Visibility.Collapsed;
                 ThreadStore.Save(thread);
                 DiagLog.SetPhase("inactiva");
+                if (_trace is { } trace)
+                {
+                    // La traza de la interaccion, entera, a la cola de MLflow (se manda en segundo plano).
+                    DiagLog.Written -= OnDiagForTrace;
+                    var last = thread.Messages.LastOrDefault();
+                    var answerText = last?.Role == "assistant" ? last.Content : null;
+                    trace.Finish(outcome, failure, answerText, _traceTtft, _traceUsage, answerText?.Length ?? 0, _traceTools);
+                    telemetry.Trace(trace);
+                    _trace = null;
+                }
             }
             if (thread.TaskId is not null) FinishedTask(thread);
             if (_pendingAnswers.Count == 0) break;
@@ -769,18 +806,32 @@ public partial class MainWindow : Window
                 // Generar una imagen mata el motor de texto (no caben los dos en la grafica) y al volver
                 // el puerto es otro: se vuelve a pedir la direccion en cada vuelta. Si el motor sigue en
                 // pie esto no cuesta nada; si no, lo levanta otra vez (fuera del hilo de la interfaz).
+                var engineSpan = _trace?.Engine();
+                var engineState = App.Engine.State;
                 var baseUrl = await EngineReadyAsync(cancel);
+                if (engineSpan is not null)
+                {
+                    engineSpan.Set("lucia.engine_state_before", engineState.ToString()).Set("lucia.engine_ms", clock.Elapsed.TotalMilliseconds)
+                        .Set("lucia.engine_started", engineState != EngineState.Ready || clock.ElapsedMilliseconds > 1500);
+                    Services.Mlflow.InteractionTrace.End(engineSpan);
+                }
                 DiagLog.Write("chat", $"motor listo a los {clock.ElapsedMilliseconds} ms");
                 DiagLog.SetPhase("preparando la pregunta (documentos y adjuntos)");
                 live.Advance(AnswerPhase.Preparing);
                 // Los documentos (PDF y .docx se leen y se trocean) y los adjuntos, tambien fuera.
-                context ??= await Task.Run(() => ToolBox.ContextPrompt(settings, question), cancel);
+                if (context is null)
+                {
+                    var docsSpan = _trace?.Child("documents", "RETRIEVER");
+                    context = await Task.Run(() => ToolBox.ContextPrompt(settings, question), cancel);
+                    if (docsSpan is not null) _trace!.Documents(docsSpan, context);
+                }
                 var history = thread.Messages.TakeLast(30).ToList();   // copia: la conversacion puede crecer mientras
                 var system = SystemPrompt(settings, thread.WorkMode, context);
                 var messages = await Task.Run(() => MessagesFor(system, history), cancel);
                 DiagLog.Write("chat", $"pregunta preparada a los {clock.ElapsedMilliseconds} ms: {messages.Count} mensajes, {messages.Sum(m => m.Content.Length)} caracteres, {messages.Sum(m => m.Images?.Count ?? 0)} imagenes");
                 DiagLog.SetPhase("esperando el primer trozo de la IA");
                 live.Advance(AnswerPhase.Waiting);
+                var llm = _trace?.Llm(round + 1, messages.Count, settings.Thinking);
                 await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, settings.Thinking, TokenLimits.Answer(settings), tools, live, cancel));
                 var got = live.Read();
                 answer.Content = got.Content.Trim();
@@ -788,6 +839,8 @@ public partial class MainWindow : Window
                 calls = got.Calls;
                 finish = got.Finish;
                 LogPiece(live, clock);
+                AddToTrace(live);
+                if (llm is not null) _trace!.EndLlm(llm, live.FirstPieceDelay?.TotalMilliseconds, live.Usage, answer.Content, answer.Reasoning?.Length ?? 0, calls?.Count ?? 0, finish, true, null);
                 if (answer.Content.Length == 0 && answer.Reasoning is not null && calls is null)
                 {
                     // Se ha gastado el tope razonando y no ha llegado a contestar: otra vuelta sin pensar,
@@ -799,12 +852,16 @@ public partial class MainWindow : Window
                     live.Advance(AnswerPhase.Waiting);
                     BeginWait(bubble, live);
                     RepaintBubble(bubble, string.Empty, answer.Reasoning, streaming: true);
+                    var retry = _trace?.Llm(round + 1, messages.Count, false);
+                    retry?.Set("lucia.retry_without_thinking", true);
                     await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, false, TokenLimits.Answer(settings), tools, live, cancel));
                     var again = live.Read();
                     answer.Content = again.Content.Trim();
                     calls = again.Calls;
                     finish = again.Finish;
                     LogPiece(live, clock);
+                    AddToTrace(live);
+                    if (retry is not null) _trace!.EndLlm(retry, live.FirstPieceDelay?.TotalMilliseconds, live.Usage, answer.Content, 0, calls?.Count ?? 0, finish, true, null);
                 }
             }
             catch (Exception ex) when (ex is OperationCanceledException || cancel.IsCancellationRequested)
@@ -930,6 +987,8 @@ public partial class MainWindow : Window
         var detail = tool?.Detail(args) ?? string.Empty;
         var label = tool is null ? call.Name : detail.Length > 0 ? $"{tool.Name}  {detail}" : tool.Name;
         var reason = args["reason"]?.GetValue<string>();
+        var toolTrace = _trace?.Tool(call.Name, call.Arguments);
+        if (toolTrace is not null) _traceTools++;
         string output;
         if (tool is null)
             output = $"Unknown tool: {call.Name}";
@@ -943,6 +1002,7 @@ public partial class MainWindow : Window
             {
                 output = "Unattended run: this action needs your approval; set the resource to Always in Settings > Permissions to allow it in scheduled tasks.";
                 ToolBox.Log(tool, detail, "unattended-declined");
+                if (toolTrace is not null) _trace!.EndTool(toolTrace, output, "declined");
                 thread.Messages.Add(new StoredMessage { Role = "tool", ToolCallId = call.Id, Command = label, Content = output });
                 Messages.Children.Add(ToolBubble(tool.Resource, label, output));
                 return;
@@ -979,11 +1039,20 @@ public partial class MainWindow : Window
                     catch (Exception ex) { DiagLog.Write("herramienta", $"{tool.Name}: error a los {toolClock.ElapsedMilliseconds} ms: {DiagLog.Describe(ex)}"); throw; }
                     ToolBox.Log(tool, detail, "ok");
                 }
-                catch (OperationCanceledException) { Messages.Children.Remove(running); ToolBox.Log(tool, detail, "cancelled"); throw; }
+                catch (OperationCanceledException)
+                {
+                    Messages.Children.Remove(running);
+                    ToolBox.Log(tool, detail, "cancelled");
+                    if (toolTrace is not null) _trace!.EndTool(toolTrace, null, "cancelled");
+                    throw;
+                }
                 catch (Exception ex) { output = "[error] " + ex.Message; ToolBox.Log(tool, detail, "error: " + ex.Message); }
                 Messages.Children.Remove(running);
             }
         }
+        if (toolTrace is not null)
+            _trace!.EndTool(toolTrace, output, output.StartsWith("[error]", StringComparison.Ordinal) || tool is null ? "error"
+                : output.StartsWith("The user declined", StringComparison.Ordinal) || output.StartsWith("This resource is turned off", StringComparison.Ordinal) ? "declined" : "ok");
         thread.Messages.Add(new StoredMessage { Role = "tool", ToolCallId = call.Id, Command = label, Content = output });
         Messages.Children.Add(ToolBubble(tool?.Resource ?? Resource.Commands, label, output));
         ScrollToEnd();

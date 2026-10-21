@@ -1,5 +1,44 @@
 # Changelog — sOC Lucia
 
+## 2026.10.21.3 — MLflow: cada pregunta como traza en GenAI / MLflow: each question as a GenAI trace
+
+**Español**
+
+- **Ajustes › MLflow** (apagado por defecto): dirección del servidor, experimento (se crea si no
+  existe), usuario y contraseña o token (también Databricks), guardados cifrados para tu usuario de
+  Windows y con el ojo para verlos, y **Probar la conexión**, que dice en palabras si conecta, por qué
+  no, qué versión de MLflow tiene y cómo se van a ver las preguntas.
+- **Cada pregunta es una traza** en la sección GenAI del experimento (pestaña *Traces*): el modelo y
+  los ajustes, el tiempo hasta el primer trozo, los tokens de entrada y salida, tokens por segundo, el
+  motor, los documentos usados (sus nombres), cada llamada al modelo y cada herramienta, y si acabó
+  bien, se canceló o falló (con el mensaje). Las preguntas de los editores de código también. Las
+  congelaciones de la ventana van como traza propia y el registro de diagnóstico, en una ejecución de
+  la sesión. Con un MLflow 2.x van como métricas de esa ejecución, y la prueba de conexión lo avisa.
+- **Tus textos no salen** salvo que marques «Enviar también el texto de preguntas y respuestas»
+  (apagado y con aviso); sin él, las trazas solo muestran tiempos, tokens y errores. Nueva
+  [política de privacidad](PRIVACY.md).
+- Nunca frena a Lucia: se envía por detrás, con cola, reintentos y un solo aviso si el servidor no
+  responde.
+- Banco de pruebas: **370 pruebas** y **92,8 %** de toda la aplicación (antes 338 y 91,3 %).
+
+**English**
+
+- **Settings › MLflow** (off by default): server address, experiment (created if missing), user and
+  password or token (Databricks too), stored encrypted for your Windows user and with the eye to reveal
+  them, and **Test connection**, which says in words whether it connects, why not, which MLflow version
+  it has and how questions will show up.
+- **Each question is a trace** in the experiment's GenAI section (*Traces* tab): model and settings,
+  time to the first piece, input and output tokens, tokens per second, the engine, the documents used
+  (their names), each model call and each tool, and whether it ended well, was cancelled or failed
+  (with the message). Code editor requests too. Window freezes are their own trace and the diagnostics
+  log goes into a session run. With MLflow 2.x they go as metrics of that run, and the connection test
+  says so.
+- **Your texts do not leave** unless you tick «Also send the text of questions and answers» (off, with a
+  warning); without it, traces only show times, tokens and errors. New [privacy policy](PRIVACY.md).
+- It never slows Lucia down: sent in the background, with a queue, retries and a single notice if the
+  server does not answer.
+- Test suite: **370 tests** and **92.8 %** of the whole app (was 338 and 91.3 %).
+
 ## 2026.10.21.2 — Ajustes ya no deja la ventana bloqueada / Settings no longer leaves the window locked
 
 **Español**

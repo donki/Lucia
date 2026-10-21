@@ -78,6 +78,8 @@ public class LocTests
         foreach (var p in Enum.GetValues<SocLucia.Agent.Permission>())
             keys.Add(p == SocLucia.Agent.Permission.Allow ? "PermAllowAlways" : "Perm" + p);
         keys.AddRange(SocLucia.Engine.ModelCatalog.All.Select(m => m.Blurb));
+        keys.AddRange(Enum.GetValues<SocLucia.Services.Mlflow.MlflowCheck>().Select(c => "MlflowCheck_" + c));
+        keys.AddRange(Enum.GetValues<SocLucia.Services.Mlflow.MlflowMode>().Select(m => "MlflowMode_" + m));
         foreach (var phase in Enum.GetValues<SocLucia.Chat.AnswerPhase>())
             foreach (var engine in Enum.GetValues<SocLucia.Engine.EngineState>())
                 foreach (var language in new[] { "es", "en" })

@@ -31,6 +31,11 @@ public sealed record RequestRecord(string Source, double? TtftMs, double Duratio
 /// <summary>
 /// Envio a MLflow en segundo plano. Decisiones (escritas tambien en el README):
 /// <list type="bullet">
+/// <item><b>Lo principal son las trazas</b> (seccion GenAI, pestaña Traces): una por interaccion
+/// (<see cref="InteractionTrace"/>), en OTLP/HTTP protobuf a <c>/v1/traces</c> con la cabecera
+/// <c>x-mlflow-experiment-id</c>, lo que admite MLflow desde la 3.6.0 (la 3.6 solo en protobuf; JSON llego
+/// despues). La version se pregunta a <c>/version</c>: con una 2.x o anterior a 3.6, o si el servidor responde
+/// que no las admite, las interacciones van como metricas de la ejecucion y se avisa una vez en el registro.</item>
 /// <item>Una <b>ejecucion (run) por sesion de la aplicacion y configuracion</b>: los parametros de un run
 /// no se pueden cambiar en MLflow, asi que si cambia el modelo, el contexto, el tope o «Pensar», empieza
 /// otra. Cada pregunta es un paso (step) de sus metricas.</item>
@@ -59,6 +64,8 @@ public sealed class MlflowTelemetry : IDisposable
     private Task? _worker;
     private MlflowSettings? _settings;
     private int _dropped;
+    private long _queued;
+    private long _done;
     private volatile bool _failing;
 
     public MlflowTelemetry(HttpMessageHandler? handler = null, TimeSpan? flushEvery = null, int capacity = 1000, TimeSpan? maxBackoff = null)
@@ -103,11 +110,14 @@ public sealed class MlflowTelemetry : IDisposable
             {
                 Enabled = true, TrackingUri = settings.TrackingUri.Trim(), Experiment = string.IsNullOrWhiteSpace(settings.Experiment) ? MlflowSettings.DefaultExperiment : settings.Experiment.Trim(),
                 Username = settings.Username, ProtectedPassword = settings.ProtectedPassword, ProtectedToken = settings.ProtectedToken, SendText = settings.SendText,
+                InstallId = settings.InstallId is { Length: > 0 } id ? id : MlflowSettings.NewInstallId(),
             };
+            _mode = MlflowMode.Unknown;
+            ServerVersion = null;
             StopLocked();
             _settings = copy;
             _queue = Channel.CreateBounded<object>(new BoundedChannelOptions(_capacity) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true },
-                _ => Interlocked.Increment(ref _dropped));
+                _ => { Interlocked.Increment(ref _dropped); Interlocked.Increment(ref _done); });
             _stop = new CancellationTokenSource();
             var queue = _queue;
             var stop = _stop.Token;
@@ -141,7 +151,8 @@ public sealed class MlflowTelemetry : IDisposable
     {
         Channel<object>? queue;
         lock (_gate) queue = _queue;
-        queue?.Writer.TryWrite(item);
+        if (queue is not null && queue.Writer.TryWrite(item))
+            Interlocked.Increment(ref _queued);
     }
 
     /// <summary>Una pregunta acabada. El texto solo sale si los ajustes lo permiten; si no, se borra aqui otra vez.</summary>
@@ -157,12 +168,43 @@ public sealed class MlflowTelemetry : IDisposable
         Enqueue(new RequestItem(DateTimeOffset.Now, config, record));
     }
 
-    /// <summary>Una congelacion de la ventana (del vigilante), con lo que duro.</summary>
-    public void Freeze(double seconds) => Enqueue(new FreezeItem(DateTimeOffset.Now, seconds));
+    /// <summary>Si ahora se manda el texto (para quien arma las trazas). Sin envio activado, falso.</summary>
+    public bool SendText { get { lock (_gate) return _settings?.SendText == true; } }
+
+    /// <summary>El id aleatorio de esta instalacion para las trazas.</summary>
+    public string InstallId { get { lock (_gate) return _settings?.InstallId is { Length: > 0 } id ? id : "lucia"; } }
+
+    /// <summary>
+    /// Una interaccion acabada, como traza. Si el texto no esta permitido, la traza no deberia llevarlo
+    /// (lo controla <see cref="InteractionTrace"/>); aqui se comprueba otra vez y, si lo lleva, no sale.
+    /// </summary>
+    public void Trace(InteractionTrace trace)
+    {
+        if (!Enabled) return;
+        if (trace.IncludesText && !SendText) return;
+        Enqueue(new TraceItem(trace.Data));
+    }
+
+    /// <summary>El modo que se esta usando (para las pruebas y el resumen).</summary>
+    public MlflowMode Mode => _mode;
+
+    /// <summary>La version del servidor, si la dijo.</summary>
+    public Version? ServerVersion { get; private set; }
+
+    private volatile MlflowMode _mode;
+
+    /// <summary>Una congelacion de la ventana (del vigilante), con lo que duro: metrica de la ejecucion y traza propia.</summary>
+    public void Freeze(double seconds)
+    {
+        if (!Enabled) return;
+        Enqueue(new FreezeItem(DateTimeOffset.Now, seconds));
+        Enqueue(new TraceItem(InteractionTrace.Freeze(seconds, DiagLog.Phase, InstallId, ConfigNow?.Invoke().AppVersion ?? "-")));
+    }
 
     private sealed record LogEvent(DateTimeOffset At, string Area, string Line);
     private sealed record RequestItem(DateTimeOffset At, RunConfig Config, RequestRecord Record);
     private sealed record FreezeItem(DateTimeOffset At, double Seconds);
+    private sealed record TraceItem(TraceData Trace);
 
     // ------------------------------------------------------------------ el hilo de envio
 
@@ -202,7 +244,16 @@ public sealed class MlflowTelemetry : IDisposable
                 try
                 {
                     experiment ??= await api.EnsureExperimentAsync(settings.Experiment, stop).ConfigureAwait(false);
+                    if (_mode == MlflowMode.Unknown && ServerVersion is null)
+                    {
+                        ServerVersion = await api.GetVersionAsync(stop).ConfigureAwait(false);
+                        _mode = MlflowApi.ModeFor(ServerVersion);
+                        DiagLog.Write("mlflow", ServerVersion is null ? "el servidor no dice su version: se prueban las trazas"
+                            : _mode == MlflowMode.Traces ? $"MLflow {ServerVersion}: interacciones como trazas (GenAI)"
+                            : $"MLflow {ServerVersion} no tiene trazas de GenAI: interacciones como ejecuciones con metricas");
+                    }
                     await SendAsync(api, experiment, pending, stop).ConfigureAwait(false);
+                    Interlocked.Add(ref _done, pending.Count);
                     pending.Clear();
                     Sent++;
                     backoff = TimeSpan.FromSeconds(1);
@@ -221,7 +272,10 @@ public sealed class MlflowTelemetry : IDisposable
                         DiagLog.Write("mlflow", $"MLflow no responde ({Describe(ex)}); se reintenta en segundo plano y Lucia sigue igual");
                     }
                     if (ex is MlflowException { Status: 400 } && pending.Count > 1)
+                    {
                         pending.RemoveAt(0);   // algo que el servidor no acepta no puede atascar lo demas
+                        Interlocked.Increment(ref _done);
+                    }
                     await Task.Delay(backoff, stop).ConfigureAwait(false);
                     backoff = TimeSpan.FromTicks(Math.Min(backoff.Ticks * 2, _maxBackoff.Ticks));
                 }
@@ -278,9 +332,25 @@ public sealed class MlflowTelemetry : IDisposable
         }
 
         var run = _run;
+        var traces = items.OfType<TraceItem>().Select(t => t.Trace).ToList();
+        if (traces.Count > 0 && _mode != MlflowMode.Runs)
+        {
+            // Primero las trazas, enlazadas a la ejecucion de la sesion si ya hay una.
+            var payload = Otlp.Encode(traces, ConfigNow?.Invoke().AppVersion ?? "-");
+            if (await api.ExportTracesAsync(experiment, run?.Id, payload, stop).ConfigureAwait(false))
+            {
+                if (_mode == MlflowMode.Unknown) { _mode = MlflowMode.Traces; DiagLog.Write("mlflow", "el servidor admite trazas: interacciones como trazas (GenAI)"); }
+            }
+            else
+            {
+                _mode = MlflowMode.Runs;
+                DiagLog.Write("mlflow", "el servidor no admite trazas (GenAI): interacciones como ejecuciones con metricas");
+            }
+        }
 
         foreach (var item in items)
         {
+            if (item is TraceItem) continue;   // ya enviadas arriba (o descartadas si el servidor no las admite)
             var config = item is RequestItem r ? r.Config : run?.Config ?? ConfigNow?.Invoke() ?? new RunConfig("-", "-", 0, 0, false, 0, "-", "-", "-");
             if (run is null || (item is RequestItem && run.Config != config))
             {
@@ -305,8 +375,9 @@ public sealed class MlflowTelemetry : IDisposable
                     M("cancelled", rec.Outcome == "cancelled" ? 1 : 0);
                     M("error", rec.Outcome == "error" ? 1 : 0);
                     if (rec.Error is not null) tags.Add(new($"{rec.Source}.{step:0000}.error", rec.Error));
-                    if (rec.Question is not null) tags.Add(new($"{rec.Source}.{step:0000}.question", rec.Question));
-                    if (rec.Answer is not null) tags.Add(new($"{rec.Source}.{step:0000}.answer", rec.Answer));
+                    // El texto, solo donde no hay trazas (con trazas va en sus entradas y salidas).
+                    if (_mode == MlflowMode.Runs && rec.Question is not null) tags.Add(new($"{rec.Source}.{step:0000}.question", rec.Question));
+                    if (_mode == MlflowMode.Runs && rec.Answer is not null) tags.Add(new($"{rec.Source}.{step:0000}.answer", rec.Answer));
                     break;
                 }
                 case FreezeItem freeze:
@@ -332,12 +403,9 @@ public sealed class MlflowTelemetry : IDisposable
     internal async Task<bool> DrainAsync(TimeSpan timeout)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        var sent = Sent;
         while (clock.Elapsed < timeout)
         {
-            Channel<object>? q;
-            lock (_gate) q = _queue;
-            if (q is null || (q.Reader.Count == 0 && Sent > sent && !_failing)) return true;
+            if (Interlocked.Read(ref _done) >= Interlocked.Read(ref _queued) && !_failing) return true;
             await Task.Delay(20).ConfigureAwait(false);
         }
         return false;

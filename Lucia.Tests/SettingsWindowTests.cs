@@ -243,6 +243,101 @@ public sealed class SettingsWindowTests : UiTest
     }
 
     [Fact]
+    public void MLflow_EnAjustes_ValidaGuardaCifradoConfirmaElTextoYPruebaLaConexion()
+    {
+        var previous = SocLucia.Services.Mlflow.MlflowTelemetry.Current;
+        var fake = new FakeMlflow { ExperimentExists = true, Version = "3.7.0" };
+        SocLucia.Services.Mlflow.MlflowTelemetry.Current = new SocLucia.Services.Mlflow.MlflowTelemetry(fake, TimeSpan.FromMilliseconds(50));
+        var ml = AppSettings.Current.Mlflow = new MlflowSettings();
+        try
+        {
+            Ui.Run(() => Settings(s =>
+            {
+                Assert.Equal(Loc.Get("MlflowTextNote"), Ui.Find<TextBlock>(s, "MlflowTextNote").Text);
+                Assert.Contains(Loc.Get("MlflowAnyServer"), Ui.Find<TextBlock>(s, "MlflowWhat").Text);
+                string? message = null;
+                // Activar sin direccion: se dice y no se activa.
+                Ui.Answer("Ok", m => message = m);
+                Ui.Click(Ui.Find<CheckBox>(s, "MlflowCheck"));
+                Assert.Equal(Loc.Get("MlflowNeedsUri"), message);
+                Assert.False(ml.Enabled);
+                // Direccion que no vale: se dice y se queda la de antes; la buena se guarda.
+                var uri = Ui.Find<TextBox>(s, "MlflowUriBox");
+                Ui.Answer("Ok", m => message = m);
+                uri.Text = "localhost:5000";
+                Leave(uri);
+                Assert.Equal(Loc.Format("MlflowBadUri", "localhost:5000"), message);
+                Assert.Equal(string.Empty, ml.TrackingUri);
+                uri.Text = "http://mlflow.test:5000";
+                Leave(uri);
+                Assert.Equal("http://mlflow.test:5000", ml.TrackingUri);
+                Assert.Contains("mlflow.test", Ui.Find<TextBlock>(s, "MlflowWhat").Text);
+                var user = Ui.Find<TextBox>(s, "MlflowUserBox");
+                user.Text = "ana";
+                Leave(user);
+                // La contraseña y el token, cifrados; el ojo los enseña.
+                var password = Ui.Find<SocLucia.Controls.RevealPasswordBox>(s, "MlflowPasswordBox");
+                password.Password = "clave-super-secreta";
+                Ui.Call(s, "OnMlflowPasswordChanged", password, new RoutedEventArgs());
+                Assert.StartsWith("dpapi1:", ml.ProtectedPassword);
+                Assert.Equal("clave-super-secreta", Secrets.Unprotect(ml.ProtectedPassword));
+                Assert.False(password.Revealed);
+                password.Toggle();
+                Assert.True(password.Revealed);
+                Assert.Contains(Ui.All<TextBox>(password), t => t.Text == "clave-super-secreta" && t.Visibility == Visibility.Visible);
+                password.Toggle();
+                var token = Ui.Find<SocLucia.Controls.RevealPasswordBox>(s, "MlflowTokenBox");
+                token.Password = " tok-super-secreto ";
+                Ui.Call(s, "OnMlflowTokenChanged", token, new RoutedEventArgs());
+                Assert.Equal("tok-super-secreto", Secrets.Unprotect(ml.ProtectedToken));
+                // El texto pide confirmacion: «no» lo deja apagado; «si» lo enciende.
+                var text = Ui.Find<CheckBox>(s, "MlflowTextCheck");
+                Ui.Answer("Cancel");
+                Ui.Click(text);
+                Assert.False(ml.SendText);
+                Assert.False(text.IsChecked);
+                Ui.Answer("Yes");
+                Ui.Click(text);
+                Assert.True(ml.SendText);
+                // Experimento vacio: el de siempre.
+                var experiment = Ui.Find<TextBox>(s, "MlflowExperimentBox");
+                experiment.Text = "  ";
+                Leave(experiment);
+                Assert.Equal(MlflowSettings.DefaultExperiment, ml.Experiment);
+                // Activar: id de instalacion aleatorio y el envio en marcha.
+                Ui.Click(Ui.Find<CheckBox>(s, "MlflowCheck"));
+                Assert.True(ml.Enabled);
+                Assert.StartsWith("lucia-", ml.InstallId);
+                Assert.True(SocLucia.Services.Mlflow.MlflowTelemetry.Current.Enabled);
+                // Probar la conexion: conecta, version y modo.
+                var test = Ui.Find<ButtonBase>(s, "MlflowTestButton");
+                var status = Ui.Find<TextBlock>(s, "MlflowTestStatus");
+                Ui.Click(test);
+                Ui.WaitFor(() => test.IsEnabled && status.Text != Loc.Get("MlflowTesting"));
+                Assert.Contains(Loc.Format("MlflowMode_Traces", "3.7.0"), status.Text);
+                Assert.Equal("Bearer tok-super-secreto", fake.Calls.Last().Auth);
+                // Credenciales que no valen: aviso con la razon.
+                fake.Override = _ => new HttpResponseMessage(HttpStatusCode.Unauthorized);
+                Ui.Answer("Ok", m => message = m);
+                Ui.Click(test);
+                Ui.WaitFor(() => test.IsEnabled && Ui.Pending == 0);
+                Assert.Equal(Loc.Format("MlflowCheck_Unauthorized", MlflowSettings.DefaultExperiment, ""), message);
+                fake.Override = null;
+                Ui.Click(Ui.Find<CheckBox>(s, "MlflowCheck"));   // apagar
+                Assert.False(SocLucia.Services.Mlflow.MlflowTelemetry.Current.Enabled);
+            }));
+            Assert.DoesNotContain("super-secret", File.ReadAllText(Paths.SettingsFile));
+            Assert.DoesNotContain("super-secret", File.ReadAllText(DiagLog.Current));
+        }
+        finally
+        {
+            SocLucia.Services.Mlflow.MlflowTelemetry.Current.Dispose();
+            SocLucia.Services.Mlflow.MlflowTelemetry.Current = previous;
+            AppSettings.Current.Mlflow = new MlflowSettings();
+        }
+    }
+
+    [Fact]
     public void Diagnostico_CopiarLosRegistros_YAbrirSuCarpeta()
     {
         DiagLog.Write("prueba", "algo que paso");

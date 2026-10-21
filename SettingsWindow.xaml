@@ -124,8 +124,8 @@
                     </StackPanel>
                 </Border>
 
-                <!-- MLflow: tiempos, metricas y eventos a un servidor de seguimiento (apagado por defecto). Oculta hasta que lleguen las trazas de GenAI. -->
-                <Border x:Name="MlflowCard" Visibility="Collapsed" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                <!-- MLflow: cada interaccion como traza de GenAI (o ejecuciones en servidores viejos); apagado por defecto -->
+                <Border x:Name="MlflowCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
                     <StackPanel>
                         <TextBlock x:Name="MlflowTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
                         <TextBlock x:Name="MlflowWhat" Style="{StaticResource HintText}" Margin="0,0,0,8" />
@@ -144,6 +144,7 @@
                         <TextBlock x:Name="MlflowAuthHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
                         <CheckBox x:Name="MlflowTextCheck" Style="{StaticResource Check}" Margin="0,12,0,0" Click="OnMlflowTextChanged" />
                         <TextBlock x:Name="MlflowTextWarning" Style="{StaticResource HintText}" Foreground="{DynamicResource Danger}" Margin="22,2,0,0" />
+                        <TextBlock x:Name="MlflowTextNote" Style="{StaticResource HintText}" Margin="22,2,0,0" />
                         <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                             <Button x:Name="MlflowTestButton" Style="{StaticResource OutlineButton}" Click="OnMlflowTest" />
                             <TextBlock x:Name="MlflowTestStatus" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="360" />

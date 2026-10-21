@@ -137,22 +137,32 @@ public sealed class EditorDoor : IDisposable
     private async Task ForwardAsync(HttpListenerRequest request, HttpListenerResponse response, string path, CancellationToken cancel)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        string baseUrl;
-        try
-        {
-            baseUrl = await _engine.EnsureReadyAsync(null, cancel);
-        }
-        catch (Exception ex)
-        {
-            DiagLog.Write("puerta", $"{path}: el motor no esta listo ({DiagLog.Describe(ex)})");
-            await ErrorAsync(response, 503, ex.Message);
-            return;
-        }
         byte[] body;
         using (var ms = new MemoryStream())
         {
             await request.InputStream.CopyToAsync(ms, cancel);
             body = ms.ToArray();
+        }
+        // Una traza por peticion (solo con MLflow activado): tiempos, estado y, con la casilla del texto, la pregunta del editor.
+        var telemetry = Services.Mlflow.MlflowTelemetry.Current;
+        var question = telemetry.Enabled ? LastUserText(body) : null;
+        var trace = telemetry.Enabled
+            ? new Services.Mlflow.InteractionTrace("door", "door-" + Guid.NewGuid().ToString("N")[..8], telemetry.InstallId, App.RunConfig(), telemetry.SendText, question, question?.Length ?? 0, 0)
+            : null;
+        trace?.Root.Set("lucia.door_path", path).Set("lucia.request_bytes", (long)body.Length);
+        string baseUrl;
+        var engineSpan = trace?.Engine();
+        try
+        {
+            baseUrl = await _engine.EnsureReadyAsync(null, cancel);
+            if (engineSpan is not null) Services.Mlflow.InteractionTrace.End(engineSpan);
+        }
+        catch (Exception ex)
+        {
+            DiagLog.Write("puerta", $"{path}: el motor no esta listo ({DiagLog.Describe(ex)})");
+            if (trace is not null) telemetry.Trace(Finish(trace, "error", DiagLog.Describe(ex)));
+            await ErrorAsync(response, 503, ex.Message);
+            return;
         }
         if (path == "/v1/chat/completions")
             body = ThinkingOffByDefault(body);
@@ -178,10 +188,38 @@ public sealed class EditorDoor : IDisposable
         }
         response.Close();
         DiagLog.Write("puerta", $"{path}: acabada a los {clock.ElapsedMilliseconds} ms");
+        if (trace is not null)
+        {
+            trace.Root.Set("lucia.http_status", (long)(int)upstream.StatusCode);
+            telemetry.Trace(Finish(trace, (int)upstream.StatusCode < 400 ? "ok" : "error", (int)upstream.StatusCode < 400 ? null : $"HTTP {(int)upstream.StatusCode}"));
+        }
         // A MLflow solo tiempos y estado: lo que pide el editor (su codigo) no sale de aqui.
         if (Services.Mlflow.MlflowTelemetry.Current.Enabled)
             Services.Mlflow.MlflowTelemetry.Current.Request(App.RunConfig(), new Services.Mlflow.RequestRecord("door", null, clock.Elapsed.TotalMilliseconds, null, null, null, 0, 0, 0,
                 (int)upstream.StatusCode < 400 ? "ok" : "error", (int)upstream.StatusCode < 400 ? null : $"HTTP {(int)upstream.StatusCode}"));
+    }
+
+    private static Services.Mlflow.InteractionTrace Finish(Services.Mlflow.InteractionTrace trace, string outcome, string? error)
+    {
+        trace.Finish(outcome, error, null, null, null, 0, 0);
+        return trace;
+    }
+
+    /// <summary>El texto del ultimo mensaje del usuario en una peticion de chat (para la traza, solo si se permite el texto).</summary>
+    internal static string? LastUserText(byte[] body)
+    {
+        try
+        {
+            if (JsonNode.Parse(body)?["messages"] is not JsonArray messages) return null;
+            var last = messages.LastOrDefault(m => m?["role"]?.GetValue<string>() == "user")?["content"];
+            return last switch
+            {
+                JsonValue v when v.TryGetValue<string>(out var s) => s,
+                JsonArray parts => string.Join("\n", parts.Select(p => p?["text"]?.GetValue<string>()).Where(t => t is not null)),
+                _ => null,
+            };
+        }
+        catch (Exception) { return null; }
     }
 
     /// <summary>Sin indicacion del cliente, el modelo no «piensa»: un razonador se gastaria toda la respuesta dentro de &lt;think&gt;.</summary>

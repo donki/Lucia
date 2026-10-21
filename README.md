@@ -93,10 +93,38 @@ esa misma IA.
   **imágenes** cuando la IA cargada tiene visión (la puerta lo dice en `/v1/models › capabilities`). Continue, Cline y similares funcionan con la misma dirección y
   token. Detalles en [vscode/README.md](vscode/README.md).
 
+## MLflow (opcional, apagado por defecto)
+
+Ajustes › MLflow manda cada interacción a un servidor MLflow (dirección, experimento —se crea si no
+existe— y usuario/contraseña o token, cifrados con DPAPI; botón «Probar la conexión»). Todo en segundo
+plano (`Services/Mlflow/`): cola acotada, reintentos con espera creciente y un solo aviso en el registro
+local si el servidor no responde; nunca en el hilo de la interfaz.
+
+- **Trazas de GenAI** (pestaña *Traces* del experimento), una por pregunta del chat o petición de un
+  editor: raíz `CHAT_MODEL` (modelo, temperatura, tope de tokens, contexto, tiempo al primer token,
+  tokens de entrada/salida en `mlflow.chat.tokenUsage`, tokens/s, modo) e hijos `TASK` (el motor),
+  `RETRIEVER` (nombres de los documentos), `LLM` (cada llamada al modelo) y `TOOL` (cada herramienta);
+  estado OK/ERROR con el mensaje y las cancelaciones marcadas (`lucia.outcome = cancelled`). Agrupación
+  por `session.id` (id aleatorio de la conversación) y `user.id` (id aleatorio de la instalación).
+  Las congelaciones de la ventana van como traza propia. Se mandan en **OTLP/HTTP protobuf** a
+  `/v1/traces` con `x-mlflow-experiment-id` (MLflow **3.6.0** o posterior; la 3.6 solo acepta protobuf),
+  escrito a mano en `Otlp.cs`, sin dependencias.
+- **Complemento**: una ejecución (run) por sesión y configuración con los parámetros del motor, métricas
+  por pregunta y `events.log` (el registro de diagnóstico) por el proxy de artefactos si el servidor lo
+  tiene. Con MLflow 2.x (o anterior a 3.6), sin trazas: las preguntas van solo como métricas de la
+  ejecución; «Probar la conexión» lo dice, según `GET /version`.
+- **El texto** de preguntas, respuestas, documentos y herramientas solo sale con la casilla «Enviar
+  también el texto» (apagada y con aviso). Ver [PRIVACY.md](PRIVACY.md).
+- **Probado contra**: MLflow **3.17.2** (servidor local `mlflow server`, sin autenticación, 2026-10-21): trazas con sus tipos y padres, sesión y usuario, uso de tokens, entradas y salidas con y sin texto, la ejecución con `events.log`; MLflow 2.x, 3.6 a 3.16 y la autenticación, contra el servidor de mentira de las pruebas.
+- **Probarlo contra un MLflow propio**: `mlflow server --host 127.0.0.1 --port 5055`; en Lucia, Ajustes ›
+  MLflow, dirección `http://127.0.0.1:5055`, «Probar la conexión», activar y preguntar algo; en la web de
+  MLflow, experimento «sOC Lucia» › *Traces*. Sin la interfaz: `LUCIA_MLFLOW_URI=http://127.0.0.1:5055
+  dotnet test Lucia.Tests --filter MlflowRealServer` (y `LUCIA_MLFLOW_TEXT=1` para mandar texto).
+
 ## Privacidad
 
 Las conversaciones y la IA se quedan en el PC. La red se usa solo para descargar el motor y el
-modelo que elijas, y solo cuando lo pides. Sin cuenta, sin anuncios, sin rastreadores ni analítica.
+modelo que elijas, y solo cuando lo pides (y, si lo activas, para MLflow: ver [PRIVACY.md](PRIVACY.md)). Sin cuenta, sin anuncios, sin rastreadores ni analítica.
 La puerta para editores escucha únicamente en `127.0.0.1` y rechaza (`401`) cualquier petición sin
 el token que se muestra en Ajustes.
 
@@ -129,10 +157,10 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-10-21): **338 pruebas**, todas pasan; el banco tarda **unos 34 s** (sin
-contar la compilación). Cobertura de líneas: **91,3 %** de lo instrumentado (se instrumenta el
-ensamblado `sOCLucia` entero) y **91,3 %** sobre toda la app (4206 de 4608 líneas ejecutables de
-C#; baja desde el 92,2 % porque ya está dentro la parte de MLflow que aún no se ve en Ajustes).
+`Lucia.Tests` (xUnit, 2026-10-21): **370 pruebas**, todas pasan; el banco tarda **unos 38 s** (sin
+contar la compilación). Cobertura de líneas: **92,8 %** de lo instrumentado (se instrumenta el
+ensamblado `sOCLucia` entero) y **92,8 %** sobre toda la app (4549 de 4903 líneas ejecutables de
+C#; el 2026-10-03, 91,5 %).
 
 Se prueba la lógica (documentos de texto, HTML, RTF, .docx y PDF; herramientas del agente; el
 cliente de chat en streaming; la puerta de editores; descargas con reanudación y SHA-256; catálogo

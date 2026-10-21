@@ -11,7 +11,15 @@ namespace SocLucia.Tests;
 /// <summary>Un servidor MLflow de mentira, en memoria: experimentos, runs, log-batch, update y el proxy de artefactos.</summary>
 internal sealed class FakeMlflow : HttpMessageHandler
 {
-    public sealed record Call(string Method, string Path, JsonObject? Body, string? Auth, byte[]? Raw);
+    public sealed record Call(string Method, string Path, JsonObject? Body, string? Auth, byte[]? Raw, Dictionary<string, string>? Headers = null);
+
+    /// <summary>Lo que contesta /version (null: 404, como Databricks o un proxy).</summary>
+    public string? Version { get; set; } = "3.7.0";
+    /// <summary>Si /v1/traces acepta trazas (MLflow 3.6+).</summary>
+    public bool Traces { get; set; } = true;
+
+    /// <summary>Todos los tramos recibidos en /v1/traces, ya leidos del protobuf.</summary>
+    public List<OtlpSpan> Spans { get { lock (Calls) return Calls.Where(c => c.Path == "/v1/traces" && c.Raw is not null).SelectMany(c => OtlpReader.Spans(c.Raw!)).ToList(); } }
 
     public List<Call> Calls { get; } = [];
     public bool ExperimentExists { get; set; }
@@ -34,11 +42,21 @@ internal sealed class FakeMlflow : HttpMessageHandler
         if (Delay > TimeSpan.Zero) await Task.Delay(Delay, cancel);
         var raw = request.Content is null ? null : await request.Content.ReadAsByteArrayAsync(cancel);
         JsonObject? body = null;
-        if (raw is { Length: > 0 } && request.Method != HttpMethod.Put) body = JsonNode.Parse(raw) as JsonObject;
         var path = request.RequestUri!.AbsolutePath;
-        lock (Calls) Calls.Add(new Call(request.Method.Method, path + request.RequestUri.Query, body, request.Headers.Authorization?.ToString(), raw));
+        if (raw is { Length: > 0 } && request.Method != HttpMethod.Put && path != "/v1/traces") body = JsonNode.Parse(raw) as JsonObject;
+        var headers = request.Headers.ToDictionary(h => h.Key.ToLowerInvariant(), h => string.Join(",", h.Value));
+        if (request.Content?.Headers.ContentType is { } type) headers["content-type"] = type.ToString();
+        lock (Calls) Calls.Add(new Call(request.Method.Method, path + request.RequestUri.Query, body, request.Headers.Authorization?.ToString(), raw, headers));
         if (Override?.Invoke(request) is { } custom) return custom;
         HttpResponseMessage Json(int status, string json) => new((HttpStatusCode)status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+        if (path == "/version")
+            return Version is null ? new HttpResponseMessage(HttpStatusCode.NotFound) : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Version) };
+        if (path == "/v1/traces")
+        {
+            if (!Traces) return new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("<html>404</html>") };
+            OtlpReader.Spans(raw!);   // si no se puede leer, la prueba revienta aqui
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([]) };
+        }
         if (path.EndsWith("/experiments/get-by-name", StringComparison.Ordinal))
             return ExperimentExists ? Json(200, """{"experiment":{"experiment_id":"7","name":"x"}}""")
                 : Json(404, """{"error_code":"RESOURCE_DOES_NOT_EXIST","message":"no existe"}""");
@@ -97,11 +115,11 @@ public class MlflowApiTests
     }
 
     [Fact]
-    public void El_token_manda_sobre_usuario_y_contrasena()
+    public async Task El_token_manda_sobre_usuario_y_contrasena()
     {
         var fake = new FakeMlflow { ExperimentExists = true };
         var api = new MlflowApi(new HttpClient(fake), Base, "ana", "clave", "tok-123");
-        _ = api.FindExperimentAsync("x", default).Result;
+        await api.FindExperimentAsync("x", default);
         Assert.Equal("Bearer tok-123", fake.Calls.Single().Auth);
     }
 
@@ -299,6 +317,7 @@ public class MlflowTelemetryTests : IDisposable
     [Fact]
     public async Task Con_la_casilla_el_texto_va_como_etiquetas_recortadas()
     {
+        _fake.Version = "2.17.2";   // sin trazas: el texto va en la ejecucion
         _telemetry.Configure(Settings(sendText: true));
         _telemetry.Request(Config, Record() with { Answer = new string('y', 9000) });
         await Drained();
@@ -358,7 +377,7 @@ public class MlflowTelemetryTests : IDisposable
         while (!_telemetry.Failing && waited.ElapsedMilliseconds < 5000) await Task.Delay(20);
         await Task.Delay(800);   // varios reintentos
         var log = File.ReadAllText(DiagLog.Current);
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(log, "MLflow no responde").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(log, "MLflow no responde"));
         _fake.Down = false;
         await Drained();
         Assert.Contains("MLflow vuelve a responder", File.ReadAllText(DiagLog.Current));

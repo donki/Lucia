@@ -765,6 +765,7 @@ public partial class SettingsWindow : Window
         MlflowTextCheck.Content = Loc.Get("MlflowSendText");
         MlflowTextCheck.IsChecked = m.SendText;
         MlflowTextWarning.Text = Loc.Get("MlflowSendTextWarning");
+        MlflowTextNote.Text = Loc.Get("MlflowTextNote");
         MlflowTestButton.Content = IconLabel("\uE703", Loc.Get("MlflowTest"));
     }
 
@@ -787,6 +788,7 @@ public partial class SettingsWindow : Window
             return;
         }
         if (on) OnMlflowUriChanged(sender, e);
+        if (on && Ml.InstallId.Length == 0) Ml.InstallId = MlflowSettings.NewInstallId();
         Ml.Enabled = on;
         SaveMlflow(on ? "activado" : "apagado");
     }
@@ -867,9 +869,11 @@ public partial class SettingsWindow : Window
             var experiment = MlflowExperimentBox.Text.Trim().Length > 0 ? MlflowExperimentBox.Text.Trim() : MlflowSettings.DefaultExperiment;
             var (user, password, token) = (MlflowUserBox.Text.Trim(), MlflowPasswordBox.Password, MlflowTokenBox.Password.Trim());
             var http = Services.Mlflow.MlflowTelemetry.Current.Http;
-            var (result, detail) = await Task.Run(() => Services.Mlflow.MlflowApi.CheckAsync(http, uri, experiment, user, password, token, CancellationToken.None));
+            var (result, detail, version, mode) = await Task.Run(() => Services.Mlflow.MlflowApi.CheckFullAsync(http, uri, experiment, user, password, token, CancellationToken.None));
             var text = Loc.Format("MlflowCheck_" + result, experiment, detail ?? string.Empty);
-            DiagLog.Write("mlflow", $"prueba de conexion: {result}{(detail is null || result is Services.Mlflow.MlflowCheck.Ok ? string.Empty : " " + detail)}");
+            if (result is Services.Mlflow.MlflowCheck.Ok or Services.Mlflow.MlflowCheck.OkWillCreate)
+                text += " " + Loc.Format("MlflowMode_" + mode, version?.ToString() ?? "?");
+            DiagLog.Write("mlflow", $"prueba de conexion: {result}{(detail is null || result is Services.Mlflow.MlflowCheck.Ok ? string.Empty : " " + detail)}, version {version?.ToString() ?? "?"}, modo {mode}");
             MlflowTestStatus.Text = text;
             var ok = result is Services.Mlflow.MlflowCheck.Ok or Services.Mlflow.MlflowCheck.OkWillCreate;
             MlflowTestStatus.SetResourceReference(TextBlock.ForegroundProperty, ok ? "Success" : "Danger");

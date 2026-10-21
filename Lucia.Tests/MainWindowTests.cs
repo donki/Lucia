@@ -244,6 +244,43 @@ public sealed class MainWindowTests : UiTest
     }
 
     [Fact]
+    public async Task ConMlflow_CadaPreguntaEsUnaTrazaDeGenAI_SinTextoPorDefecto()
+    {
+        var previous = SocLucia.Services.Mlflow.MlflowTelemetry.Current;
+        var fake = new FakeMlflow();
+        var telemetry = new SocLucia.Services.Mlflow.MlflowTelemetry(fake, TimeSpan.FromMilliseconds(50)) { ConfigNow = App.RunConfig };
+        SocLucia.Services.Mlflow.MlflowTelemetry.Current = telemetry;
+        try
+        {
+            telemetry.Configure(new MlflowSettings { Enabled = true, TrackingUri = "http://mlflow.test:5000", InstallId = "lucia-prueba" });
+            Net.Answers.Enqueue(new FakeHttp.Answer("Una respuesta privada"));
+            string? conversation = null;
+            Ui.Run(() =>
+            {
+                var w = Open();
+                Ask(w, "una pregunta privada");
+                conversation = ThreadStore.LoadAll().Single().Id;
+            });
+            Assert.True(await telemetry.DrainAsync(TimeSpan.FromSeconds(10)));
+            var spans = fake.Spans;
+            var root = spans.Single(sp => sp.ParentId is null);
+            Assert.Equal(("chat", "CHAT_MODEL"), (root.Name, root.Type));
+            Assert.Equal(conversation, root.Attributes["session.id"]);
+            Assert.Equal("lucia-prueba", root.Attributes["user.id"]);
+            Assert.Equal("ok", root.Attributes["lucia.outcome"]);
+            Assert.Contains(spans, sp => sp.Type == "TASK" && sp.ParentId == root.SpanId);       // el motor
+            Assert.Contains(spans, sp => sp.Type == "RETRIEVER" && sp.ParentId == root.SpanId);  // los documentos
+            Assert.Contains(spans, sp => sp.Type == "LLM" && sp.ParentId == root.SpanId);        // la llamada al modelo
+            Assert.DoesNotContain("privada", System.Text.Encoding.UTF8.GetString(fake.Of("/v1/traces").Single().Raw!));
+        }
+        finally
+        {
+            telemetry.Dispose();
+            SocLucia.Services.Mlflow.MlflowTelemetry.Current = previous;
+        }
+    }
+
+    [Fact]
     public void MientrasCargaLaIA_ElIndicadorLoDice_YLuegoContesta()
     {
         Net.Healthy = false;   // llama-server arrancado pero cargando el modelo
