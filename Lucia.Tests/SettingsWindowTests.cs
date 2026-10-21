@@ -39,6 +39,11 @@ public sealed class SettingsWindowTests : UiTest
             Assert.Contains(Paths.Root, Ui.Find<TextBlock>(s, "DiagnosticsText").Text);
             Assert.Equal(Loc.Format("DocsCount", 0), Ui.Find<TextBlock>(s, "DocsCount").Text);
             Assert.Equal(Loc.Get("TasksEmpty"), Ui.Find<TextBlock>(s, "TasksEmpty").Text);
+            // Ninguna etiqueta enseña una clave interna (pasaba con «Perm_Free»); lo libre se explica, no se elige.
+            var texts = Ui.All<TextBlock>(s).Select(t => new System.Windows.Documents.TextRange(t.ContentStart, t.ContentEnd).Text).ToList();
+            Assert.DoesNotContain(texts, t => System.Text.RegularExpressions.Regex.IsMatch(t, @"\b(Perm|PermHint|PermIntro)_\w+"));
+            Assert.Contains(Loc.Get("PermHint_Free"), texts);
+            Assert.DoesNotContain(Ui.All<RadioButton>(s), r => r.GroupName == "perm_Free");
             Loc.Use("en");
             Assert.Equal(Loc.Get("SettingsTitle"), s.Title);
             Loc.Use("es");
@@ -169,6 +174,98 @@ public sealed class SettingsWindowTests : UiTest
             Ui.WaitFor(() => Ui.Find<TextBlock>(s, "SearchHint").Text.StartsWith(Loc.Format("SearchHfError", "")[..5], StringComparison.Ordinal));
             s.SearchForTest("*bueno");
             Ui.WaitFor(() => Button(s, "SearchButton").IsEnabled && Ui.Find<StackPanel>(s, "SearchList").Children.Count == 4);
+        }));
+    }
+
+    private static void Leave(TextBox box) => box.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent));
+
+    [Fact]
+    public void Ajustes_RespuestasYContexto_SeValidanAlSalir_YElMotorArrancaConElNuevoContexto()
+    {
+        var args = Path.Combine(Sandbox.NewFolder("fakellama-args"), "args.log");
+        Environment.SetEnvironmentVariable("FAKE_LLAMA_LOG", args);
+        try
+        {
+            Ui.Run(() =>
+            {
+                var main = new MainWindow();
+                main.Show();
+                Ui.WaitFor(() => File.Exists(args) && File.ReadAllText(args).Contains("|-c|") && App.Engine.State == EngineState.Ready);
+                Assert.Contains("|-c|8192|", File.ReadAllText(args));
+                Settings(s =>
+                {
+                    Assert.Equal(Loc.Get("LimitsTitle"), Ui.Find<TextBlock>(s, "LimitsTitle").Text);
+                    var answer = Ui.Find<TextBox>(s, "AnswerTokensBox");
+                    Assert.Equal("2048", answer.Text);
+                    answer.Text = "4 096";
+                    Leave(answer);
+                    Assert.Equal(4096, AppSettings.Current.MaxAnswerTokens);
+                    Assert.Equal("4096", answer.Text);
+                    // Lo que no vale se dice (con la razon y el rango) y no se guarda (General 6.8 y 6.9).
+                    string? message = null;
+                    Ui.Answer("Ok", m => message = m);
+                    answer.Text = "100";
+                    Leave(answer);
+                    Assert.Equal(Loc.Format("NumberOutOfRange", "100", TokenLimits.AnswerMin, TokenLimits.AnswerMax), message);
+                    Assert.Equal(4096, AppSettings.Current.MaxAnswerTokens);
+                    Assert.Equal("4096", answer.Text);
+                    // Intro tambien lo aplica.
+                    answer.Text = "3000";
+                    Ui.Call(s, "OnLimitKey", answer, new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(s)!, 0, Key.Enter) { RoutedEvent = Keyboard.KeyDownEvent });
+                    Assert.Equal(3000, AppSettings.Current.MaxAnswerTokens);
+
+                    var context = Ui.Find<TextBox>(s, "ContextTokensBox");
+                    Assert.Equal("8192", context.Text);
+                    var hint = Ui.Find<TextBlock>(s, "ContextTokensHint").Text;
+                    Assert.StartsWith(Loc.Format("ContextTokensHint", TokenLimits.ContextMin, TokenLimits.ContextUnknownMax, TokenLimits.ContextDefault), hint);   // el modelo de prueba no tiene cabecera
+                    Assert.EndsWith(Loc.Get("ContextRestart"), hint);
+                    Ui.Answer("Ok", m => message = m);
+                    context.Text = "65536";
+                    Leave(context);
+                    Assert.Equal(Loc.Format("NumberOutOfRange", "65536", TokenLimits.ContextMin, TokenLimits.ContextUnknownMax), message);
+                    Assert.Equal(8192, AppSettings.Current.ContextTokens);
+                    context.Text = "16384";
+                    Ui.Click(Button(s, "CloseButton"));   // al cerrar tambien se aplica lo escrito
+                    Assert.Equal(16384, AppSettings.Current.ContextTokens);
+                }, main);
+                Assert.Equal(EngineState.Ready, App.Engine.State);   // cambiar el contexto no corta nada en el momento…
+                Ui.Wait(App.Engine.EnsureReadyAsync(null, CancellationToken.None));   // …la siguiente peticion lo reinicia con el nuevo
+                Ui.WaitFor(() => File.ReadAllText(args).Contains("|-c|16384|"));   // el llama-server de mentira apunta sus argumentos al arrancar
+            });
+            Assert.Contains("contexto 8192 -> 16384", File.ReadAllText(DiagLog.Current));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKE_LLAMA_LOG", null);
+            AppSettings.Current.ContextTokens = TokenLimits.ContextDefault;
+            AppSettings.Current.MaxAnswerTokens = TokenLimits.AnswerDefault;
+        }
+    }
+
+    [Fact]
+    public void Diagnostico_CopiarLosRegistros_YAbrirSuCarpeta()
+    {
+        DiagLog.Write("prueba", "algo que paso");
+        Ui.Run(() => Settings(s =>
+        {
+            Assert.Equal(Loc.Get("LogsHint"), Ui.Find<TextBlock>(s, "LogsHint").Text);
+            Ui.Click(Button(s, "OpenLogsFolderButton"));
+            Assert.Contains(Paths.Logs, Fake.Opened);
+            string? message = null;
+            Ui.Answer("Ok", m => message = m);
+            Ui.Click(Button(s, "CopyLogsButton"));
+            Ui.WaitFor(() => Ui.Pending == 0 && Button(s, "CopyLogsButton").IsEnabled);
+            var zip = Assert.Single(Fake.ClipboardFileList!);
+            Assert.True(File.Exists(zip));
+            Assert.Equal(Loc.Format("LogsCopied", Path.GetFileName(zip)), message);
+            using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
+            using var reader = new StreamReader(archive.GetEntry("resumen.txt")!.Open());
+            var summary = reader.ReadToEnd();
+            Assert.Contains("sOC Lucia", summary);
+            Assert.Contains("Contexto: ajustado 8192", summary);
+            Assert.Contains("Prueba", summary);
+            Assert.DoesNotContain(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), summary, StringComparison.OrdinalIgnoreCase);
+            Assert.NotNull(archive.GetEntry("diagnostics.log"));
         }));
     }
 

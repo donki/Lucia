@@ -44,6 +44,11 @@ public partial class SettingsWindow : Window
         SearchLabel.Text = Loc.Get("SearchHf");
         SearchBox.ToolTip = SearchButton.ToolTip = Loc.Get("SearchHfTip");
         if (_hits is null) SearchHint.Text = Loc.Get("SearchHfHint");
+        LimitsTitle.Text = Loc.Get("LimitsTitle");
+        LimitsHint.Text = Loc.Get("LimitsHint");
+        AnswerTokensLabel.Text = Loc.Get("AnswerTokensLabel");
+        ContextTokensLabel.Text = Loc.Get("ContextTokensLabel");
+        PaintLimits();
         InstructionsTitle.Text = Loc.Get("InstructionsTitle");
         InstructionsHint.Text = Loc.Get("InstructionsHint");
         InstructionsBox.Text = s.Instructions;
@@ -100,8 +105,11 @@ public partial class SettingsWindow : Window
         PaintLanguageButtons();
         DiagnosticsTitle.Text = Loc.Get("DiagnosticsTitle");
         DiagnosticsText.Text = Loc.Format("Accelerator", EnginePin.Build, App.Engine.Accelerator) + Environment.NewLine + Paths.Root;
-        OpenLogButton.Content = Loc.Get("OpenEngineLog");
-        OpenDataButton.Content = Loc.Get("OpenDataFolder");
+        OpenLogButton.Content = IconLabel("\uE9F9", Loc.Get("OpenEngineLog"));
+        OpenDataButton.Content = IconLabel("\uE8B7", Loc.Get("OpenDataFolder"));
+        LogsHint.Text = Loc.Get("LogsHint");
+        CopyLogsButton.Content = IconLabel("\uE8C8", Loc.Get("CopyLogs"));
+        OpenLogsFolderButton.Content = IconLabel("\uE838", Loc.Get("OpenLogsFolder"));
     }
 
     // ------------------------------------------------------------------ la IA
@@ -619,6 +627,12 @@ public partial class SettingsWindow : Window
             text.Children.Add(title);
             text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Get("PermHint_" + resource), TextWrapping = TextWrapping.Wrap });
             grid.Children.Add(text);
+            if (resource == Resource.Free)
+            {
+                // Lo que no sale de Lucia siempre esta permitido (AppSettings.PermissionFor): se explica, no se elige.
+                PermList.Children.Add(grid);
+                continue;
+            }
             var choices = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
             var current = s.PermissionFor(resource);
             foreach (var permission in new[] { Permission.Ask, Permission.Allow, Permission.Deny })
@@ -654,6 +668,135 @@ public partial class SettingsWindow : Window
     private void OnStartupChanged(object sender, RoutedEventArgs e) => WindowsStartup.Set(StartupCheck.IsChecked == true);
 
     private void OnOpenLog(object sender, RoutedEventArgs e) => Open(Paths.EngineLog);
+
+    private void OnOpenLogsFolder(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(Paths.Logs);
+        Open(Paths.Logs);
+    }
+
+    /// <summary>
+    /// Un zip con los registros y un resumen del PC y de la configuracion, copiado al portapapeles
+    /// como fichero: se pega con Ctrl+V en un correo o un chat. Se queda tambien en la carpeta de registros.
+    /// </summary>
+    private async void OnCopyLogs(object sender, RoutedEventArgs e)
+    {
+        CopyLogsButton.IsEnabled = false;
+        try
+        {
+            DiagLog.Write("app", "se copian los registros");
+            var summary = DiagnosticsSummary();
+            var zip = await Task.Run(() => DiagLog.Bundle(summary));
+            Desktop.Current.SetClipboardFiles([zip]);
+            PromptWindow.Alert(this, Loc.Get("CopyLogs"), Loc.Format("LogsCopied", Path.GetFileName(zip)));
+        }
+        catch (Exception ex)
+        {
+            DiagLog.Write("app", "no se han podido copiar los registros: " + DiagLog.Describe(ex));
+            PromptWindow.Alert(this, Loc.Get("Error"), Loc.Format("LogsCopyFailed", ex.Message));
+        }
+        finally
+        {
+            CopyLogsButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>Lo que hace falta para entender un registro: version, PC, IA y ajustes de longitud (sin rutas ni nada personal).</summary>
+    internal static string DiagnosticsSummary()
+    {
+        var s = AppSettings.Current;
+        var pc = TokenLimits.Pc;
+        var range = TokenLimits.RangeFor(s);
+        long size = 0;
+        try { if (s.HasModel) size = new FileInfo(s.ModelPath!).Length; } catch (Exception) { }
+        var gguf = GgufInfo.Read(s.ModelPath);
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"sOC Lucia {App.Version} — {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"Windows {Environment.OSVersion.Version}, .NET {Environment.Version}");
+        sb.AppendLine($"CPU: {pc.Cpu} ({pc.Cores} hilos), RAM {Human(pc.RamBytes)}; grafica: {pc.Gpu ?? "-"} ({Human(pc.VramBytes)})");
+        sb.AppendLine($"Motor: llama.cpp {EnginePin.Build}, {App.Engine.Accelerator}, estado {App.Engine.State}");
+        sb.AppendLine($"IA: {s.ModelName ?? "-"} ({(s.HasModel ? Path.GetFileName(s.ModelPath) : "-")}, {Human(size)}), vision {(EngineHost.VisionAvailable(s) ? "si" : "no")}");
+        sb.AppendLine($"GGUF: {(gguf is null ? "no se puede leer" : $"{gguf.Architecture}, contexto de entrenamiento {gguf.ContextLength}, capas {gguf.Layers}, cabezas KV {gguf.HeadsKv}, {gguf.KvBytesPerToken} bytes de cache por token")}");
+        sb.AppendLine($"Contexto: ajustado {s.ContextTokens}, en uso {TokenLimits.Context(s)}, maximo {range.Max}, rapido hasta {range.Fast?.ToString() ?? "?"}");
+        sb.AppendLine($"Tokens por respuesta: {TokenLimits.Answer(s)}; pensar {(s.Thinking ? "si" : "no")}; puerta de editores {(s.EditorDoor.Enabled ? "activa" : "apagada")}");
+        sb.AppendLine($"Congelaciones vistas en esta sesion: {App.Watchdog?.Freezes ?? 0}");
+        return sb.ToString();
+    }
+
+    /// <summary>Un boton con su icono plano (Segoe Fluent Icons, el mismo en toda la aplicacion) y su texto.</summary>
+    private static StackPanel IconLabel(string glyph, string text)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        panel.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
+        return panel;
+    }
+
+    // ------------------------------------------------------------------ respuestas y contexto
+
+    private void PaintLimits()
+    {
+        var s = AppSettings.Current;
+        var range = TokenLimits.RangeFor(s);
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        AnswerTokensBox.Text = TokenLimits.Answer(s).ToString(culture);
+        AnswerTokensHint.Text = Loc.Format("AnswerTokensHint", TokenLimits.AnswerMin, TokenLimits.AnswerMax, TokenLimits.AnswerDefault);
+        ContextTokensBox.Text = s.ContextTokens.ToString(culture);
+        var hint = Loc.Format("ContextTokensHint", TokenLimits.ContextMin, range.Max, TokenLimits.ContextDefault);
+        if (range.Fast is { } fast) hint += " " + Loc.Format("ContextFast", fast);
+        if (range.Trained is { } trained) hint += " " + Loc.Format("ContextTrained", trained);
+        if (s.ContextTokens > range.Max) hint += " " + Loc.Format("ContextCapped", range.Max);
+        ContextTokensHint.Text = hint + " " + Loc.Get("ContextRestart");
+    }
+
+    private void OnLimitKey(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key is not (System.Windows.Input.Key.Enter or System.Windows.Input.Key.Return)) return;
+        e.Handled = true;
+        if (sender == AnswerTokensBox) OnAnswerTokensChanged(sender, e);
+        else OnContextTokensChanged(sender, e);
+    }
+
+    /// <summary>Se aplica al salir de la casilla (y con Intro); si no vale, se dice por que y se deja el valor de antes (General 6.8).</summary>
+    private void OnAnswerTokensChanged(object sender, RoutedEventArgs e)
+    {
+        var s = AppSettings.Current;
+        if (AnswerTokensBox.Text.Trim() == TokenLimits.Answer(s).ToString(System.Globalization.CultureInfo.InvariantCulture)) return;
+        if (TokenLimits.Parse(AnswerTokensBox.Text, TokenLimits.AnswerMin, TokenLimits.AnswerMax) is not { } value)
+        {
+            PromptWindow.Alert(this, Loc.Get("AnswerTokensLabel"), Loc.Format("NumberOutOfRange", AnswerTokensBox.Text.Trim(), TokenLimits.AnswerMin, TokenLimits.AnswerMax));
+            PaintLimits();
+            return;
+        }
+        if (value != s.MaxAnswerTokens)
+        {
+            s.MaxAnswerTokens = value;
+            s.Save();
+            DiagLog.Write("ajustes", $"tokens por respuesta: {value}");
+        }
+        PaintLimits();
+    }
+
+    private void OnContextTokensChanged(object sender, RoutedEventArgs e)
+    {
+        var s = AppSettings.Current;
+        if (ContextTokensBox.Text.Trim() == s.ContextTokens.ToString(System.Globalization.CultureInfo.InvariantCulture)) return;
+        var range = TokenLimits.RangeFor(s);
+        if (TokenLimits.Parse(ContextTokensBox.Text, TokenLimits.ContextMin, range.Max) is not { } value)
+        {
+            PromptWindow.Alert(this, Loc.Get("ContextTokensLabel"), Loc.Format("NumberOutOfRange", ContextTokensBox.Text.Trim(), TokenLimits.ContextMin, range.Max));
+            PaintLimits();
+            return;
+        }
+        if (value != s.ContextTokens)
+        {
+            s.ContextTokens = value;
+            s.Save();
+            // El motor no se corta aqui (podria estar contestando): se reinicia con el nuevo contexto en la siguiente pregunta.
+            DiagLog.Write("ajustes", $"contexto: {value} (en uso al reiniciar el motor: {TokenLimits.Context(s)})");
+        }
+        PaintLimits();
+    }
 
     private void OnOpenData(object sender, RoutedEventArgs e) => Open(Paths.Root);
 
@@ -765,6 +908,8 @@ public partial class SettingsWindow : Window
     private void OnClose(object sender, RoutedEventArgs e)
     {
         OnInstructionsChanged(sender, e);
+        OnAnswerTokensChanged(sender, e);
+        OnContextTokensChanged(sender, e);
         Close();
     }
 

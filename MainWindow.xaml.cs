@@ -670,6 +670,9 @@ public partial class MainWindow : Window
             _answering = new CancellationTokenSource();
             StopButton.Visibility = Visibility.Visible;
             var cancel = _answering.Token;
+            var question = thread.Messages.LastOrDefault(m => m.Role == "user");
+            DiagLog.Write("chat", $"pregunta enviada en la conversacion {thread.Id}: {question?.Content.Length ?? 0} caracteres, {question?.Attachments?.Count ?? 0} adjuntos" + (thread.TaskId is not null ? ", tarea programada" : string.Empty));
+            DiagLog.SetPhase("preparando la vision");
             try
             {
                 await EnsureVisionAsync(thread, cancel);
@@ -689,6 +692,7 @@ public partial class MainWindow : Window
                 _answering = null;
                 StopButton.Visibility = Visibility.Collapsed;
                 ThreadStore.Save(thread);
+                DiagLog.SetPhase("inactiva");
             }
             if (thread.TaskId is not null) FinishedTask(thread);
             if (_pendingAnswers.Count == 0) break;
@@ -755,56 +759,73 @@ public partial class MainWindow : Window
             RepaintBubble(bubble, string.Empty, null, streaming: true);
             var answer = new StoredMessage { Role = "assistant", Content = string.Empty };
             IReadOnlyList<ToolCall>? calls;
+            string? finish;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            DiagLog.Write("chat", $"vuelta {round + 1} ({thread.Id}): modo {(thread.WorkMode ? "agente" : "preguntas")}, pensar {(settings.Thinking ? "si" : "no")}, tope {TokenLimits.Answer(settings)} tokens");
+            DiagLog.SetPhase("esperando el motor");
             try
             {
                 // Generar una imagen mata el motor de texto (no caben los dos en la grafica) y al volver
                 // el puerto es otro: se vuelve a pedir la direccion en cada vuelta. Si el motor sigue en
                 // pie esto no cuesta nada; si no, lo levanta otra vez (fuera del hilo de la interfaz).
                 var baseUrl = await EngineReadyAsync(cancel);
+                DiagLog.Write("chat", $"motor listo a los {clock.ElapsedMilliseconds} ms");
+                DiagLog.SetPhase("preparando la pregunta (documentos y adjuntos)");
                 live.Advance(AnswerPhase.Preparing);
                 // Los documentos (PDF y .docx se leen y se trocean) y los adjuntos, tambien fuera.
                 context ??= await Task.Run(() => ToolBox.ContextPrompt(settings, question), cancel);
                 var history = thread.Messages.TakeLast(30).ToList();   // copia: la conversacion puede crecer mientras
                 var system = SystemPrompt(settings, thread.WorkMode, context);
                 var messages = await Task.Run(() => MessagesFor(system, history), cancel);
+                DiagLog.Write("chat", $"pregunta preparada a los {clock.ElapsedMilliseconds} ms: {messages.Count} mensajes, {messages.Sum(m => m.Content.Length)} caracteres, {messages.Sum(m => m.Images?.Count ?? 0)} imagenes");
+                DiagLog.SetPhase("esperando el primer trozo de la IA");
                 live.Advance(AnswerPhase.Waiting);
-                await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, settings.Thinking, settings.MaxAnswerTokens, tools, live, cancel));
+                await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, settings.Thinking, TokenLimits.Answer(settings), tools, live, cancel));
                 var got = live.Read();
                 answer.Content = got.Content.Trim();
                 answer.Reasoning = got.Reasoning?.Trim();
                 calls = got.Calls;
+                finish = got.Finish;
+                LogPiece(live, clock);
                 if (answer.Content.Length == 0 && answer.Reasoning is not null && calls is null)
                 {
                     // Se ha gastado el tope razonando y no ha llegado a contestar: otra vuelta sin pensar,
                     // para que responda directo. El razonamiento se conserva plegado.
                     Log($"respuesta vacia tras razonar (fin: {got.Finish}); se repite sin pensamiento");
+                    DiagLog.Write("chat", $"solo razonamiento ({answer.Reasoning.Length} caracteres, fin {got.Finish}) a los {clock.ElapsedMilliseconds} ms: se repite sin pensar");
+                    DiagLog.SetPhase("esperando el primer trozo de la IA (sin pensar)");
                     live = new PendingAnswer(answer.Reasoning);
                     live.Advance(AnswerPhase.Waiting);
                     BeginWait(bubble, live);
                     RepaintBubble(bubble, string.Empty, answer.Reasoning, streaming: true);
-                    await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, false, settings.MaxAnswerTokens, tools, live, cancel));
+                    await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, false, TokenLimits.Answer(settings), tools, live, cancel));
                     var again = live.Read();
                     answer.Content = again.Content.Trim();
                     calls = again.Calls;
+                    finish = again.Finish;
+                    LogPiece(live, clock);
                 }
             }
             catch (Exception ex) when (ex is OperationCanceledException || cancel.IsCancellationRequested)
             {
                 // Parar: lo que ya se habia escrito se queda; si no habia nada, la burbuja se va.
+                DiagLog.Write("chat", $"cancelada a los {clock.ElapsedMilliseconds} ms ({live.Read().Content.Length} caracteres escritos; fase {live.Phase})");
                 EndWait();
                 answer.Content = live.Read().Content.Trim();
                 if (answer.Content.Length > 0) { RepaintBubble(bubble, answer.Content, null, false); thread.Messages.Add(answer); }
                 else Messages.Children.Remove(bubble);
                 throw new OperationCanceledException(cancel);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // El motor no arranca o el servidor falla: el aviso lo pone AnswerAsync, sin la burbuja de espera.
+                DiagLog.Write("chat", $"error a los {clock.ElapsedMilliseconds} ms (fase {live.Phase}): {DiagLog.Describe(ex)}");
                 EndWait();
                 Messages.Children.Remove(bubble);
                 throw;
             }
             EndWait();
+            DiagLog.Write("chat", $"respuesta acabada a los {clock.ElapsedMilliseconds} ms: {answer.Content.Length} caracteres, razonamiento {answer.Reasoning?.Length ?? 0}, herramientas {calls?.Count ?? 0}, fin {finish ?? "-"}");
             if (calls is { Count: > 0 })
             {
                 answer.ToolCalls = new JsonArray(calls.Select(c => (JsonNode)c.ToJson()).ToArray()).ToJsonString();
@@ -880,10 +901,14 @@ public partial class MainWindow : Window
             if (now.Version == shown || (now.Content.Length == 0 && now.Reasoning is null))
                 continue;
             var clock = System.Diagnostics.Stopwatch.StartNew();
+            DiagLog.SetPhase($"repintando la respuesta ({now.Content.Length} caracteres)");
             RepaintBubble(bubble, now.Content, now.Reasoning, streaming: true);
             bubble.UpdateLayout();   // medir tambien la maquetacion, que es lo que mas pesa
             interval = PendingAnswer.NextRepaint(clock.Elapsed);
             shown = now.Version;
+            if (clock.ElapsedMilliseconds > 250)
+                DiagLog.Write("chat", $"repintar la respuesta ({now.Content.Length} caracteres) tardo {clock.ElapsedMilliseconds} ms; el siguiente, en {interval.TotalMilliseconds:0} ms");
+            DiagLog.SetPhase(now.Content.Length > 0 ? "escribiendo la respuesta" : "razonando");
         }
         await pump;   // errores y cancelacion
     }
@@ -939,7 +964,15 @@ public partial class MainWindow : Window
                 {
                     // Leer un PDF, buscar ficheros o sacar el texto de una web no congela la ventana; lo
                     // que tiene que ir en el hilo de la interfaz (el portapapeles) ya vuelve a el solo.
-                    output = await Task.Run(() => tool.Run(args, cancel), cancel);
+                    DiagLog.SetPhase($"herramienta {tool.Name}");
+                    var toolClock = System.Diagnostics.Stopwatch.StartNew();
+                    try
+                    {
+                        output = await Task.Run(() => tool.Run(args, cancel), cancel);
+                        DiagLog.Write("herramienta", $"{tool.Name}: bien en {toolClock.ElapsedMilliseconds} ms ({output.Length} caracteres)");
+                    }
+                    catch (OperationCanceledException) { DiagLog.Write("herramienta", $"{tool.Name}: cancelada a los {toolClock.ElapsedMilliseconds} ms"); throw; }
+                    catch (Exception ex) { DiagLog.Write("herramienta", $"{tool.Name}: error a los {toolClock.ElapsedMilliseconds} ms: {DiagLog.Describe(ex)}"); throw; }
                     ToolBox.Log(tool, detail, "ok");
                 }
                 catch (OperationCanceledException) { Messages.Children.Remove(running); ToolBox.Log(tool, detail, "cancelled"); throw; }
@@ -1231,6 +1264,15 @@ public partial class MainWindow : Window
     }
 
     private static void Log(string line) => EngineHost.Log(line);
+
+    /// <summary>Cuando llego el primer trozo de la IA (lo que mas tarda con una pregunta larga: leerla entera).</summary>
+    private static void LogPiece(PendingAnswer live, System.Diagnostics.Stopwatch clock)
+    {
+        var first = live.FirstPieceDelay;
+        DiagLog.Write("chat", first is { } d
+            ? $"primer trozo {d.TotalMilliseconds:0} ms despues de pedirlo; fin del streaming a los {clock.ElapsedMilliseconds} ms"
+            : $"el streaming ha acabado sin texto a los {clock.ElapsedMilliseconds} ms");
+    }
 
     private void ScrollToEnd() => Dispatcher.BeginInvoke(() => MessagesScroll.ScrollToEnd(), System.Windows.Threading.DispatcherPriority.Background);
 

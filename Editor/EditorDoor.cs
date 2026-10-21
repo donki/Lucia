@@ -110,7 +110,7 @@ public sealed class EditorDoor : IDisposable
                         // Lo que el modelo sabe hacer, para que los editores lo declaren (Copilot Chat:
                         // toolCalling e imageInput). Herramientas siempre (llama-server con --jinja); vision
                         // si tiene su mmproj al lado, que es con lo que arranca el motor.
-                        ["context_length"] = Math.Clamp(settings.ContextTokens, 2048, 32768),
+                        ["context_length"] = TokenLimits.Context(settings),
                         ["capabilities"] = new JsonObject
                         {
                             ["tools"] = true,
@@ -129,12 +129,14 @@ public sealed class EditorDoor : IDisposable
         }
         catch (Exception ex)
         {
+            DiagLog.Write("puerta", $"{path}: {(ex is OperationCanceledException ? "cancelada" : "error " + DiagLog.Describe(ex))}");
             try { await ErrorAsync(response, 502, ex.Message); } catch (Exception) { }
         }
     }
 
     private async Task ForwardAsync(HttpListenerRequest request, HttpListenerResponse response, string path, CancellationToken cancel)
     {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         string baseUrl;
         try
         {
@@ -142,6 +144,7 @@ public sealed class EditorDoor : IDisposable
         }
         catch (Exception ex)
         {
+            DiagLog.Write("puerta", $"{path}: el motor no esta listo ({DiagLog.Describe(ex)})");
             await ErrorAsync(response, 503, ex.Message);
             return;
         }
@@ -153,11 +156,14 @@ public sealed class EditorDoor : IDisposable
         }
         if (path == "/v1/chat/completions")
             body = ThinkingOffByDefault(body);
+        if (path is "/v1/chat/completions" or "/v1/completions")
+            body = TokenLimits.ApplyToDoorRequest(body, TokenLimits.Answer(AppSettings.Current), TokenLimits.Context(AppSettings.Current));
         using var upstreamRequest = new HttpRequestMessage(HttpMethod.Post, baseUrl + path)
         {
             Content = new ByteArrayContent(body) { Headers = { ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json") } },
         };
         using var upstream = await Downloader.Http.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, cancel);
+        DiagLog.Write("puerta", $"{path}: {(int)upstream.StatusCode} del motor a los {clock.ElapsedMilliseconds} ms ({body.Length} bytes pedidos)");
         response.StatusCode = (int)upstream.StatusCode;
         response.ContentType = upstream.Content.Headers.ContentType?.ToString() ?? "application/json";
         response.Headers["Cache-Control"] = "no-cache";
@@ -171,6 +177,7 @@ public sealed class EditorDoor : IDisposable
             await response.OutputStream.FlushAsync(cancel);   // cada trozo del SSE sale al momento
         }
         response.Close();
+        DiagLog.Write("puerta", $"{path}: acabada a los {clock.ElapsedMilliseconds} ms");
     }
 
     /// <summary>Sin indicacion del cliente, el modelo no «piensa»: un razonador se gastaria toda la respuesta dentro de &lt;think&gt;.</summary>

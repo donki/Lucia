@@ -44,6 +44,17 @@ esa misma IA.
   (`Engine/ImageEngine.cs`, versión fijada con SHA como llama.cpp) y Stable Diffusion 1.5 (GGUF); sale
   en la conversación con abrir y guardar como. Mientras se genera se para llama-server (no caben las
   dos en la gráfica); si la gráfica no puede, CPU. Ajustes › Imágenes instala o quita el motor y el modelo.
+- **Respuestas y contexto** (Ajustes): tokens máximos por respuesta (256–32 768, por defecto 2048; el
+  triple con «Pensar») y contexto (2048 hasta lo que admiten la IA y el PC, por defecto 8192). El tope del
+  contexto sale de la cabecera del GGUF (contexto de entrenamiento y cache por token, `Engine/GgufInfo.cs`)
+  y de la memoria de la gráfica (`Engine/TokenLimits.cs`); cambiarlo reinicia el motor en la siguiente
+  pregunta. La puerta de editores usa el máximo de Ajustes si el cliente no trae el suyo y, si lo trae,
+  lo respeta recortado al contexto.
+- **Registros de diagnóstico** (`logs\diagnostics.log`, rota a 1 MB y guarda 4): tiempos de cada
+  pregunta, del motor y de la puerta, errores y las **congelaciones** que detecta un vigilante del hilo
+  de la interfaz (`Services/UiWatchdog.cs`: más de 2 s sin responder, con la fase y la operación en
+  curso). Sin texto de las conversaciones ni datos personales. Ajustes › Diagnóstico: «Copiar
+  registros» (zip al portapapeles) y «Carpeta de registros».
 - **Instrucciones fijas** (el «system prompt»), la casilla **Pensar** en el chat para dejar que el
   modelo razone antes de responder (el razonamiento sale plegado), tamaño de letra, español/inglés,
   tema claro/oscuro siguiendo a Windows. Una sola instancia: volver a ejecutarla trae la abierta.
@@ -115,9 +126,9 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-10-21): **278 pruebas**, todas pasan; el banco tarda **unos 30 s** (sin
-contar la compilación). Cobertura de líneas: **91,8 %** de lo instrumentado (se instrumenta el
-ensamblado `sOCLucia` entero) y **91,8 %** sobre toda la app (3288 de 3582 líneas ejecutables de
+`Lucia.Tests` (xUnit, 2026-10-21): **310 pruebas**, todas pasan; el banco tarda **unos 27 s** (sin
+contar la compilación). Cobertura de líneas: **92,2 %** de lo instrumentado (se instrumenta el
+ensamblado `sOCLucia` entero) y **92,2 %** sobre toda la app (3710 de 4026 líneas ejecutables de
 C#; el 2026-10-03, 91,5 %).
 
 Se prueba la lógica (documentos de texto, HTML, RTF, .docx y PDF; herramientas del agente; el

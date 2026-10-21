@@ -1,5 +1,63 @@
 # Changelog — sOC Lucia
 
+## 2026.10.21.1 — Longitud de las respuestas y del contexto, y registros para cuando se congela / Answer and context length, and logs for when it freezes
+
+**Español**
+
+- **Ajustes › Respuestas y contexto** (nuevo):
+  - **Tokens máximos por respuesta**: lo más largo que escribe de una vez (antes fijo en 2048). Entre
+    256 y 32 768, por defecto 2048; con «Pensar», el triple.
+  - **Contexto**: cuánto texto tiene en cuenta a la vez (antes fijo en 8192). Entre 2048 y lo que
+    admiten la IA y el PC: Lucia lee de la propia IA con cuánto contexto se entrenó y cuánta memoria
+    gasta cada token, y lo compara con la memoria de la gráfica (dice también hasta dónde va rápido).
+    Al cambiarlo, la IA se reinicia en la siguiente pregunta.
+  - Se aplican al salir de la casilla o con Intro; un valor que no vale se avisa con el rango y no se guarda.
+  - **Editores de código** (la puerta 127.0.0.1:41417): si el editor no pide su propio máximo se usa el
+    de Ajustes (antes no había ninguno y la IA podía escribir hasta llenar el contexto); si lo pide, se
+    respeta, recortado al contexto.
+- **Registros para cuando se congela**: `logs\diagnostics.log` apunta, con hora y duración, cada
+  pregunta (motor listo, pregunta preparada, primer trozo, fin, cancelación, error), el arranque y la
+  parada del motor y la carga del modelo, las herramientas y la puerta de editores. Nunca el texto de
+  las conversaciones ni datos personales (la carpeta del usuario se tapa). Rota a 1 MB y guarda cuatro
+  anteriores.
+- **Vigilante de congelaciones**: si la ventana deja de responder más de 2 s, se apunta qué estaba
+  haciendo y qué operación se había quedado ejecutándose, y luego cuánto duró.
+- **Ajustes › Diagnóstico**: «Copiar registros» (un zip con los registros y un resumen del PC y de la
+  configuración, listo para pegar con Ctrl+V en un correo o un chat) y «Carpeta de registros».
+- **Arreglo**: en Ajustes › Permisos salían las etiquetas «Perm_Free» y «PermHint_Free». Era la fila de
+  lo que nunca pide permiso (memoria, documentos de Lucia, tareas, datos del PC, imágenes); ahora se
+  explica así y ya no ofrece elegir, porque elegir no cambiaba nada. Si algún día falta un texto, sale
+  vacío en vez de la clave interna.
+- Banco de pruebas: **310 pruebas** y **92,2 %** de toda la aplicación (antes 278 y 91,8 %).
+
+**English**
+
+- **Settings › Answers and context** (new):
+  - **Maximum tokens per answer**: the longest it writes in one go (was fixed at 2048). Between 256
+    and 32,768, default 2048; with «Think», three times as much.
+  - **Context**: how much text it takes into account at once (was fixed at 8192). Between 2048 and what
+    the AI and the PC allow: Lucia reads from the AI itself the context it was trained with and how
+    much memory each token uses, and compares it with the graphics memory (it also says up to where it
+    stays fast). Changing it restarts the AI at the next question.
+  - They apply when you leave the box or press Enter; a value that is not valid is reported with the
+    range and not saved.
+  - **Code editors** (the 127.0.0.1:41417 door): if the editor does not ask for its own maximum, the one
+    in Settings is used (before there was none and the AI could write until the context was full); if it
+    does, it is respected, capped to the context.
+- **Logs for when it freezes**: `logs\diagnostics.log` records, with times and durations, each question
+  (engine ready, question prepared, first piece, end, cancellation, error), engine start and stop, model
+  loading, tools and the editor door. Never the text of the conversations or personal data (the user
+  folder is masked). It rotates at 1 MB and keeps four previous files.
+- **Freeze watchdog**: if the window stops responding for more than 2 s, it records what it was doing
+  and which operation was stuck running, and then how long it lasted.
+- **Settings › Diagnostics**: «Copy logs» (a zip with the logs and a summary of the PC and the settings,
+  ready to paste with Ctrl+V into an email or a chat) and «Logs folder».
+- **Fix**: Settings › Permissions showed the labels «Perm_Free» and «PermHint_Free». It was the row for
+  what never asks (memory, Lucia's documents, tasks, PC details, pictures); it now says so and no longer
+  offers a choice, since choosing changed nothing. If a text is ever missing, it shows empty instead of
+  the internal key.
+- Test suite: **310 tests** and **92.2 %** of the whole app (was 278 and 91.8 %).
+
 ## 2026.10.21.0 — Lucia ya no se queda bloqueada al preguntar / Lucia no longer freezes when you ask
 
 **Español**

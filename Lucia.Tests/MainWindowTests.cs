@@ -65,6 +65,7 @@ public sealed class MainWindowTests : UiTest
             var request = Net.ChatRequests.Single();
             Assert.Equal("hola", request["messages"]!.AsArray().Last()!["content"]!.GetValue<string>());
             Assert.Equal(false, request["chat_template_kwargs"]!["enable_thinking"]!.GetValue<bool>());
+            Assert.Equal(TokenLimits.AnswerDefault, request["max_tokens"]!.GetValue<int>());   // el tope de Ajustes › Respuestas y contexto
         });
         Assert.Single(ThreadStore.LoadAll());
     }

@@ -14,6 +14,14 @@ public partial class App : Application
     public static EngineHost Engine { get; } = new();
     public static EditorDoor Door { get; } = new(Engine);
 
+    /// <summary>El vigilante de congelaciones de la ventana (registro de diagnostico).</summary>
+    internal static UiWatchdog? Watchdog { get; private set; }
+
+    /// <summary>La version que se enseña y se apunta en el registro (la del csproj).</summary>
+    public static string Version =>
+        (System.Reflection.Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "?").Split('+')[0];
+
     /// <summary>
     /// Las pruebas crean la App solo por sus recursos: WPF lanza Startup en cuanto corre el
     /// Dispatcher, y ellas abren las ventanas cuando y como quieren.
@@ -43,6 +51,7 @@ public partial class App : Application
         Paths.Ensure();
         ChildJob.KillStale(Paths.Engine);
         AppSettings.Load();
+        DiagLog.Write("app", $"arranca sOC Lucia {Version} en {Environment.OSVersion.VersionString}, .NET {Environment.Version}, {Environment.ProcessorCount} nucleos; argumentos: {string.Join(' ', args.Where(a => a.StartsWith("--", StringComparison.Ordinal)))}");
         WindowsStartup.Refresh();
         if (AppSettings.Current.Language is { } language)
             Loc.Use(language);
@@ -51,6 +60,8 @@ public partial class App : Application
         var window = new MainWindow();
         MainWindow = window;
         window.Show();
+        Watchdog?.Dispose();
+        Watchdog = new UiWatchdog(window.Dispatcher);
         // Una descarga que quedo a medias al cerrar se retoma sola (el .part sigue en la carpeta de modelos).
         window.Dispatcher.BeginInvoke(ModelDownloads.ResumePending, System.Windows.Threading.DispatcherPriority.ApplicationIdle);   // tambien con --tray, que no llega a Loaded
         // --tray (arranque con Windows): escondida en el area de notificacion desde el principio.
@@ -108,16 +119,21 @@ public partial class App : Application
         TaskScheduler.UnobservedTaskException += (_, ex) =>
         {
             EngineHost.Log($"error no controlado en tarea: {ex.Exception}");
+            DiagLog.Write("error", "no controlado en tarea: " + DiagLog.Describe(ex.Exception.GetBaseException()));
             ex.SetObserved();
         };
         AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
+        {
             EngineHost.Log($"error fatal: {ex.ExceptionObject}");
+            DiagLog.Write("error", "fatal: " + (ex.ExceptionObject is Exception e ? DiagLog.Describe(e) : "?"));
+        };
     }
 
     /// <summary>Un error que nadie esperaba: al registro con su traza y un aviso; la aplicacion sigue.</summary>
     internal void OnUnexpected(Exception exception)
     {
         EngineHost.Log($"error no controlado: {exception}");
+        DiagLog.Write("error", $"no controlado: {DiagLog.Describe(exception)} en {exception.TargetSite?.DeclaringType?.Name}.{exception.TargetSite?.Name}");
         // Un solo aviso a la vez: un error que se repite en cada pintado no debe abrir cien ventanas.
         if (_alerting || MainWindow is not { IsLoaded: true } owner) return;
         _alerting = true;
@@ -138,6 +154,8 @@ public partial class App : Application
 
     private void OnExit(object sender, ExitEventArgs e)
     {
+        DiagLog.Write("app", "se cierra");
+        Watchdog?.Dispose();
         Door.Dispose();
         Engine.Dispose();
     }

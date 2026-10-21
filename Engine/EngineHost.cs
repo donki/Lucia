@@ -21,6 +21,7 @@ public sealed class EngineHost : IDisposable
     private Process? _process;
     private int _port;
     private string? _modelPath;
+    private int _context;
     private EnginePin.Archive? _archive;
     private bool _cudaFailed;
 
@@ -40,11 +41,15 @@ public sealed class EngineHost : IDisposable
         await _lock.WaitAsync(cancel);
         try
         {
-            if (_process is { HasExited: false } && _modelPath == settings.ModelPath && await HealthyAsync(_port, cancel))
+            // Otro modelo u otro contexto (Ajustes) piden reiniciar el motor; lo demas, reutilizarlo.
+            var context = TokenLimits.Context(settings);
+            if (_process is { HasExited: false } && _modelPath == settings.ModelPath && _context == context && await HealthyAsync(_port, cancel))
             {
                 Set(EngineState.Ready, null);
                 return BaseUrl;
             }
+            if (_process is not null)
+                DiagLog.Write("motor", _context != context && _modelPath == settings.ModelPath ? $"se reinicia: contexto {_context} -> {context}" : "se reinicia (otro modelo o no responde)");
             Stop();
             var archive = _archive ?? EnginePin.ForThisMachine(allowCuda: !_cudaFailed);
             var folder = await EnsureBinariesAsync(archive, engineDownload, cancel);
@@ -63,17 +68,20 @@ public sealed class EngineHost : IDisposable
             }
             _archive = archive;
             _modelPath = settings.ModelPath;
+            _context = context;
             Set(EngineState.Ready, null);
             return BaseUrl;
         }
         catch (OperationCanceledException)
         {
+            DiagLog.Write("motor", "arranque cancelado");
             Stop();
             Set(EngineState.Stopped, null);
             throw;
         }
         catch (Exception ex)
         {
+            DiagLog.Write("motor", "no arranca: " + DiagLog.Describe(ex));
             Stop();
             Set(EngineState.Error, ex.Message);
             throw;
@@ -101,6 +109,7 @@ public sealed class EngineHost : IDisposable
         if (File.Exists(exe) && File.Exists(complete))
             return folder;
         Set(EngineState.DownloadingEngine, null);
+        DiagLog.Write("motor", $"descargando el motor {EnginePin.Build}-{archive.Accelerator}");
         if (Directory.Exists(folder))
             Directory.Delete(folder, recursive: true);
         Directory.CreateDirectory(folder);
@@ -144,7 +153,7 @@ public sealed class EngineHost : IDisposable
         foreach (var arg in new[]
         {
             "-m", settings.ModelPath!, "--host", "127.0.0.1", "--port", _port.ToString(),
-            "-c", Math.Clamp(settings.ContextTokens, 2048, 32768).ToString(), "-np", "1",
+            "-c", TokenLimits.Context(settings).ToString(), "-np", "1",
             "-ngl", gpuLayers.ToString(), "-fa", flash, "--jinja", "--reasoning-format", "auto", "--no-webui",
         })
             info.ArgumentList.Add(arg);
@@ -159,6 +168,8 @@ public sealed class EngineHost : IDisposable
         else
             Vision = false;
         Log($"arrancando llama-server ({archive.Accelerator}) con {Path.GetFileName(settings.ModelPath)} en :{_port}");
+        DiagLog.Write("motor", $"arrancando llama-server {EnginePin.Build}-{archive.Accelerator}, modelo {Path.GetFileName(settings.ModelPath)}, contexto {TokenLimits.Context(settings)}, capas en GPU {gpuLayers}, vision {(Vision ? "si" : "no")}");
+        var loading = Stopwatch.StartNew();
         var process = Process.Start(info) ?? throw new InvalidOperationException("No se ha podido arrancar llama-server");
         ChildJob.Add(process);   // muere con la aplicacion, pase lo que pase
         _process = process;
@@ -173,11 +184,18 @@ public sealed class EngineHost : IDisposable
         {
             cancel.ThrowIfCancellationRequested();
             if (process.HasExited)
+            {
+                DiagLog.Write("motor", $"llama-server se ha cerrado al cargar (codigo {process.ExitCode}) a los {loading.Elapsed.TotalSeconds:0.0} s");
                 throw new InvalidOperationException(string.Format(Localization.Loc.Get("EngineExited"), process.ExitCode));
+            }
             if (await HealthyAsync(_port, cancel))
+            {
+                DiagLog.Write("motor", $"modelo cargado en {loading.Elapsed.TotalSeconds:0.0} s (puerto {_port})");
                 return;
+            }
             await Task.Delay(500, cancel);
         }
+        DiagLog.Write("motor", $"el modelo no ha cargado en {loading.Elapsed.TotalMinutes:0} min");
         throw new TimeoutException(Localization.Loc.Get("EngineTimeout"));
     }
 
@@ -201,7 +219,10 @@ public sealed class EngineHost : IDisposable
         try
         {
             if (_process is { HasExited: false })
+            {
+                DiagLog.Write("motor", "parado");
                 _process.Kill(entireProcessTree: true);
+            }
         }
         catch (Exception) { }
         _process?.Dispose();

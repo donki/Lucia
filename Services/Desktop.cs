@@ -32,6 +32,9 @@ public interface IDesktop
 
     void SetClipboardText(string text);
 
+    /// <summary>Copia ficheros al portapapeles, para pegarlos (Ctrl+V) en un correo, un chat o una carpeta.</summary>
+    void SetClipboardFiles(string[] paths);
+
     /// <summary>Ficheros copiados en el portapapeles, o null si no hay.</summary>
     string[]? ClipboardFiles();
 
@@ -83,6 +86,13 @@ public sealed class RealDesktop : IDesktop
     public string ClipboardText() => Clipboard.GetText();
 
     public void SetClipboardText(string text) => Clipboard.SetText(text);
+
+    public void SetClipboardFiles(string[] paths)
+    {
+        var list = new System.Collections.Specialized.StringCollection();
+        list.AddRange(paths);
+        Clipboard.SetFileDropList(list);
+    }
 
     public string[]? ClipboardFiles() =>
         Clipboard.ContainsFileDropList() ? Clipboard.GetFileDropList().Cast<string?>().OfType<string>().ToArray() : null;

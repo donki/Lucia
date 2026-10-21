@@ -36,6 +36,18 @@ public sealed class PendingAnswer
     private string? _finish;
     private AnswerPhase _phase;
     private int _version;
+    private long _waitingSince;
+    private long _firstPiece;
+
+    /// <summary>Lo que tardo el primer trozo (texto o razonamiento) desde que se empezo a esperar; null si aun no ha llegado.</summary>
+    public TimeSpan? FirstPieceDelay
+    {
+        get
+        {
+            lock (_gate)
+                return _firstPiece == 0 ? null : System.Diagnostics.Stopwatch.GetElapsedTime(_waitingSince == 0 ? _firstPiece : _waitingSince, _firstPiece);
+        }
+    }
 
     /// <param name="keptReasoning">El razonamiento de un intento anterior que se sigue enseñando (al repetir sin pensar).</param>
     public PendingAnswer(string? keptReasoning = null)
@@ -56,6 +68,7 @@ public sealed class PendingAnswer
         {
             if (phase <= _phase) return;
             _phase = phase;
+            if (phase == AnswerPhase.Waiting) _waitingSince = System.Diagnostics.Stopwatch.GetTimestamp();
             _version++;
         }
     }
@@ -75,6 +88,8 @@ public sealed class PendingAnswer
                 _reasoning.Append(reasoning);
                 if (_phase < AnswerPhase.Reasoning) _phase = AnswerPhase.Reasoning;
             }
+            if (_firstPiece == 0 && (delta.Content is { Length: > 0 } || delta.Reasoning is { Length: > 0 }))
+                _firstPiece = System.Diagnostics.Stopwatch.GetTimestamp();
             if (delta.ToolCalls is not null) _calls = delta.ToolCalls;
             if (delta.FinishReason is not null) _finish = delta.FinishReason;
             _version++;

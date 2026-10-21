@@ -243,6 +243,8 @@ internal sealed class FakeDesktop : IDesktop
 
     public void SetClipboardText(string text) => Clipboard = text;
 
+    public void SetClipboardFiles(string[] paths) => ClipboardFileList = paths;
+
     public string[]? ClipboardFiles() => ClipboardFileList;
 
     public BitmapSource? ClipboardImage() => Image;

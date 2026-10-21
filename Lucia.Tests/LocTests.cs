@@ -59,6 +59,38 @@ public class LocTests
         Assert.Empty(used.Where(k => !en.ContainsKey(k)));
     }
 
+    /// <summary>
+    /// Las claves que se construyen en el codigo («Perm_» + recurso, «Perm» + permiso, la descripcion
+    /// de cada IA del catalogo, el indicador de espera…): todas, en los dos idiomas. Un valor nuevo de un
+    /// enum sin su texto haria salir la clave en pantalla (como pasaba con «Perm_Free»).
+    /// </summary>
+    [Fact]
+    public void Every_key_built_at_runtime_exists_in_both_languages()
+    {
+        var keys = new List<string>();
+        foreach (var r in Enum.GetValues<SocLucia.Agent.Resource>())
+        {
+            keys.Add("Perm_" + r);
+            keys.Add("PermHint_" + r);
+            if (r != SocLucia.Agent.Resource.Free)   // la ventana de permiso no sale nunca para lo libre
+                keys.Add("PermIntro_" + r);
+        }
+        foreach (var p in Enum.GetValues<SocLucia.Agent.Permission>())
+            keys.Add(p == SocLucia.Agent.Permission.Allow ? "PermAllowAlways" : "Perm" + p);
+        keys.AddRange(SocLucia.Engine.ModelCatalog.All.Select(m => m.Blurb));
+        foreach (var phase in Enum.GetValues<SocLucia.Chat.AnswerPhase>())
+            foreach (var engine in Enum.GetValues<SocLucia.Engine.EngineState>())
+                foreach (var language in new[] { "es", "en" })
+                {
+                    Loc.Use(language);
+                    Assert.NotEqual(string.Empty, SocLucia.Chat.PendingAnswer.Status(phase, engine, TimeSpan.Zero));
+                }
+        Loc.Use("es");
+        keys.AddRange(["AnswerPreparing", "AnswerLoadingModel", "AnswerDownloadingEngine", "AnswerWaiting", "AnswerReasoning", "FitOptimalGpu", "FitOptimalCpu", "FitOkGpu", "FitOkCpu", "CatalogHf"]);
+        var missing = keys.Where(k => !Loc.HasBoth(k)).ToList();
+        Assert.True(missing.Count == 0, "Sin texto en los dos idiomas: " + string.Join(", ", missing));
+    }
+
     [Fact]
     public void Every_resource_that_asks_permission_has_its_texts()
     {
@@ -86,7 +118,8 @@ public class LocTests
             Loc.Use("fr");          // no admitido: se queda como esta
             Assert.Equal("es", Loc.Language);
             Loc.Use("es");          // el mismo: no avisa
-            Assert.Equal("NoExisteEstaClave", Loc.Get("NoExisteEstaClave"));
+            Assert.Equal(string.Empty, Loc.Get("NoExisteEstaClave"));   // la clave nunca se enseña
+            Assert.Contains("NoExisteEstaClave", File.ReadAllText(SocLucia.Services.DiagLog.Current));
             Assert.True(changes >= 2);
             Assert.Contains("7", Loc.Format("EngineExited", 7));
         }

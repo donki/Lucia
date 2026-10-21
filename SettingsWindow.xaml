@@ -54,6 +54,20 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Respuestas y contexto: tokens por respuesta y memoria de la conversacion -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="LimitsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="LimitsHint" Style="{StaticResource HintText}" Margin="0,0,0,10" />
+                        <TextBlock x:Name="AnswerTokensLabel" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
+                        <TextBox x:Name="AnswerTokensBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnAnswerTokensChanged" KeyDown="OnLimitKey" />
+                        <TextBlock x:Name="AnswerTokensHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                        <TextBlock x:Name="ContextTokensLabel" Style="{StaticResource FieldLabel}" Margin="0,14,0,4" />
+                        <TextBox x:Name="ContextTokensBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnContextTokensChanged" KeyDown="OnLimitKey" />
+                        <TextBlock x:Name="ContextTokensHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+
                 <!-- Instrucciones fijas -->
                 <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
                     <StackPanel>
@@ -212,10 +226,13 @@
                     <StackPanel>
                         <TextBlock x:Name="DiagnosticsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,6" />
                         <TextBlock x:Name="DiagnosticsText" Style="{StaticResource HintText}" />
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <Button x:Name="OpenLogButton" Style="{StaticResource OutlineButton}" Click="OnOpenLog" />
-                            <Button x:Name="OpenDataButton" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" Click="OnOpenData" />
-                        </StackPanel>
+                        <TextBlock x:Name="LogsHint" Style="{StaticResource HintText}" Margin="0,8,0,0" />
+                        <WrapPanel Margin="0,8,0,0">
+                            <Button x:Name="CopyLogsButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnCopyLogs" />
+                            <Button x:Name="OpenLogsFolderButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnOpenLogsFolder" />
+                            <Button x:Name="OpenLogButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnOpenLog" />
+                            <Button x:Name="OpenDataButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnOpenData" />
+                        </WrapPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>

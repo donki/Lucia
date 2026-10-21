@@ -64,6 +64,22 @@ public static class Loc
         ["AnswerWaiting"] = "Lucia is thinking…",
         ["AnswerReasoning"] = "Reasoning…",
         ["AnswerElapsed"] = "{0} · {1} s",
+        ["LimitsTitle"] = "Answers and context",
+        ["LimitsHint"] = "How much the AI writes in one answer and how much text it keeps in mind. A token is a piece of a word (about three quarters of a word).",
+        ["AnswerTokensLabel"] = "Maximum tokens per answer",
+        ["AnswerTokensHint"] = "The longest answer it can write in one go; if it falls short, raise it. With «Think» it gets three times as much, so the reasoning leaves room for the answer. Between {0:N0} and {1:N0}; default {2:N0}. It also applies to code editors that do not ask for their own maximum.",
+        ["ContextTokensLabel"] = "Context (tokens)",
+        ["ContextTokensHint"] = "How much text it takes into account at once: instructions, documents, attachments and the conversation so far. More context remembers more but uses more graphics memory and answers more slowly. Between {0:N0} and {1:N0} with this AI on this PC; default {2:N0}.",
+        ["ContextFast"] = "Up to {0:N0} fits in the graphics card and stays fast.",
+        ["ContextTrained"] = "This AI was trained with up to {0:N0}.",
+        ["ContextCapped"] = "What is saved is more than this AI allows: {0:N0} is used.",
+        ["ContextRestart"] = "Changing it restarts the AI at the next question (a few seconds while it reloads).",
+        ["NumberOutOfRange"] = "«{0}» is not valid: write a whole number between {1:N0} and {2:N0}. The previous value is kept.",
+        ["LogsHint"] = "If Lucia freezes or fails, copy the logs and send them: they say what it was doing and how long each step took, never what you wrote.",
+        ["CopyLogs"] = "Copy logs",
+        ["OpenLogsFolder"] = "Logs folder",
+        ["LogsCopied"] = "The logs are copied as {0}: paste them with Ctrl+V into an email or a chat. The file also stays in the logs folder.",
+        ["LogsCopyFailed"] = "The logs could not be copied ({0}). Open the logs folder and send the files by hand.",
 
         // Ajustes
         ["SettingsTitle"] = "Settings",
@@ -196,6 +212,8 @@ public static class Loc
         ["PermHint_Clipboard"] = "Read or replace the text in the clipboard.",
         ["Perm_Apps"] = "Open things",
         ["PermHint_Apps"] = "Open a file, folder, program or web address with its usual program.",
+        ["Perm_Free"] = "Without asking",
+        ["PermHint_Free"] = "What stays inside Lucia never asks: remembering things you tell it about yourself, reading and saving in Lucia's documents folder, scheduling tasks, looking up this PC's details (Windows, memory, disks) and drawing pictures.",
         ["PermTitle"] = "Allow this?",
         ["PermIntro_Commands"] = "The AI wants to run this command on your PC:",
         ["PermIntro_FilesRead"] = "The AI wants to read this:",
@@ -318,6 +336,22 @@ public static class Loc
         ["AnswerWaiting"] = "Lucia está pensando…",
         ["AnswerReasoning"] = "Razonando…",
         ["AnswerElapsed"] = "{0} · {1} s",
+        ["LimitsTitle"] = "Respuestas y contexto",
+        ["LimitsHint"] = "Cuánto escribe la IA en una respuesta y cuánto texto tiene en cuenta. Un token es un trozo de palabra (unas tres cuartas partes de una palabra).",
+        ["AnswerTokensLabel"] = "Tokens máximos por respuesta",
+        ["AnswerTokensHint"] = "Lo más largo que puede escribir de una vez; si se queda corta, súbelo. Con «Pensar» se le da el triple, para que el razonamiento no se coma la respuesta. Entre {0:N0} y {1:N0}; por defecto {2:N0}. Vale también para los editores de código que no piden su propio máximo.",
+        ["ContextTokensLabel"] = "Contexto (tokens)",
+        ["ContextTokensHint"] = "Cuánto texto tiene en cuenta a la vez: instrucciones, documentos, adjuntos y la conversación hasta ahora. Más contexto recuerda más, pero usa más memoria de la gráfica y responde más despacio. Entre {0:N0} y {1:N0} con esta IA en este PC; por defecto {2:N0}.",
+        ["ContextFast"] = "Hasta {0:N0} cabe en la gráfica y va rápido.",
+        ["ContextTrained"] = "Esta IA se entrenó con hasta {0:N0}.",
+        ["ContextCapped"] = "Lo guardado es más de lo que admite esta IA: se usa {0:N0}.",
+        ["ContextRestart"] = "Al cambiarlo, la IA se reinicia en la siguiente pregunta (unos segundos mientras se vuelve a cargar).",
+        ["NumberOutOfRange"] = "«{0}» no vale: escribe un número entero entre {1:N0} y {2:N0}. Se mantiene el valor anterior.",
+        ["LogsHint"] = "Si Lucia se congela o falla, copia los registros y mándalos: dicen qué estaba haciendo y cuánto tardó cada paso, nunca lo que escribiste.",
+        ["CopyLogs"] = "Copiar registros",
+        ["OpenLogsFolder"] = "Carpeta de registros",
+        ["LogsCopied"] = "Los registros están copiados como {0}: pégalos con Ctrl+V en un correo o un chat. El fichero se queda también en la carpeta de registros.",
+        ["LogsCopyFailed"] = "No se han podido copiar los registros ({0}). Abre la carpeta de registros y manda los ficheros a mano.",
 
         ["SettingsTitle"] = "Ajustes",
         ["ModelTitle"] = "La IA",
@@ -449,6 +483,8 @@ public static class Loc
         ["PermHint_Clipboard"] = "Leer o sustituir el texto del portapapeles.",
         ["Perm_Apps"] = "Abrir cosas",
         ["PermHint_Apps"] = "Abrir un fichero, carpeta, programa o direcci\u00f3n web con su programa habitual.",
+        ["Perm_Free"] = "Sin preguntar",
+        ["PermHint_Free"] = "Lo que no sale de Lucia nunca pregunta: recordar lo que le cuentas de ti, leer y guardar en la carpeta de documentos de Lucia, programar tareas, consultar los datos de este PC (Windows, memoria, discos) y dibujar im\u00e1genes.",
         ["PermTitle"] = "\u00bfPermitir esto?",
         ["PermIntro_Commands"] = "La IA quiere ejecutar esta orden en tu PC:",
         ["PermIntro_FilesRead"] = "La IA quiere leer esto:",
@@ -529,13 +565,25 @@ public static class Loc
         LanguageChanged?.Invoke();
     }
 
+    private static readonly HashSet<string> Missing = [];
+
+    /// <summary>
+    /// El texto en el idioma activo; si falta, el ingles. La clave interna nunca se enseña (constitucion,
+    /// seccion 8): si no esta en ningun idioma sale vacio y se apunta una vez en el registro de diagnostico.
+    /// </summary>
     public static string Get(string key)
     {
         var table = Language == "es" ? Spanish : English;
-        return table.TryGetValue(key, out var value) ? value
-            : English.TryGetValue(key, out var fallback) ? fallback
-            : key;
+        if (table.TryGetValue(key, out var value) || English.TryGetValue(key, out value))
+            return value;
+        lock (Missing)
+            if (Missing.Add(key))
+                Services.DiagLog.Write("textos", $"falta el texto «{key}» en los dos idiomas");
+        return string.Empty;
     }
+
+    /// <summary>Si la clave tiene texto en los dos idiomas (para las pruebas de las claves que se construyen).</summary>
+    internal static bool HasBoth(string key) => English.ContainsKey(key) && Spanish.ContainsKey(key);
 
     public static string Format(string key, params object[] args) =>
         string.Format(CultureInfo.CurrentCulture, Get(key), args);
