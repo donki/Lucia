@@ -23,6 +23,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        App.GuardDialogs();   // diálogos: al registro y sin minimizarse por su cuenta
         InitializeComponent();
         SourceInitialized += (_, _) =>
         {
@@ -810,6 +811,7 @@ public partial class MainWindow : Window
             {
                 // Parar: lo que ya se habia escrito se queda; si no habia nada, la burbuja se va.
                 DiagLog.Write("chat", $"cancelada a los {clock.ElapsedMilliseconds} ms ({live.Read().Content.Length} caracteres escritos; fase {live.Phase})");
+                Report(settings, live, clock, "cancelled", null, question, live.Read().Content, 0);
                 EndWait();
                 answer.Content = live.Read().Content.Trim();
                 if (answer.Content.Length > 0) { RepaintBubble(bubble, answer.Content, null, false); thread.Messages.Add(answer); }
@@ -820,12 +822,14 @@ public partial class MainWindow : Window
             {
                 // El motor no arranca o el servidor falla: el aviso lo pone AnswerAsync, sin la burbuja de espera.
                 DiagLog.Write("chat", $"error a los {clock.ElapsedMilliseconds} ms (fase {live.Phase}): {DiagLog.Describe(ex)}");
+                Report(settings, live, clock, "error", DiagLog.Describe(ex), question, null, 0);
                 EndWait();
                 Messages.Children.Remove(bubble);
                 throw;
             }
             EndWait();
             DiagLog.Write("chat", $"respuesta acabada a los {clock.ElapsedMilliseconds} ms: {answer.Content.Length} caracteres, razonamiento {answer.Reasoning?.Length ?? 0}, herramientas {calls?.Count ?? 0}, fin {finish ?? "-"}");
+            Report(settings, live, clock, "ok", null, question, answer.Content, calls?.Count ?? 0, answer.Reasoning?.Length ?? 0);
             if (calls is { Count: > 0 })
             {
                 answer.ToolCalls = new JsonArray(calls.Select(c => (JsonNode)c.ToJson()).ToArray()).ToJsonString();
@@ -1075,6 +1079,8 @@ public partial class MainWindow : Window
 
     public SettingsWindow OpenSettingsForTest() { var w = new SettingsWindow { Owner = this }; w.Show(); return w; }
 
+    public void OpenSettingsFromButtonForTest() => OnSettings(this, new RoutedEventArgs());
+
     public async void RunToolForTest(string name, string json)
     {
         Log($"prueba de herramienta: {name} {json}");
@@ -1264,6 +1270,23 @@ public partial class MainWindow : Window
     }
 
     private static void Log(string line) => EngineHost.Log(line);
+
+    /// <summary>
+    /// Una vuelta acabada, a MLflow si esta activado (en segundo plano: aqui solo se encola). El texto
+    /// de la pregunta y de la respuesta solo va si el usuario lo permitio en Ajustes.
+    /// </summary>
+    private static void Report(AppSettings settings, PendingAnswer live, System.Diagnostics.Stopwatch clock, string outcome, string? error, string question, string? answerText, int toolCalls, int reasoningChars = 0)
+    {
+        var telemetry = Services.Mlflow.MlflowTelemetry.Current;
+        if (!telemetry.Enabled) return;
+        var usage = live.Usage;
+        var ttft = live.FirstPieceDelay?.TotalMilliseconds;
+        var total = clock.Elapsed.TotalMilliseconds;
+        var speed = usage?.TokensPerSecond ?? (usage?.CompletionTokens is { } n && ttft is { } t && total > t ? n / ((total - t) / 1000) : null);
+        var text = settings.Mlflow.SendText;
+        telemetry.Request(App.RunConfig(), new Services.Mlflow.RequestRecord("chat", ttft, total, usage?.PromptTokens, usage?.CompletionTokens, speed,
+            answerText?.Length ?? 0, reasoningChars, toolCalls, outcome, error, text ? question : null, text ? answerText : null));
+    }
 
     /// <summary>Cuando llego el primer trozo de la IA (lo que mas tarda con una pregunta larga: leerla entera).</summary>
     private static void LogPiece(PendingAnswer live, System.Diagnostics.Stopwatch clock)

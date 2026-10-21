@@ -112,6 +112,137 @@ public sealed class MainWindowTests : UiTest
         });
     }
 
+    /// <summary>
+    /// Lo que conto Josep (2026.10.21.1): enviar y, mientras contesta, abrir Ajustes congelaba la ventana.
+    /// Ajustes se abre durante el streaming y cada vuelta del Dispatcher tiene que ser corta. Con
+    /// LUCIA_REAL_GGUF=ruta se usa un GGUF de verdad como modelo (solo se lee su cabecera).
+    /// </summary>
+    [Fact]
+    public void AbrirAjustesMientrasContesta_NoCongelaLaVentana()
+    {
+        if (Environment.GetEnvironmentVariable("LUCIA_REAL_GGUF") is { Length: > 0 } real && File.Exists(real))
+            AppSettings.Current.ModelPath = real;
+        Net.Answers.Enqueue(new FakeHttp.Answer(string.Concat(Enumerable.Repeat("Una respuesta larga. ", 40)), DelayMs: 2500));
+        Ui.Run(() =>
+        {
+            var w = Open();
+            Ui.Find<TextBox>(w, "Composer").Text = "explícame algo largo";
+            Ui.Click(Ui.Find<ButtonBase>(w, "SendButton"));
+            Ui.WaitFor(() => Net.ChatRequests.Count == 1);
+            var slowest = 0L;
+            var opened = System.Diagnostics.Stopwatch.StartNew();
+            Ui.Expect<SettingsWindow>(s =>
+            {
+                Assert.True(opened.ElapsedMilliseconds < 1500, $"Ajustes tardo {opened.ElapsedMilliseconds} ms en abrir");
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                while (Answering(w) && clock.ElapsedMilliseconds < 15_000)
+                {
+                    var turn = System.Diagnostics.Stopwatch.StartNew();
+                    Ui.DoEvents();
+                    slowest = Math.Max(slowest, turn.ElapsedMilliseconds);
+                    Thread.Sleep(5);
+                }
+                s.Close();
+            });
+            Ui.Click(Ui.Find<ButtonBase>(w, "SettingsButton"));
+            Assert.True(slowest < 1000, $"una vuelta del Dispatcher tardo {slowest} ms con Ajustes abierto");
+            Ui.WaitFor(() => !Answering(w));
+            Assert.Contains("Una respuesta larga.", Bubbles(w));
+        });
+        var log = File.ReadAllText(DiagLog.Current);
+        Assert.Contains("pregunta enviada", log);
+        Assert.Contains("respuesta acabada", log);
+    }
+
+    /// <summary>
+    /// Ajustes abierto (modal) y la ventana se minimiza a la bandeja (Win+D, la barra de tareas): al volver
+    /// con el icono, Ajustes tiene que verse. Si no, la principal se ve pero esta desactivada por un dialogo
+    /// que no se ve: parece congelada aunque el hilo responda.
+    /// </summary>
+    [Fact]
+    public void AjustesAbierto_MinimizarALaBandejaYVolver_NoDejaLaVentanaBloqueada()
+    {
+        Ui.Run(() =>
+        {
+            var w = Open();
+            var hwnd = new WindowInteropHelper(w).Handle;
+            bool? settingsVisible = null, mainEnabled = null, mainVisible = null;
+            Ui.Expect<SettingsWindow>(s =>
+            {
+                // Minimizar el propio dialogo (Win+D; ya no tiene boton): se minimiza la aplicacion entera, a la bandeja.
+                s.WindowState = WindowState.Minimized;
+                Ui.WaitFor(() => !w.IsVisible && s.WindowState == WindowState.Normal);
+                SendMessage(hwnd, 0x8001, 0, 0x0202);
+                Ui.DoEvents();
+                Assert.True(IsWindowVisible(new WindowInteropHelper(s).Handle), "minimizar Ajustes y volver: Ajustes no se ve");
+                Assert.Equal(0, GetWindowLong(new WindowInteropHelper(s).Handle, -16) & 0x00020000);   // sin boton de minimizar
+                SendMessage(hwnd, 0x0112, 0xF020, 0);   // SC_MINIMIZE: a la bandeja
+                Ui.DoEvents();
+                SendMessage(hwnd, 0x8001, 0, 0x0202);   // clic en el icono: volver
+                Ui.DoEvents();
+                var settings = new WindowInteropHelper(s).Handle;
+                Assert.True(IsWindowVisible(settings), "SC_MINIMIZE y volver: Ajustes no se ve");
+                // Minimizar desde la barra de tareas o con Win+D (cambio de estado, sin SC_MINIMIZE).
+                w.WindowState = WindowState.Minimized;
+                Ui.WaitFor(() => !w.IsVisible);
+                SendMessage(hwnd, 0x8001, 0, 0x0202);
+                Ui.DoEvents();
+                (settingsVisible, mainEnabled, mainVisible) = (IsWindowVisible(settings), IsWindowEnabled(hwnd), IsWindowVisible(hwnd));
+                s.Close();
+            });
+            Ui.Click(Ui.Find<ButtonBase>(w, "SettingsButton"));
+            Assert.True(mainVisible);
+            Assert.False(mainEnabled);          // con Ajustes abierto la principal esta desactivada (modal, Win32)…
+            Assert.True(settingsVisible);       // …y por eso Ajustes tiene que verse
+            Assert.True(IsWindowEnabled(hwnd));
+            w.Tray?.Dispose();
+        });
+    }
+
+    /// <summary>
+    /// El «congelado» que el hilo no ve: Ajustes abierto pero escondido, la principal visible y desactivada.
+    /// El vigilante lo detecta por Win32, lo apunta y vuelve a enseñar el dialogo.
+    /// </summary>
+    [Fact]
+    public void DialogoQueNoSeVe_ElVigilanteLoApuntaYLoVuelveAEnseñar()
+    {
+        if (File.Exists(DiagLog.Current)) File.Delete(DiagLog.Current);
+        Ui.Run(() =>
+        {
+            var w = Open();
+            var hwnd = new WindowInteropHelper(w).Handle;
+            Ui.Expect<SettingsWindow>(s =>
+            {
+                using var watchdog = new UiWatchdog(w.Dispatcher, TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(50))
+                {
+                    MainWindow = hwnd,
+                    RecoverHiddenDialog = () => App.ShowHiddenDialogs(w),
+                    HiddenDialogAfter = TimeSpan.FromMilliseconds(300),
+                };
+                Ui.WaitFor(() => IsWindowVisible(new WindowInteropHelper(s).Handle));
+                Thread.Sleep(500);
+                Assert.Equal(0, watchdog.HiddenDialogs);   // con Ajustes a la vista no pasa nada
+                // Minimizado (su boton o Win+D) y sin boton en la barra de tareas: desaparece y la principal sigue desactivada.
+                // Windows esconde el dialogo sin que WPF se entere: la principal sigue desactivada y no se ve nada que pulsar.
+                var dialog = new WindowInteropHelper(s).Handle;
+                ShowWindow(dialog, 0 /* SW_HIDE */);
+                Ui.WaitFor(() => watchdog.HiddenDialogs == 1 && IsWindowVisible(dialog), 10_000);   // lo ve, lo apunta y lo vuelve a enseñar
+                Assert.False(IsWindowEnabled(hwnd));   // sigue siendo modal: ahora con su dialogo a la vista
+                Ui.WaitFor(() => File.ReadAllText(DiagLog.Current).Contains("vuelve a estar disponible"));
+                Assert.False(IsWindowEnabled(hwnd));
+                s.Close();
+            });
+            Ui.Click(Ui.Find<ButtonBase>(w, "SettingsButton"));
+            Assert.True(IsWindowEnabled(hwnd));
+        });
+        var log = File.ReadAllText(DiagLog.Current);
+        Assert.Contains("VENTANA BLOQUEADA", log);
+        Assert.Contains("vuelve a estar disponible", log);
+        Assert.Contains("dialogo traido delante: SettingsWindow", log);
+        Assert.Contains("abierta: SettingsWindow «Ajustes», sobre MainWindow", log);
+        Assert.Contains("cerrada: SettingsWindow", log);
+    }
+
     [Fact]
     public void MientrasCargaLaIA_ElIndicadorLoDice_YLuegoContesta()
     {
@@ -627,6 +758,18 @@ public sealed class MainWindowTests : UiTest
             _ = real.ClipboardImage();
         });
     }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsWindowEnabled(IntPtr hwnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hwnd, int command);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr hwnd, int index);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);

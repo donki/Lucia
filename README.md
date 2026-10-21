@@ -53,7 +53,10 @@ esa misma IA.
 - **Registros de diagnóstico** (`logs\diagnostics.log`, rota a 1 MB y guarda 4): tiempos de cada
   pregunta, del motor y de la puerta, errores y las **congelaciones** que detecta un vigilante del hilo
   de la interfaz (`Services/UiWatchdog.cs`: más de 2 s sin responder, con la fase y la operación en
-  curso). Sin texto de las conversaciones ni datos personales. Ajustes › Diagnóstico: «Copiar
+  curso) y también la ventana **bloqueada por un diálogo que no se ve** (la principal visible pero
+  desactivada sin nada a la vista: lo apunta y vuelve a enseñar el diálogo), y cada ventana que se abre
+  y se cierra. Los diálogos no se minimizan por su cuenta (sin botón en la barra de tareas
+  desaparecían y la ventana parecía congelada). Sin texto de las conversaciones ni datos personales. Ajustes › Diagnóstico: «Copiar
   registros» (zip al portapapeles) y «Carpeta de registros».
 - **Instrucciones fijas** (el «system prompt»), la casilla **Pensar** en el chat para dejar que el
   modelo razone antes de responder (el razonamiento sale plegado), tamaño de letra, español/inglés,
@@ -126,10 +129,10 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-10-21): **310 pruebas**, todas pasan; el banco tarda **unos 27 s** (sin
-contar la compilación). Cobertura de líneas: **92,2 %** de lo instrumentado (se instrumenta el
-ensamblado `sOCLucia` entero) y **92,2 %** sobre toda la app (3710 de 4026 líneas ejecutables de
-C#; el 2026-10-03, 91,5 %).
+`Lucia.Tests` (xUnit, 2026-10-21): **338 pruebas**, todas pasan; el banco tarda **unos 34 s** (sin
+contar la compilación). Cobertura de líneas: **91,3 %** de lo instrumentado (se instrumenta el
+ensamblado `sOCLucia` entero) y **91,3 %** sobre toda la app (4206 de 4608 líneas ejecutables de
+C#; baja desde el 92,2 % porque ya está dentro la parte de MLflow que aún no se ve en Ajustes).
 
 Se prueba la lógica (documentos de texto, HTML, RTF, .docx y PDF; herramientas del agente; el
 cliente de chat en streaming; la puerta de editores; descargas con reanudación y SHA-256; catálogo

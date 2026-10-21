@@ -1,5 +1,39 @@
 # Changelog — sOC Lucia
 
+## 2026.10.21.2 — Ajustes ya no deja la ventana bloqueada / Settings no longer leaves the window locked
+
+**Español**
+
+- **Arreglo**: Ajustes (y los avisos y permisos) se podía minimizar y, como no sale en la barra de
+  tareas, desaparecía mientras la ventana principal seguía bloqueada esperándolo: parecía que Lucia
+  se había congelado. Ahora los diálogos no tienen botón de minimizar; si se minimizan igualmente
+  (Win+D), se minimiza la aplicación entera y, al volver desde el icono junto al reloj, el diálogo
+  sale delante.
+- Si aun así la ventana se queda bloqueada por un diálogo que no se ve, Lucia lo nota en unos
+  segundos, lo apunta en el registro y vuelve a enseñar el diálogo.
+- El registro de diagnóstico apunta también cada ventana que se abre y se cierra (y cuánto estuvo
+  abierta), y el del motor lleva la fecha en cada línea.
+- Los paquetes llevan la versión bien escrita en el nombre (`sOCLucia-2026.10.21.2.msix`,
+  `soc-lucia-code-2026.10.21.2.vsix`); antes salía `2026.10.211`.
+- Banco de pruebas: **338 pruebas**; cobertura de toda la aplicación **91,3 %** (antes 92,2 %): baja
+  porque ya está dentro la parte de MLflow que se verá en Ajustes en la próxima versión, que llega con
+  sus pruebas de ventana.
+
+**English**
+
+- **Fix**: Settings (and prompts and permissions) could be minimized and, as it has no taskbar button,
+  it vanished while the main window stayed locked waiting for it: Lucia looked frozen. Dialogs no
+  longer have a minimize button; if they are minimized anyway (Win+D), the whole app is minimized and,
+  when you come back from the icon next to the clock, the dialog is in front.
+- If the window is still left locked by a dialog that cannot be seen, Lucia notices within seconds,
+  records it in the log and shows the dialog again.
+- The diagnostics log also records each window that opens and closes (and how long it was open), and
+  the engine log has the date on every line.
+- Packages carry the version properly in their name (`sOCLucia-2026.10.21.2.msix`,
+  `soc-lucia-code-2026.10.21.2.vsix`); before it came out as `2026.10.211`.
+- Test suite: **338 tests**; whole-app coverage **91.3 %** (was 92.2 %): it drops because the MLflow
+  part that will show in Settings in the next version is already in, and it comes with its window tests.
+
 ## 2026.10.21.1 — Longitud de las respuestas y del contexto, y registros para cuando se congela / Answer and context length, and logs for when it freezes
 
 **Español**

@@ -28,6 +28,25 @@ public sealed class UiWatchdog : IDisposable
     /// <summary>Cuantas congelaciones ha visto (para las pruebas y el resumen).</summary>
     public int Freezes { get; private set; }
 
+    /// <summary>
+    /// La ventana principal (su HWND). Con ella el vigilante ve tambien el otro «congelado»: la principal
+    /// visible pero desactivada por un dialogo modal que no se ve (el hilo responde, pero no se puede hacer
+    /// nada). Se comprueba con Win32 desde este hilo, sin tocar el de la interfaz.
+    /// </summary>
+    public IntPtr MainWindow { get; set; }
+
+    /// <summary>Que hacer si pasa (en el hilo de la interfaz): volver a enseñar y traer delante el dialogo.</summary>
+    public Action? RecoverHiddenDialog { get; set; }
+
+    /// <summary>Cuanto tiene que durar antes de apuntarlo y arreglarlo.</summary>
+    public TimeSpan HiddenDialogAfter { get; set; } = TimeSpan.FromSeconds(3);
+
+    /// <summary>Veces que se ha visto la principal bloqueada por un dialogo que no se veia.</summary>
+    public int HiddenDialogs { get; private set; }
+
+    private readonly Stopwatch _blocked = new();
+    private bool _blockedLogged;
+
     public UiWatchdog(Dispatcher dispatcher, TimeSpan? threshold = null, TimeSpan? interval = null)
     {
         _dispatcher = dispatcher;
@@ -75,10 +94,60 @@ public sealed class UiWatchdog : IDisposable
                 Wait(answered, Timeout.InfiniteTimeSpan, cancel);
                 if (cancel.IsCancellationRequested) return;
                 DiagLog.Write("ui", $"la ventana vuelve a responder tras {clock.Elapsed.TotalSeconds:0.0} s congelada");
+                Mlflow.MlflowTelemetry.Current.Freeze(clock.Elapsed.TotalSeconds);
             }
+            CheckHiddenDialog();
             if (cancel.WaitHandle.WaitOne(Interval)) return;
         }
     }
+
+    private void CheckHiddenDialog()
+    {
+        if (MainWindow == IntPtr.Zero) return;
+        var stuck = IsWindowVisible(MainWindow) && !IsWindowEnabled(MainWindow) && !AnyUsableWindow();
+        if (!stuck)
+        {
+            if (_blockedLogged)
+                DiagLog.Write("ui", $"la ventana principal vuelve a estar disponible tras {_blocked.Elapsed.TotalSeconds:0.0} s");
+            _blocked.Reset();
+            _blockedLogged = false;
+            return;
+        }
+        if (!_blocked.IsRunning) _blocked.Restart();
+        if (_blockedLogged || _blocked.Elapsed < HiddenDialogAfter) return;
+        _blockedLogged = true;
+        HiddenDialogs++;
+        DiagLog.Write("ui", $"VENTANA BLOQUEADA: la principal esta desactivada por un dialogo que no se ve desde hace {_blocked.Elapsed.TotalSeconds:0.0} s (el hilo responde). Fase: {DiagLog.Phase}. Se vuelve a enseñar el dialogo.");
+        if (RecoverHiddenDialog is { } recover)
+            try { _dispatcher.BeginInvoke(recover); } catch (Exception) { }
+    }
+
+    /// <summary>Si alguna ventana de este proceso (que no sea la principal) se ve y se puede usar: el dialogo que la desactiva.</summary>
+    private bool AnyUsableWindow()
+    {
+        var pid = (uint)Environment.ProcessId;
+        var found = false;
+        EnumWindows((h, _) =>
+        {
+            if (h == MainWindow) return true;
+            GetWindowThreadProcessId(h, out var owner);
+            if (owner == pid && IsWindowVisible(h) && IsWindowEnabled(h) && !IsIconic(h) && GetWindowTextLength(h) > 0)
+            {
+                found = true;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    private delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc callback, IntPtr lParam);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr hwnd);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] private static extern int GetWindowTextLength(IntPtr hwnd);
 
     private static bool Wait(ManualResetEventSlim e, TimeSpan time, CancellationToken cancel)
     {

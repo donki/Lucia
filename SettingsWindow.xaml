@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:SocLucia.Localization"
+        xmlns:c="clr-namespace:SocLucia.Controls"
         Title="{loc:T SettingsTitle}"
         Width="620" Height="760" MinWidth="520" MinHeight="520"
         ShowInTaskbar="False"
@@ -119,6 +120,33 @@
                                 </StackPanel>
                             </Grid>
                             <TextBlock x:Name="DoorHow" Style="{StaticResource HintText}" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- MLflow: tiempos, metricas y eventos a un servidor de seguimiento (apagado por defecto). Oculta hasta que lleguen las trazas de GenAI. -->
+                <Border x:Name="MlflowCard" Visibility="Collapsed" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="MlflowTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="MlflowWhat" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                        <CheckBox x:Name="MlflowCheck" Style="{StaticResource Check}" Margin="0" Click="OnMlflowEnabled" />
+                        <TextBlock x:Name="MlflowUriLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                        <TextBox x:Name="MlflowUriBox" Style="{StaticResource Field}" LostFocus="OnMlflowUriChanged" />
+                        <TextBlock x:Name="MlflowUriHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                        <TextBlock x:Name="MlflowExperimentLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
+                        <TextBox x:Name="MlflowExperimentBox" Style="{StaticResource Field}" LostFocus="OnMlflowExperimentChanged" />
+                        <TextBlock x:Name="MlflowUserLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
+                        <TextBox x:Name="MlflowUserBox" Style="{StaticResource Field}" LostFocus="OnMlflowUserChanged" />
+                        <TextBlock x:Name="MlflowPasswordLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
+                        <c:RevealPasswordBox x:Name="MlflowPasswordBox" Left="OnMlflowPasswordChanged" />
+                        <TextBlock x:Name="MlflowTokenLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
+                        <c:RevealPasswordBox x:Name="MlflowTokenBox" Left="OnMlflowTokenChanged" />
+                        <TextBlock x:Name="MlflowAuthHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                        <CheckBox x:Name="MlflowTextCheck" Style="{StaticResource Check}" Margin="0,12,0,0" Click="OnMlflowTextChanged" />
+                        <TextBlock x:Name="MlflowTextWarning" Style="{StaticResource HintText}" Foreground="{DynamicResource Danger}" Margin="22,2,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button x:Name="MlflowTestButton" Style="{StaticResource OutlineButton}" Click="OnMlflowTest" />
+                            <TextBlock x:Name="MlflowTestStatus" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="360" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

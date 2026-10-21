@@ -24,12 +24,32 @@ public sealed class ToolCall
     };
 }
 
-/// <summary>Un trozo de respuesta en streaming: texto visible, razonamiento, o el fin con las herramientas pedidas.</summary>
-public sealed record ChatDelta(string? Content, string? Reasoning, IReadOnlyList<ToolCall>? ToolCalls = null, string? FinishReason = null);
+/// <summary>Un trozo de respuesta en streaming: texto visible, razonamiento, o el fin con las herramientas pedidas y lo que costo.</summary>
+public sealed record ChatDelta(string? Content, string? Reasoning, IReadOnlyList<ToolCall>? ToolCalls = null, string? FinishReason = null, ChatUsage? Usage = null);
+
+/// <summary>Lo que dice el servidor al acabar: tokens de la pregunta y de la respuesta y velocidad (llama-server: usage y timings).</summary>
+public sealed record ChatUsage(int? PromptTokens, int? CompletionTokens, double? TokensPerSecond)
+{
+    public static ChatUsage? From(JsonNode? node)
+    {
+        var usage = node?["usage"] as JsonObject;
+        var timings = node?["timings"] as JsonObject;
+        if (usage is null && timings is null) return null;
+        static int? Int(JsonNode? n) => n is JsonValue v && v.TryGetValue<double>(out var d) && d >= 0 ? (int)d : null;
+        static double? Num(JsonNode? n) => n is JsonValue v && v.TryGetValue<double>(out var d) && d >= 0 && !double.IsInfinity(d) ? d : null;
+        return new ChatUsage(
+            Int(usage?["prompt_tokens"]) ?? Int(timings?["prompt_n"]),
+            Int(usage?["completion_tokens"]) ?? Int(timings?["predicted_n"]),
+            Num(timings?["predicted_per_second"]));
+    }
+}
 
 /// <summary>Cliente del <c>/v1/chat/completions</c> de llama-server, en streaming (SSE), con herramientas.</summary>
 public static class ChatClient
 {
+    /// <summary>La temperatura con la que se pregunta (va tambien como parametro a MLflow).</summary>
+    public const double Temperature = 0.7;
+
     /// <summary>
     /// Lee la respuesta entera en un hilo del pool y deja cada trozo en <paramref name="target"/>.
     /// Nada de esto pasa por el hilo de la interfaz: ni la peticion HTTP ni el troceado del SSE ni
@@ -53,7 +73,7 @@ public static class ChatClient
             ["stream"] = true,
             // Con pensamiento, el razonamiento gasta del mismo tope: se le da sitio para que quede respuesta.
             ["max_tokens"] = thinking ? maxTokens * 3 : maxTokens,
-            ["temperature"] = 0.7,
+            ["temperature"] = Temperature,
             ["messages"] = new JsonArray(messages.Select(ToJson).ToArray()),
             // Con el «pensamiento» apagado el modelo contesta directo; encendido, llama-server separa
             // el razonamiento en reasoning_content y se enseña aparte.
@@ -76,6 +96,7 @@ public static class ChatClient
         }
         var calls = new SortedDictionary<int, ToolCall>();
         string? finish = null;
+        ChatUsage? usage = null;
         await using var stream = await response.Content.ReadAsStreamAsync(cancel);
         using var reader = new StreamReader(stream, Encoding.UTF8);
         while (await reader.ReadLineAsync(cancel) is { } line)
@@ -88,6 +109,7 @@ public static class ChatClient
             JsonNode? node;
             try { node = JsonNode.Parse(payload); }
             catch (JsonException) { continue; }
+            usage = ChatUsage.From(node) ?? usage;
             // El ultimo trozo puede traer «choices» vacio (solo el uso de tokens): no es un error.
             var choice = node?["choices"] is JsonArray { Count: > 0 } choices ? choices[0] : null;
             if (choice?["finish_reason"]?.GetValue<string>() is { Length: > 0 } reason)
@@ -119,8 +141,8 @@ public static class ChatClient
                 if (call.Id.Length == 0) call.Id = $"call_{i}";
             yield return new ChatDelta(null, null, calls.Values.ToList());
         }
-        if (finish is not null)
-            yield return new ChatDelta(null, null, null, finish);
+        if (finish is not null || usage is not null)
+            yield return new ChatDelta(null, null, null, finish, usage);
     }
 
     private static JsonNode ToJson(ChatMessage m)

@@ -101,6 +101,9 @@ public sealed class TrayIcon : IDisposable
         _window.Activate();
         SetForegroundWindow(_hwnd);
         Remove();
+        // Un dialogo abierto (Ajustes, un aviso) vuelve delante: si no, la ventana se veria desactivada sin saber por que.
+        if (_window.OwnedWindows.Count > 0)
+            App.ShowHiddenDialogs(_window);
     }
 
     /// <summary>

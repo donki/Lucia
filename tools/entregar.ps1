@@ -21,8 +21,12 @@ Set-Location $raiz
 $p = 'sOCLucia.csproj'; $x = Get-Content $p -Raw
 foreach ($t in 'Version', 'AssemblyVersion', 'FileVersion') { $x = [regex]::Replace($x, "<$t>[^<]*</$t>", "<$t>$Version</$t>") }
 [IO.File]::WriteAllText($p, $x)
-$parts = $Version.Split('.'); $msixVer = "$($parts[0]).$($parts[1]).$($parts[2])$($parts[3]).0"
-$semver = "$($parts[0]).$($parts[1]).$($parts[2])$(if ($parts[3] -ne '0') { $parts[3] })"
+# MSIX (cuatro numeros, el ultimo 0) y extension (tres, semver): dia*100+revision en el tercero, para
+# que siempre crezca y se lea bien (2026.10.21.1 -> 2026.10.2101). Los ficheros llevan la version de
+# verdad en el nombre: sOCLucia-2026.10.21.1.msix y soc-lucia-code-2026.10.21.1.vsix.
+$parts = $Version.Split('.'); $packed = [int]$parts[2] * 100 + [int]$parts[3]
+$msixVer = "$($parts[0]).$($parts[1]).$packed.0"
+$semver = "$($parts[0]).$($parts[1]).$packed"
 $v = Get-Content 'vscode\package.json' -Raw
 $v = [regex]::Replace($v, '"version": "[^"]+"', "`"version`": `"$semver`"", 1)
 [IO.File]::WriteAllText('vscode\package.json', $v)
@@ -39,8 +43,11 @@ Push-Location vscode
 Remove-Item *.vsix -ErrorAction SilentlyContinue
 npx --yes @vscode/vsce package --no-dependencies 2>&1 | Select-Object -Last 1
 $vsix = Get-ChildItem *.vsix | Select-Object -First 1
+if ($vsix) { $vsix = Rename-Item $vsix.FullName "soc-lucia-code-$Version.vsix" -PassThru }
 Pop-Location
 if (-not $vsix) { throw 'No hay .vsix.' }
+$msix = "bin\sOCLucia-$Version.msix"
+Copy-Item bin\sOCLucia.msix $msix -Force
 
 # 4. OneDrive (constitucion general, 8).
 $d = 'C:\ID\OneDrive\Lucia'
@@ -52,7 +59,7 @@ catch {
     Copy-Item $exe "$d\sOCLucia-nueva.exe" -Force
     Write-Warning "sOCLucia.exe estaba en uso: la version nueva queda como sOCLucia-nueva.exe"
 }
-Copy-Item bin\sOCLucia.msix "$d\sOCLucia-$msixVer.msix" -Force
+Copy-Item $msix $d -Force
 Copy-Item $vsix.FullName $d -Force
 $leeme = @"
 sOC Lucia para Windows
@@ -106,4 +113,4 @@ Software libre bajo licencia MIT. En español y en ingles, claro y oscuro.
 git add -A
 git commit -q -m $Mensaje
 git push -q origin HEAD 2>&1 | Select-Object -Last 1
-python 'D:\sOCProjects\Mobile\Shared\release-github.py' "v$Version" $exe bin\sOCLucia.msix $vsix.FullName 2>&1 | Select-Object -Last 1
+python 'D:\sOCProjects\Mobile\Shared\release-github.py' "v$Version" $exe $msix $vsix.FullName 2>&1 | Select-Object -Last 1

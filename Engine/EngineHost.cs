@@ -258,7 +258,7 @@ public sealed class EngineHost : IDisposable
                 var log = new FileInfo(Paths.EngineLog);
                 if (log.Exists && log.Length > 5_000_000)
                     log.Delete();
-                File.AppendAllText(Paths.EngineLog, $"{DateTime.Now:HH:mm:ss} {line}{Environment.NewLine}");
+                File.AppendAllText(Paths.EngineLog, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {line}{Environment.NewLine}");   // con fecha: sin ella, lineas de dias distintos parecian de la misma sesion
             }
         }
         catch (Exception) { }

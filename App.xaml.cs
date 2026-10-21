@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using SocLucia.Editor;
 using SocLucia.Engine;
 using SocLucia.Localization;
@@ -16,6 +16,14 @@ public partial class App : Application
 
     /// <summary>El vigilante de congelaciones de la ventana (registro de diagnostico).</summary>
     internal static UiWatchdog? Watchdog { get; private set; }
+
+    /// <summary>Con que se contesta ahora (los parametros de la ejecucion de MLflow).</summary>
+    internal static Services.Mlflow.RunConfig RunConfig()
+    {
+        var s = AppSettings.Current;
+        return new Services.Mlflow.RunConfig(s.ModelName ?? "-", System.IO.Path.GetFileName(s.ModelPath ?? "-"), TokenLimits.Context(s), TokenLimits.Answer(s),
+            s.Thinking, ChatClient.Temperature, Engine.Accelerator, Version, TokenLimits.Pc.Gpu ?? "-");
+    }
 
     /// <summary>La version que se enseña y se apunta en el registro (la del csproj).</summary>
     public static string Version =>
@@ -61,7 +69,14 @@ public partial class App : Application
         MainWindow = window;
         window.Show();
         Watchdog?.Dispose();
-        Watchdog = new UiWatchdog(window.Dispatcher);
+        Watchdog = new UiWatchdog(window.Dispatcher)
+        {
+            MainWindow = new System.Windows.Interop.WindowInteropHelper(window).Handle,
+            RecoverHiddenDialog = () => ShowHiddenDialogs(window),
+        };
+        // MLflow (apagado por defecto): en segundo plano, nunca en este hilo.
+        Services.Mlflow.MlflowTelemetry.Current.ConfigNow = RunConfig;
+        Services.Mlflow.MlflowTelemetry.Current.Configure(AppSettings.Current.Mlflow);
         // Una descarga que quedo a medias al cerrar se retoma sola (el .part sigue en la carpeta de modelos).
         window.Dispatcher.BeginInvoke(ModelDownloads.ResumePending, System.Windows.Threading.DispatcherPriority.ApplicationIdle);   // tambien con --tray, que no llega a Loaded
         // --tray (arranque con Windows): escondida en el area de notificacion desde el principio.
@@ -85,6 +100,12 @@ public partial class App : Application
             }
             else if (args[i] == "--settings")
                 WhenLoaded(window, () => window.OpenSettingsForTest());
+            else if (args[i] == "--settings-after" && i + 1 < args.Length && int.TryParse(args[i + 1], out var ms))
+            {
+                // Como el boton del engranaje (modal), al cabo de ms: para reproducir «envio y abro Ajustes».
+                i++;
+                WhenLoaded(window, async () => { await Task.Delay(ms); window.OpenSettingsFromButtonForTest(); });
+            }
             else if (args[i] == "--tool" && i + 2 < args.Length)
             {
                 // Prueba de una herramienta sin modelo: --tool read_file {"path":"x"} (con --auto no pregunta)
@@ -102,6 +123,87 @@ public partial class App : Application
 #endif
         return window;
     }
+
+    /// <summary>
+    /// Los dialogos de la ventana principal que estan abiertos pero no se ven (escondidos, minimizados o
+    /// fuera de las pantallas): se enseñan, se traen a una pantalla y se ponen delante.
+    /// </summary>
+    internal static void ShowHiddenDialogs(Window main)
+    {
+        foreach (var w in main.OwnedWindows.Cast<Window>().Concat(Current.Windows.Cast<Window>().Where(x => x != main && x.Owner is null)).Distinct().ToList())
+        {
+            if (!w.IsLoaded) continue;
+            if (w.Visibility != Visibility.Visible) w.Visibility = Visibility.Visible;
+            // Tambien por Win32: si Windows la escondio sin que WPF se enterase, la propiedad no basta.
+            var handle = new System.Windows.Interop.WindowInteropHelper(w).Handle;
+            if (handle != IntPtr.Zero) ShowWindow(handle, 5 /* SW_SHOW */);
+            if (w.WindowState == WindowState.Minimized) w.WindowState = WindowState.Normal;
+            if (w.Left + 50 < SystemParameters.VirtualScreenLeft || w.Left + 50 > SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth
+                || w.Top < SystemParameters.VirtualScreenTop || w.Top + 50 > SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight)
+            {
+                w.Left = main.Left + 40;
+                w.Top = main.Top + 40;
+            }
+            if (!HostedByTests)   // en el banco de pruebas no se le quita el foco a nadie
+            {
+                w.Topmost = true;
+                w.Activate();
+                w.Topmost = false;
+            }
+            DiagLog.Write("ui", $"dialogo traido delante: {w.GetType().Name} «{w.Title}»");
+        }
+    }
+
+    private static bool _tracking;
+
+    /// <summary>
+    /// Cada ventana que se abre (Ajustes, avisos, permisos, «Acerca de») y cuanto estuvo abierta, al
+    /// registro de diagnostico: un dialogo modal que no se ve deja la ventana principal desactivada y
+    /// parece congelada aunque el hilo responda (el vigilante no lo ve).
+    /// </summary>
+    internal static void GuardDialogs()
+    {
+        if (_tracking) return;
+        _tracking = true;
+        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler((sender, _) =>
+        {
+            if (sender is not Window w || w is MainWindow || w.Tag is "tracked") return;
+            w.Tag ??= "tracked";
+            NoOwnMinimize(w);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var owner = w.Owner;
+            DiagLog.Write("ventana", $"abierta: {w.GetType().Name} «{w.Title}»{(owner is not null ? $", sobre {owner.GetType().Name} (visible {owner.IsVisible}, {owner.WindowState})" : string.Empty)}, en {(int)w.Left},{(int)w.Top} de {(int)w.ActualWidth}x{(int)w.ActualHeight}, visible {w.IsVisible}");
+            w.Closed += (_, _) => DiagLog.Write("ventana", $"cerrada: {w.GetType().Name} tras {clock.Elapsed.TotalSeconds:0.0} s");
+        }));
+    }
+
+    /// <summary>
+    /// Un dialogo (Ajustes, avisos, permisos) no se minimiza por su cuenta: no tiene boton en la barra de
+    /// tareas, asi que minimizado desaparecia y la ventana principal se quedaba desactivada por el,
+    /// «congelada». Se le quita el boton de minimizar y, si aun asi se minimiza (Win+D), se minimiza la
+    /// aplicacion entera (a la bandeja si esta asi) y el dialogo vuelve a su tamaño para cuando se vuelva.
+    /// </summary>
+    private static void NoOwnMinimize(Window w)
+    {
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(w).Handle;
+        if (hwnd != IntPtr.Zero)
+        {
+            const int GwlStyle = -16, WsMinimizeBox = 0x00020000;
+            SetWindowLong(hwnd, GwlStyle, GetWindowLong(hwnd, GwlStyle) & ~WsMinimizeBox);
+        }
+        w.StateChanged += (_, _) =>
+        {
+            if (w.WindowState != WindowState.Minimized) return;
+            DiagLog.Write("ventana", $"{w.GetType().Name} minimizado: se minimiza la aplicacion entera");
+            w.WindowState = WindowState.Normal;
+            if (w.Owner is { } owner && owner.WindowState != WindowState.Minimized)
+                owner.WindowState = WindowState.Minimized;
+        };
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hwnd, int index, int value);
 
     private static bool _alerting;
 
@@ -156,6 +258,7 @@ public partial class App : Application
     {
         DiagLog.Write("app", "se cierra");
         Watchdog?.Dispose();
+        Services.Mlflow.MlflowTelemetry.Current.Dispose();
         Door.Dispose();
         Engine.Dispose();
     }

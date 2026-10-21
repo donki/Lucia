@@ -34,6 +34,10 @@ public sealed class PendingAnswer
     private readonly StringBuilder _reasoning = new();
     private IReadOnlyList<ToolCall>? _calls;
     private string? _finish;
+    private ChatUsage? _usage;
+
+    /// <summary>Tokens y velocidad que dijo el servidor al acabar (null si no lo dijo).</summary>
+    public ChatUsage? Usage { get { lock (_gate) return _usage; } }
     private AnswerPhase _phase;
     private int _version;
     private long _waitingSince;
@@ -92,6 +96,7 @@ public sealed class PendingAnswer
                 _firstPiece = System.Diagnostics.Stopwatch.GetTimestamp();
             if (delta.ToolCalls is not null) _calls = delta.ToolCalls;
             if (delta.FinishReason is not null) _finish = delta.FinishReason;
+            if (delta.Usage is not null) _usage = delta.Usage;
             _version++;
         }
     }

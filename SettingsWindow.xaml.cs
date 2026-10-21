@@ -14,6 +14,11 @@ public partial class SettingsWindow : Window
 {
     public SettingsWindow()
     {
+#if DEBUG
+        DiagLog.Write("ventana", "Ajustes creado desde: " + Environment.StackTrace.Replace(Environment.NewLine, " | "));
+#endif
+        var building = System.Diagnostics.Stopwatch.StartNew();
+        Loaded += (_, _) => DiagLog.Write("ventana", $"Ajustes listo en {building.ElapsedMilliseconds} ms");
         InitializeComponent();
         SourceInitialized += (_, _) => ThemeManager.ApplyToWindow(this);
         Loc.LanguageChanged += ApplyTexts;
@@ -71,6 +76,7 @@ public partial class SettingsWindow : Window
         NewTokenButton.ToolTip = Loc.Get("DoorNewToken");
         DoorHow.Text = Loc.Get("DoorHow");
         PaintDoor();
+        PaintMlflow();
         WorkTitle.Text = Loc.Get("WorkTitle");
         WorkHint.Text = Loc.Get("WorkHint");
         WorkFolderLabel.Text = Loc.Get("WorkFolder");
@@ -732,6 +738,150 @@ public partial class SettingsWindow : Window
         return panel;
     }
 
+    // ------------------------------------------------------------------ MLflow
+
+    private static MlflowSettings Ml => AppSettings.Current.Mlflow;
+
+    private void PaintMlflow()
+    {
+        var m = Ml;
+        MlflowTitle.Text = Loc.Get("MlflowTitle");
+        MlflowWhat.Text = Loc.Format("MlflowWhat", Services.Mlflow.MlflowApi.TryUri(m.TrackingUri, out var uri) ? uri.Host : Loc.Get("MlflowAnyServer"));
+        MlflowCheck.Content = Loc.Get("MlflowEnable");
+        MlflowCheck.IsChecked = m.Enabled;
+        MlflowUriLabel.Text = Loc.Get("MlflowUri");
+        MlflowUriBox.Text = m.TrackingUri;
+        MlflowUriHint.Text = Loc.Get("MlflowUriHint");
+        MlflowExperimentLabel.Text = Loc.Get("MlflowExperiment");
+        MlflowExperimentBox.Text = m.Experiment;
+        MlflowUserLabel.Text = Loc.Get("MlflowUser");
+        MlflowUserBox.Text = m.Username;
+        MlflowPasswordLabel.Text = Loc.Get("MlflowPassword");
+        MlflowTokenLabel.Text = Loc.Get("MlflowToken");
+        // En las casillas, el texto descifrado (para poder verlo con el ojo); en el fichero, solo cifrado.
+        if (MlflowPasswordBox.Password.Length == 0) MlflowPasswordBox.Password = Secrets.Unprotect(m.ProtectedPassword);
+        if (MlflowTokenBox.Password.Length == 0) MlflowTokenBox.Password = Secrets.Unprotect(m.ProtectedToken);
+        MlflowAuthHint.Text = Loc.Get("MlflowAuthHint");
+        MlflowTextCheck.Content = Loc.Get("MlflowSendText");
+        MlflowTextCheck.IsChecked = m.SendText;
+        MlflowTextWarning.Text = Loc.Get("MlflowSendTextWarning");
+        MlflowTestButton.Content = IconLabel("\uE703", Loc.Get("MlflowTest"));
+    }
+
+    /// <summary>Guarda y aplica: el envio arranca, cambia o se para (en segundo plano).</summary>
+    private void SaveMlflow(string what)
+    {
+        AppSettings.Current.Save();
+        Services.Mlflow.MlflowTelemetry.Current.Configure(Ml);
+        DiagLog.Write("ajustes", "MLflow: " + what);   // nunca el valor de un secreto
+        PaintMlflow();
+    }
+
+    private void OnMlflowEnabled(object sender, RoutedEventArgs e)
+    {
+        var on = MlflowCheck.IsChecked == true;
+        if (on && !Services.Mlflow.MlflowApi.TryUri(MlflowUriBox.Text, out _))
+        {
+            PromptWindow.Alert(this, Loc.Get("MlflowTitle"), Loc.Get("MlflowNeedsUri"));
+            MlflowCheck.IsChecked = false;
+            return;
+        }
+        if (on) OnMlflowUriChanged(sender, e);
+        Ml.Enabled = on;
+        SaveMlflow(on ? "activado" : "apagado");
+    }
+
+    private void OnMlflowUriChanged(object sender, RoutedEventArgs e)
+    {
+        var text = MlflowUriBox.Text.Trim();
+        if (text == Ml.TrackingUri) return;
+        if (text.Length > 0 && !Services.Mlflow.MlflowApi.TryUri(text, out _))
+        {
+            PromptWindow.Alert(this, Loc.Get("MlflowUri"), Loc.Format("MlflowBadUri", text));
+            MlflowUriBox.Text = Ml.TrackingUri;
+            return;
+        }
+        if (text.Length == 0 && Ml.Enabled)
+        {
+            PromptWindow.Alert(this, Loc.Get("MlflowUri"), Loc.Get("MlflowNeedsUri"));
+            MlflowUriBox.Text = Ml.TrackingUri;
+            return;
+        }
+        Ml.TrackingUri = text;
+        SaveMlflow("direccion cambiada");
+    }
+
+    private void OnMlflowExperimentChanged(object sender, RoutedEventArgs e)
+    {
+        var text = MlflowExperimentBox.Text.Trim();
+        if (text.Length == 0) text = MlflowSettings.DefaultExperiment;
+        if (text == Ml.Experiment) { MlflowExperimentBox.Text = text; return; }
+        Ml.Experiment = text;
+        SaveMlflow("experimento cambiado");
+    }
+
+    private void OnMlflowUserChanged(object sender, RoutedEventArgs e)
+    {
+        var text = MlflowUserBox.Text.Trim();
+        if (text == Ml.Username) return;
+        Ml.Username = text;
+        SaveMlflow("usuario cambiado");
+    }
+
+    private void OnMlflowPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (MlflowPasswordBox.Password == Secrets.Unprotect(Ml.ProtectedPassword)) return;
+        Ml.ProtectedPassword = Secrets.Protect(MlflowPasswordBox.Password);
+        SaveMlflow("contraseña cambiada");
+    }
+
+    private void OnMlflowTokenChanged(object sender, RoutedEventArgs e)
+    {
+        if (MlflowTokenBox.Password.Trim() == Secrets.Unprotect(Ml.ProtectedToken)) return;
+        Ml.ProtectedToken = Secrets.Protect(MlflowTokenBox.Password.Trim());
+        SaveMlflow("token cambiado");
+    }
+
+    /// <summary>Mandar el texto pide confirmacion: es lo unico que puede llevar datos personales.</summary>
+    private void OnMlflowTextChanged(object sender, RoutedEventArgs e)
+    {
+        var on = MlflowTextCheck.IsChecked == true;
+        if (on && !PromptWindow.Confirm(this, Loc.Get("MlflowSendText"), Loc.Get("MlflowSendTextConfirm")))
+        {
+            MlflowTextCheck.IsChecked = false;
+            return;
+        }
+        Ml.SendText = on;
+        SaveMlflow(on ? "texto de preguntas y respuestas: si" : "texto de preguntas y respuestas: no");
+    }
+
+    /// <summary>Prueba la conexion con lo que hay escrito (aunque no se haya guardado) y dice en palabras que pasa.</summary>
+    private async void OnMlflowTest(object sender, RoutedEventArgs e)
+    {
+        MlflowTestButton.IsEnabled = false;
+        MlflowTestStatus.Text = Loc.Get("MlflowTesting");
+        MlflowTestStatus.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondary");
+        try
+        {
+            var uri = MlflowUriBox.Text;
+            var experiment = MlflowExperimentBox.Text.Trim().Length > 0 ? MlflowExperimentBox.Text.Trim() : MlflowSettings.DefaultExperiment;
+            var (user, password, token) = (MlflowUserBox.Text.Trim(), MlflowPasswordBox.Password, MlflowTokenBox.Password.Trim());
+            var http = Services.Mlflow.MlflowTelemetry.Current.Http;
+            var (result, detail) = await Task.Run(() => Services.Mlflow.MlflowApi.CheckAsync(http, uri, experiment, user, password, token, CancellationToken.None));
+            var text = Loc.Format("MlflowCheck_" + result, experiment, detail ?? string.Empty);
+            DiagLog.Write("mlflow", $"prueba de conexion: {result}{(detail is null || result is Services.Mlflow.MlflowCheck.Ok ? string.Empty : " " + detail)}");
+            MlflowTestStatus.Text = text;
+            var ok = result is Services.Mlflow.MlflowCheck.Ok or Services.Mlflow.MlflowCheck.OkWillCreate;
+            MlflowTestStatus.SetResourceReference(TextBlock.ForegroundProperty, ok ? "Success" : "Danger");
+            if (!ok)
+                PromptWindow.Alert(this, Loc.Get("MlflowTest"), text);
+        }
+        finally
+        {
+            MlflowTestButton.IsEnabled = true;
+        }
+    }
+
     // ------------------------------------------------------------------ respuestas y contexto
 
     private void PaintLimits()
@@ -910,6 +1060,11 @@ public partial class SettingsWindow : Window
         OnInstructionsChanged(sender, e);
         OnAnswerTokensChanged(sender, e);
         OnContextTokensChanged(sender, e);
+        OnMlflowUriChanged(sender, e);
+        OnMlflowExperimentChanged(sender, e);
+        OnMlflowUserChanged(sender, e);
+        OnMlflowPasswordChanged(sender, e);
+        OnMlflowTokenChanged(sender, e);
         Close();
     }
 

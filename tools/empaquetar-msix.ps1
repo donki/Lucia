@@ -56,9 +56,10 @@ if (-not $Version) {
     $partes = $Matches[1].Split(".")
     while ($partes.Count -lt 4) { $partes += "0" }
 
-    # La Store reserva el cuarto numero: tiene que ser 0. Se corre el nuestro a la tercera posicion
-    # para no perderlo (2026.9.2.4 -> 2026.9.24.0).
-    $Version = "{0}.{1}.{2}{3}.0" -f $partes[0], $partes[1], $partes[2], $partes[3]
+    # La Store reserva el cuarto numero: tiene que ser 0. El nuestro va en la tercera posicion como
+    # dia*100+revision (2026.10.21.1 -> 2026.10.2101.0; maximo 3199, dentro de 65535). Pegado sin
+    # mas (2026.10.211.0) se leia mal y el dia 22 (2200) quedaba por debajo del 211 de la vispera.
+    $Version = "{0}.{1}.{2}.0" -f $partes[0], $partes[1], ([int]$partes[2] * 100 + [int]$partes[3])
 }
 Write-Host "Version del paquete: $Version"
 

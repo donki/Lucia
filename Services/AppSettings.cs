@@ -37,6 +37,9 @@ public sealed class AppSettings
     /// <summary>Puerta local para editores de codigo (VS Code): apagada por defecto.</summary>
     public EditorDoorSettings EditorDoor { get; set; } = new();
 
+    /// <summary>Envio de tiempos, metricas y eventos a un servidor MLflow: apagado por defecto.</summary>
+    public MlflowSettings Mlflow { get; set; } = new();
+
     /// <summary>Modo trabajo: carpeta en la que se ejecutan las ordenes (por defecto, Documentos).</summary>
     public string WorkFolder { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
@@ -114,6 +117,29 @@ public sealed class AppSettings
     }
 
     public bool HasModel => !string.IsNullOrEmpty(ModelPath) && File.Exists(ModelPath);
+}
+
+/// <summary>
+/// El servidor MLflow al que se mandan los tiempos y las metricas de cada pregunta y los eventos del
+/// registro de diagnostico. Apagado por defecto; el texto de preguntas y respuestas, aparte y tambien
+/// apagado. La contraseña y el token van cifrados con DPAPI (<see cref="Secrets"/>), nunca en claro.
+/// </summary>
+public sealed class MlflowSettings
+{
+    public const string DefaultExperiment = "sOC Lucia";
+
+    public bool Enabled { get; set; }
+    /// <summary>La direccion del servidor (MLFLOW_TRACKING_URI), http o https.</summary>
+    public string TrackingUri { get; set; } = string.Empty;
+    public string Experiment { get; set; } = DefaultExperiment;
+    /// <summary>Usuario de la autenticacion basica (MLFLOW_TRACKING_USERNAME).</summary>
+    public string Username { get; set; } = string.Empty;
+    /// <summary>Contraseña cifrada (dpapi1:…) de la autenticacion basica.</summary>
+    public string ProtectedPassword { get; set; } = string.Empty;
+    /// <summary>Token cifrado (dpapi1:…) para Bearer (MLFLOW_TRACKING_TOKEN, tambien Databricks). Si hay token, manda sobre usuario y contraseña.</summary>
+    public string ProtectedToken { get; set; } = string.Empty;
+    /// <summary>Mandar tambien el texto de las preguntas y respuestas. Apagado por defecto.</summary>
+    public bool SendText { get; set; }
 }
 
 public sealed class EditorDoorSettings

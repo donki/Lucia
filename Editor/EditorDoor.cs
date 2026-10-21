@@ -178,6 +178,10 @@ public sealed class EditorDoor : IDisposable
         }
         response.Close();
         DiagLog.Write("puerta", $"{path}: acabada a los {clock.ElapsedMilliseconds} ms");
+        // A MLflow solo tiempos y estado: lo que pide el editor (su codigo) no sale de aqui.
+        if (Services.Mlflow.MlflowTelemetry.Current.Enabled)
+            Services.Mlflow.MlflowTelemetry.Current.Request(App.RunConfig(), new Services.Mlflow.RequestRecord("door", null, clock.Elapsed.TotalMilliseconds, null, null, null, 0, 0, 0,
+                (int)upstream.StatusCode < 400 ? "ok" : "error", (int)upstream.StatusCode < 400 ? null : $"HTTP {(int)upstream.StatusCode}"));
     }
 
     /// <summary>Sin indicacion del cliente, el modelo no «piensa»: un razonador se gastaria toda la respuesta dentro de &lt;think&gt;.</summary>

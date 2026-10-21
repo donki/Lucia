@@ -45,12 +45,17 @@ public static class DiagLog
         }
     }
 
+    /// <summary>Cada linea escrita (zona y mensaje ya tapado), para quien la quiera reenviar (MLflow). Nunca en el hilo de nadie que espere: el oyente encola y vuelve.</summary>
+    public static event Action<string, string>? Written;
+
     /// <summary>Una linea con fecha y hora (milisegundos), la zona y el hilo. Nunca lanza.</summary>
     public static void Write(string area, string message)
     {
         try
         {
-            var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{area}] (hilo {Environment.CurrentManagedThreadId}) {Scrub(message)}{Environment.NewLine}";
+            message = Scrub(message);
+            try { Written?.Invoke(area, message); } catch (Exception) { }
+            var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{area}] (hilo {Environment.CurrentManagedThreadId}) {message}{Environment.NewLine}";
             lock (Gate)
             {
                 Directory.CreateDirectory(Paths.Logs);
