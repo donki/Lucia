@@ -69,7 +69,7 @@ public class HuggingFaceTests
             """);
         Assert.Equal(3, list.Count);
         Assert.Equal(new HuggingFace.Candidate("unsloth/Qwen3.5-4B-GGUF", 1000, 20, "apache-2.0", false, true, "text-generation"), list[0]);
-        Assert.Equal(new HuggingFace.Candidate("org/imagen", 5, 0, "?", true, false, "diffusers"), list[1]);
+        Assert.Equal(new HuggingFace.Candidate("org/imagen", 5, 0, "?", true, false, "diffusers", 0, true), list[1]);
         Assert.Equal(new HuggingFace.Candidate("org/sin-nada", 0, 0, "?", false, false, ""), list[2]);
     }
 

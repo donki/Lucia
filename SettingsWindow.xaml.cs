@@ -70,7 +70,8 @@ public partial class SettingsWindow : Window
         CancelDownloadButton.ToolTip = Loc.Get("ModelCancel");
         InstalledLabel.Text = Loc.Get("ModelsInstalled");
         CatalogLabel.Text = Loc.Get("CatalogLabel");
-        OnlyGgufCheck.Content = Loc.Get("SearchOnlyGguf");
+        PaintFilters();
+        PaintTeach();
         SearchLabel.Text = Loc.Get("SearchHf");
         SearchBox.ToolTip = SearchButton.ToolTip = Loc.Get("SearchHfTip");
         if (_hits is null) SearchHint.Text = Loc.Get("SearchHfHint");
@@ -196,7 +197,7 @@ public partial class SettingsWindow : Window
     private async Task SearchAsync()
     {
         var query = SearchBox.Text.Trim();
-        if (query.Length == 0) return;
+        if (query.Length == 0 && CurrentFilters() == new HuggingFace.Filters()) return;   // sin texto ni filtros no hay nada que buscar
         _search?.Cancel();
         _search = new CancellationTokenSource();
         var token = _search.Token;
@@ -206,7 +207,7 @@ public partial class SettingsWindow : Window
         SearchBusy.Start(Loc.Get("SearchHfSearching"));
         try
         {
-            _hits = await HuggingFace.SearchAsync(query, _pc ??= PcProfile.Detect(App.Engine.Accelerator), OnlyGgufCheck.IsChecked == true, token);
+            _hits = await HuggingFace.SearchAsync(query, _pc ??= PcProfile.Detect(App.Engine.Accelerator), CurrentFilters(), token);
             PaintSearch();
         }
         catch (OperationCanceledException) { }
@@ -223,12 +224,14 @@ public partial class SettingsWindow : Window
 
     public async void SearchForTest(string query)
     {
-        if (query.StartsWith('*')) { OnlyGgufCheck.IsChecked = false; query = query[1..]; }
+        if (query.StartsWith('*')) { FormatCombo.SelectedIndex = 2; query = query[1..]; }
+        if (query.StartsWith('+')) { FormatCombo.SelectedIndex = 1; query = query[1..]; }
         SearchBox.Text = query;
         await SearchAsync();
         foreach (var h in _hits ?? [])
             EngineHost.Log($"HF {(h.Runnable ? ModelCatalog.FitOf(h.Model, _pc!).ToString() : "no:" + h.Kind)} {h.Model.Name} | {h.Model.Repo} | {h.FileName} | {Human(h.Model.ApproxBytes)} | {h.Model.License} | {h.Downloads} desc" + (h.Gated ? " | gated" : string.Empty));
-        SearchLabel.BringIntoView();
+        // Despues de pintar (si no, el desplazamiento se calcula con la lista vacia).
+        _ = Dispatcher.BeginInvoke(() => SearchLabel.BringIntoView(new Rect(0, 0, 1, 600)), System.Windows.Threading.DispatcherPriority.ContextIdle);
     }
 
     /// <summary>Los resultados, con la misma fila que el catalogo: estrella si es optima, aviso si ira lenta.</summary>
@@ -248,6 +251,11 @@ public partial class SettingsWindow : Window
             if (hit.Runnable)
             {
                 SearchList.Children.Add(CatalogRow(hit.Model, ModelCatalog.FitOf(hit.Model, pc), false, s.ModelName == hit.Model.Name || installed.Any(i => i.Name == hit.Model.Name), $"{hit.Model.Repo} · {hit.FileName} · {stats}"));
+                continue;
+            }
+            if (hit.Convertible)
+            {
+                SearchList.Children.Add(ConvertibleRow(hit, stats));
                 continue;
             }
             // No es un GGUF de un fichero: se enseña que es y se puede abrir en el navegador, pero no se instala.
@@ -271,6 +279,236 @@ public partial class SettingsWindow : Window
             Grid.SetColumn(open, 1);
             grid.Children.Add(open);
             SearchList.Children.Add(grid);
+        }
+    }
+
+    // ------------------------------------------------------------------ filtros del buscador
+
+    private sealed record Choice(string Label, object? Value)
+    {
+        public override string ToString() => Label;
+    }
+
+    private static readonly (string Key, string? Kind)[] KindChoices =
+    [
+        ("FilterKindAny", null), ("FilterKindText", "text-generation"), ("FilterKindVision", "image-text-to-text"),
+        ("FilterKindImage", "text-to-image"), ("FilterKindSpeech", "text-to-speech"), ("FilterKindTranscribe", "automatic-speech-recognition"),
+        ("FilterKindTranslate", "translation"), ("FilterKindEmbeddings", "feature-extraction"),
+    ];
+
+    private static readonly double?[] SizeChoices = [null, 1, 2, 4, 8, 14, 32, 70];
+
+    private static readonly (string Key, string Sort)[] SortChoices =
+        [("FilterSortDownloads", "downloads"), ("FilterSortLikes", "likes"), ("FilterSortTrending", "trendingScore"), ("FilterSortRecent", "lastModified")];
+
+    /// <summary>Rellena los desplegables en el idioma activo sin perder lo elegido.</summary>
+    private void PaintFilters()
+    {
+        static void Fill(ComboBox combo, IEnumerable<Choice> items, int fallback)
+        {
+            var index = combo.SelectedIndex < 0 ? fallback : combo.SelectedIndex;
+            combo.ItemsSource = items.ToList();
+            combo.SelectedIndex = index;
+        }
+        KindLabel.Text = Loc.Get("FilterKind");
+        SizeLabel.Text = Loc.Get("FilterSize");
+        FormatLabel.Text = Loc.Get("FilterFormat");
+        SortLabel.Text = Loc.Get("FilterSort");
+        CommercialCheck.Content = Loc.Get("FilterCommercial");
+        CommercialCheck.ToolTip = Loc.Get("FilterCommercialTip");
+        Fill(KindCombo, KindChoices.Select(k => new Choice(Loc.Get(k.Key), k.Kind)), 0);
+        Fill(SizeCombo, SizeChoices.Select(v => new Choice(v is { } b ? Loc.Format("FilterSizeMax", b) : Loc.Get("FilterSizeAny"), v)), 0);
+        Fill(FormatCombo, new[] { "FilterFormatGguf", "FilterFormatConvertible", "FilterFormatAll" }.Select((k, i) => new Choice(Loc.Get(k), (HuggingFace.Formats)i)), 0);
+        Fill(SortCombo, SortChoices.Select(s => new Choice(Loc.Get(s.Key), s.Sort)), 0);
+        FormatCombo.ToolTip = Loc.Get("FilterFormatTip");
+    }
+
+    private HuggingFace.Filters CurrentFilters() => new(
+        (KindCombo.SelectedItem as Choice)?.Value as string,
+        (SizeCombo.SelectedItem as Choice)?.Value as double?,
+        (FormatCombo.SelectedItem as Choice)?.Value is HuggingFace.Formats f ? f : HuggingFace.Formats.Gguf,
+        CommercialCheck.IsChecked == true,
+        (SortCombo.SelectedItem as Choice)?.Value as string ?? "downloads");
+
+    /// <summary>Un modelo de texto en safetensors: se puede convertir a GGUF e instalar (con el entorno de Enseñar a Lucia).</summary>
+    private UIElement ConvertibleRow(HuggingFace.Hit hit, string stats)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var text = new StackPanel();
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold, Text = hit.Model.Name });
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{hit.Model.Repo} · {stats}", TextTrimming = TextTrimming.CharacterEllipsis });
+        // Lo que ocupara en GGUF Q4_K_M (~0,6 bytes por parametro) y como ira en este PC.
+        var gguf = hit.Model;   // ApproxBytes ya es lo que ocupara en GGUF Q4_K_M
+        var fit = ModelCatalog.FitOf(gguf, _pc!);
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Format("SearchConvertible", $"{hit.Parameters / 1e9:0.#}", Human(gguf.ApproxBytes), hit.Model.License), TextWrapping = TextWrapping.Wrap });
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = fit switch
+        {
+            ModelFit.Optimal => Loc.Get(_pc!.HasUsableGpu ? "FitOptimalGpu" : "FitOptimalCpu"),
+            ModelFit.Ok => Loc.Get(_pc!.HasUsableGpu ? "FitOkGpu" : "FitOkCpu"),
+            ModelFit.TooBig => Loc.Get("FitTooBig"),
+            _ => Loc.Get("FitSlow"),
+        }, Foreground = (Brush)FindResource(fit is ModelFit.Slow or ModelFit.TooBig ? "Danger" : fit == ModelFit.Optimal ? "Success" : "TextSecondary"), TextWrapping = TextWrapping.Wrap });
+        grid.Children.Add(text);
+        var open = new Button { Style = (Style)FindResource("GhostIconButton"), Content = "\uE774", ToolTip = Loc.Get("SearchOpenHf"), VerticalAlignment = VerticalAlignment.Center };
+        var url = hit.Url;
+        open.Click += (_, _) => Open(url);
+        Grid.SetColumn(open, 1);
+        grid.Children.Add(open);
+        var convert = new Button { Style = (Style)FindResource("IconButton"), Content = "\uE8AB", ToolTip = Loc.Get("SearchConvert"), IsEnabled = fit != ModelFit.TooBig && _convert is null, VerticalAlignment = VerticalAlignment.Center };
+        convert.Click += async (_, _) => await ConvertAsync(hit);
+        Grid.SetColumn(convert, 2);
+        grid.Children.Add(convert);
+        return grid;
+    }
+
+    // ------------------------------------------------------------------ Enseñar a Lucia y convertir modelos
+
+    private CancellationTokenSource? _convert;
+
+    private void OnTeach(object sender, RoutedEventArgs e)
+    {
+        new FineTuneWindow { Owner = this }.ShowDialog();
+        PaintTeach();
+    }
+
+    /// <summary>Los adaptadores entrenados (en uso o no) y lo que ocupa en disco lo de entrenar.</summary>
+    private void PaintTeach()
+    {
+        TeachTitle.Text = Loc.Get("TeachTitle");
+        TeachHint.Text = Loc.Get("TeachHint");
+        TeachButton.Content = IconLabel("\uE82D", Loc.Get("TeachOpen"));
+        AdaptersLabel.Text = Loc.Get("TeachAdapters");
+        RemoveEnvButton.Content = IconLabel("\uE74D", Loc.Get("TeachRemoveEnv"));
+        RemoveBasesButton.Content = IconLabel("\uE74D", Loc.Get("TeachRemoveBases"));
+        CancelConvertButton.ToolTip = Loc.Get("Cancel");
+        var s = AppSettings.Current;
+        AdapterList.Children.Clear();
+        s.Adapters.RemoveAll(a => !File.Exists(a.Path));
+        foreach (var adapter in s.Adapters.OrderByDescending(a => a.CreatedAt))
+            AdapterList.Children.Add(AdapterRow(adapter));
+        if (s.Adapters.Count == 0)
+            AdapterList.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Get("TeachNoAdapters") });
+        _ = RunBusyAsync(TeachBusy, Loc.Get("TeachMeasuring"),
+            () => (env: FineTune.PythonEnv.SizeOnDisk() - FineTune.PythonEnv.FolderSize(FineTune.BaseModels.Folder) - FineTune.PythonEnv.FolderSize(FineTune.Adapters.Folder), bases: FineTune.PythonEnv.FolderSize(FineTune.BaseModels.Folder)),
+            r =>
+            {
+                TeachDisk.Text = Loc.Format("TeachDisk", Human(Math.Max(0, r.env)), Human(r.bases));
+                RemoveEnvButton.IsEnabled = r.env > 0 && _convert is null;
+                RemoveBasesButton.IsEnabled = r.bases > 0 && _convert is null;
+            });
+    }
+
+    private UIElement AdapterRow(FineTune.LoraAdapter adapter)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var text = new StackPanel();
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold, Text = adapter.Name });
+        var model = AppSettings.Current.Installed.FirstOrDefault(i => string.Equals(i.Path, adapter.ModelPath, StringComparison.OrdinalIgnoreCase))?.Name ?? Path.GetFileName(adapter.ModelPath);
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Format("TeachAdapterLine", model, adapter.Examples, adapter.CreatedAt.LocalDateTime.ToString("g")), TextTrimming = TextTrimming.CharacterEllipsis });
+        grid.Children.Add(text);
+        var use = new CheckBox { Style = (Style)FindResource("Check"), Content = Loc.Get("TeachInUse"), IsChecked = adapter.Active, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
+        use.Click += (_, _) =>
+        {
+            FineTune.Adapters.SetActive(AppSettings.Current, use.IsChecked == true ? adapter : null, adapter.ModelPath);
+            PaintTeach();
+            (Owner as MainWindow)?.ModelChanged();
+        };
+        Grid.SetColumn(use, 1);
+        grid.Children.Add(use);
+        var delete = new Button { Style = (Style)FindResource("DangerIconButton"), Content = "\uE74D", ToolTip = Loc.Get("TeachDeleteAdapter"), VerticalAlignment = VerticalAlignment.Center };
+        delete.Click += (_, _) =>
+        {
+            if (!PromptWindow.Confirm(this, Loc.Get("TeachDeleteAdapter"), Loc.Format("TeachDeleteAdapterConfirm", adapter.Name))) return;
+            var wasActive = adapter.Active;
+            FineTune.Adapters.Delete(AppSettings.Current, adapter);
+            PaintTeach();
+            if (wasActive) (Owner as MainWindow)?.ModelChanged();
+        };
+        Grid.SetColumn(delete, 2);
+        grid.Children.Add(delete);
+        return grid;
+    }
+
+    private void OnRemoveEnv(object sender, RoutedEventArgs e)
+    {
+        if (!PromptWindow.Confirm(this, Loc.Get("TeachRemoveEnv"), Loc.Get("TeachRemoveEnvConfirm"))) return;
+        try { FineTune.PythonEnv.Remove(); }
+        catch (Exception ex) { PromptWindow.Alert(this, Loc.Get("Error"), ex.Message); }
+        PaintTeach();
+    }
+
+    private void OnRemoveBases(object sender, RoutedEventArgs e)
+    {
+        if (!PromptWindow.Confirm(this, Loc.Get("TeachRemoveBases"), Loc.Get("TeachRemoveBasesConfirm"))) return;
+        try { if (Directory.Exists(FineTune.BaseModels.Folder)) Directory.Delete(FineTune.BaseModels.Folder, recursive: true); }
+        catch (Exception ex) { PromptWindow.Alert(this, Loc.Get("Error"), ex.Message); }
+        PaintTeach();
+    }
+
+    private void OnCancelConvert(object sender, RoutedEventArgs e) => _convert?.Cancel();
+
+    /// <summary>
+    /// Convierte un modelo de Hugging Face en safetensors a GGUF y lo instala: monta el entorno si
+    /// falta, baja los pesos (se guardan, sirven tambien para enseñarle), convierte, cuantiza y apunta su ficha.
+    /// </summary>
+    public async Task ConvertAsync(HuggingFace.Hit hit)
+    {
+        if (_convert is not null) return;
+        var download = FineTune.BaseModels.IsDownloaded(hit.Model.Repo) ? 0 : hit.Parameters * 2;
+        if (!PromptWindow.Confirm(this, Loc.Get("SearchConvert"), Loc.Format("SearchConvertConfirm", hit.Model.Name, Human(download),
+                FineTune.PythonEnv.Installed ? Loc.Get("SearchConvertEnvReady") : Loc.Format("SearchConvertEnv", FineTune.PythonEnv.UseCuda ? "≈ 4 GB" : "≈ 1 GB"))))
+            return;
+        var cts = _convert = new CancellationTokenSource();
+        ConvertBox.Visibility = Visibility.Visible;
+        TeachCard.BringIntoView();
+        RemoveEnvButton.IsEnabled = RemoveBasesButton.IsEnabled = false;
+        void Status(string text) { ConvertText.Text = text; ConvertBar.IsIndeterminate = true; }
+        var bytes = new Progress<Downloader.Progress>(p =>
+        {
+            ConvertBar.IsIndeterminate = p.Fraction is null;
+            ConvertBar.Value = (p.Fraction ?? 0) * 100;
+        });
+        try
+        {
+            await FineTune.PythonEnv.EnsureAsync(new Progress<string>(Status), bytes, cts.Token);
+            Status(Loc.Format("SearchConvertDownloading", hit.Model.Repo));
+            var model = await FineTune.BaseModels.ResolveAsync(hit.Model.Repo, cts.Token)
+                        ?? throw new InvalidOperationException(Loc.Get("SearchConvertNoFiles"));
+            var folder = await FineTune.BaseModels.DownloadAsync(model, bytes, cts.Token);
+            Status(Loc.Get("FtStageConverting"));
+            var events = new Progress<FineTune.TrainEvent>(ev => { if (ev.Stage == "quantizing") Status(Loc.Get("FtStageQuantizing")); });
+            var path = await FineTune.FineTuneRunner.ConvertAsync(folder, FineTune.Adapters.SafeName(hit.Model.Repo[(hit.Model.Repo.IndexOf('/') + 1)..]), events, cts.Token);
+            var name = HuggingFace.NameFor(hit.Model.Repo);
+            AppSettings.Current.Remember(new InstalledModel { Name = name, Path = path, License = hit.Model.License, Repo = hit.Model.Repo });
+            AppSettings.Current.Save();
+            DiagLog.Write("convertir", $"{hit.Model.Repo} convertido a {Path.GetFileName(path)}");
+            ConvertText.Text = Loc.Format("SearchConverted", name);
+            ConvertBar.IsIndeterminate = false;
+            ConvertBar.Value = 100;
+            PaintModel();
+            (Owner as MainWindow)?.ModelChanged();
+        }
+        catch (OperationCanceledException)
+        {
+            ConvertBox.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            DiagLog.Write("convertir", $"{hit.Model.Repo} no se ha podido convertir: " + DiagLog.Describe(ex));
+            ConvertBox.Visibility = Visibility.Collapsed;
+            PromptWindow.Alert(this, Loc.Get("Error"), Loc.Format("SearchConvertFailed", ex.Message));
+        }
+        finally
+        {
+            _convert = null;
+            PaintTeach();
+            if (_hits is not null) PaintSearch();
         }
     }
 

@@ -54,6 +54,7 @@ internal static class Sandbox
         s.InternetAccess = true;
         s.Permissions.Clear();
         s.Installed.Clear();
+        s.Adapters.Clear();
         s.Pending = null;   // una descarga a medias de otra prueba no se retoma en esta
         s.ContextTokens = Engine.TokenLimits.ContextDefault;
         s.AutoContext = false;   // las pruebas fijan el contexto a mano; el automatico se prueba aparte

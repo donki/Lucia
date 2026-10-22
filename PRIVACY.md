@@ -13,6 +13,11 @@ analítica.
 
 - **Descargas**: el motor (llama.cpp, de GitHub), las IA que eliges (de Hugging Face) y el motor de
   imágenes, solo cuando lo pides.
+- **Enseñar a Lucia y convertir modelos**: la primera vez se descargan las herramientas de entrenamiento
+  (uv de GitHub; Python, PyTorch y las bibliotecas de PyPI y download.pytorch.org; los convertidores
+  del código de llama.cpp en GitHub) y el modelo original de Hugging Face. **Tus ejemplos y lo que la IA
+  aprende no salen del PC**: el entrenamiento es local y los ejemplos se guardan en
+  `finetune\work\dataset.jsonl` hasta el siguiente entrenamiento.
 - **Internet para la IA**: si dejas activado «acceder a internet», la IA puede buscar (DuckDuckGo) y
   leer páginas cuando la pregunta lo necesita.
 - **Puerta para editores** (apagada por defecto): escucha solo en este PC (127.0.0.1) y pide un token.
@@ -53,6 +58,11 @@ Everything you write and everything the AI answers stays on this PC, in your use
 
 - **Downloads**: the engine (llama.cpp, from GitHub), the AIs you choose (from Hugging Face) and the
   image engine, only when you ask for them.
+- **Teach Lucia and converting models**: the first time, the training tools are downloaded (uv from
+  GitHub; Python, PyTorch and the libraries from PyPI and download.pytorch.org; the converters from the
+  llama.cpp source on GitHub) and the original model from Hugging Face. **Your examples and what the AI
+  learns never leave the PC**: training is local and the examples are kept in
+  `finetune\work\dataset.jsonl` until the next training.
 - **Internet for the AI**: if «access the internet» stays on, the AI can search (DuckDuckGo) and read
   pages when the question needs it.
 - **Editor door** (off by default): listens only on this PC (127.0.0.1) and requires a token.

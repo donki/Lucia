@@ -98,6 +98,40 @@ esa misma IA.
   **imágenes** cuando la IA cargada tiene visión (la puerta lo dice en `/v1/models › capabilities`). Continue, Cline y similares funcionan con la misma dirección y
   token. Detalles en [vscode/README.md](vscode/README.md).
 
+## Enseñar a Lucia (fine-tuning guiado)
+
+Ajustes › **Enseñar a Lucia…** abre un asistente de cinco pasos para hacer fine-tuning sin saber de
+fine-tuning. Todo se hace en el PC; el resultado es un **adaptador LoRA** pequeño (decenas de MB) que
+llama-server pone encima de la IA con `--lora` y que se activa, desactiva o borra desde Ajustes.
+
+1. **La IA**: se elige una de las instaladas. Lucia busca en Hugging Face su modelo original en
+   safetensors (`cardData.base_model` del repositorio GGUF) y dice si cabe para entrenar en la gráfica
+   (QLoRA en 4 bits: ~0,6 bytes por parámetro + ~1,2 GB). En una RTX 3050 Ti de 4 GB caben de sobra
+   hasta ~2B; un 4B va justo.
+2. **Ejemplos**: de las conversaciones guardadas (una respuesta de texto = un ejemplo, sin herramientas
+   ni razonamiento), de un fichero (CSV `pregunta;respuesta` o JSONL en los formatos `messages`,
+   `conversations`/ShareGPT, `prompt`/`completion`, `instruction`/`output`/Alpaca, `question`/`answer`)
+   o escritos a mano; plantilla CSV para rellenar. Se revisan al momento (vacíos, repetidos, demasiado
+   largos) y no se sigue con menos de 10.
+3. **Cómo**: Rápido / Equilibrado / A fondo (pasadas, rango del LoRA, ritmo de aprendizaje) con el
+   tiempo estimado y lo que se va a descargar.
+4. **Entrenar**: la primera vez monta un entorno aislado en `finetune\` con **uv** (Python propio,
+   PyTorch con CUDA o CPU, Transformers, PEFT, bitsandbytes; versiones fijadas en
+   `FineTune/FineTunePin.cs`) y los convertidores de llama.cpp de la misma versión que el motor; baja el
+   modelo original; para la IA del chat (la gráfica no da para las dos) y entrena con progreso, pérdida
+   y tiempo restante. Se puede parar (no se guarda nada).
+5. **Listo**: el adaptador queda en uso con esa IA; «Probarlo» abre una conversación nueva.
+
+**Modelos que no son GGUF**: en el buscador, *Formato › GGUF y convertibles* enseña también modelos de
+texto en safetensors; el botón de convertir los baja, los pasa a GGUF con `convert_hf_to_gguf.py` y los
+comprime a Q4_K_M con el `llama-quantize` del motor. El buscador filtra además por **tipo** (texto,
+imagen a texto, texto a imagen, voz…), **tamaño máximo** en parámetros, **licencia comercial** y orden.
+
+Probado de punta a punta el 2026-10-22 en la RTX 3050 Ti (4 GB) con Qwen3.5 0.8B: entorno instalado
+desde cero, 12 ejemplos y el adaptador cargado por llama-server respondiendo lo enseñado. El script es
+`FineTune/lucia_train.py` (va dentro del exe); su salida va a `logs\finetune.log`. Para probar sin
+ratón (Debug): `sOCLucia.exe --teach --teach-run ejemplos.csv` con `SOC_LUCIA_ROOT` en un arenero.
+
 ## MLflow (opcional, apagado por defecto)
 
 Ajustes › MLflow manda cada interacción a un servidor MLflow (dirección, experimento —se crea si no
@@ -129,7 +163,7 @@ local si el servidor no responde; nunca en el hilo de la interfaz.
 ## Privacidad
 
 Las conversaciones y la IA se quedan en el PC. La red se usa solo para descargar el motor y el
-modelo que elijas, y solo cuando lo pides (y, si lo activas, para MLflow: ver [PRIVACY.md](PRIVACY.md)). Sin cuenta, sin anuncios, sin rastreadores ni analítica.
+modelo que elijas (y, al enseñarle o convertir un modelo, las herramientas de entrenamiento y el modelo original), y solo cuando lo pides (y, si lo activas, para MLflow: ver [PRIVACY.md](PRIVACY.md)). Sin cuenta, sin anuncios, sin rastreadores ni analítica.
 La puerta para editores escucha únicamente en `127.0.0.1` y rechaza (`401`) cualquier petición sin
 el token que se muestra en Ajustes.
 
@@ -138,6 +172,7 @@ el token que se muestra en Ajustes.
 - `App.xaml`: sistema visual sOCratic (paleta índigo, tarjetas, botones con icono); `Services/ThemeManager.cs` sigue al tema de Windows.
 - `MainWindow`: conversaciones y chat. `SettingsWindow`: la IA (catálogo, importar), instrucciones, razonamiento, letra, puerta de editores, idioma, diagnóstico. `AboutWindow`: la «Acerca de» del catálogo. `PromptWindow`: los diálogos pequeños.
 - `Engine/`: `EnginePin` (versión fijada de llama.cpp y sus SHA), `EngineHost` (descarga, arranque, salud, parada; `--mmproj` si el modelo tiene visión), `ModelCatalog` (catálogo, elección del cuantizado, descarga; `PickMmprojAsync`/`DownloadMmprojAsync` para la parte de visión), `ChatClient` (SSE; imágenes como partes `image_url`), `Downloader`, `ImageEngine` (stable-diffusion.cpp fijado con SHA, modelo SD 1.5 y generación con `sd-cli`).
+- `FineTune/`: Enseñar a Lucia. `FineTunePin` (uv, Python, PyTorch y bibliotecas fijadas), `PythonEnv` (el entorno aislado y los convertidores de llama.cpp), `TrainingData` (ejemplos: conversaciones, CSV, JSONL, revisión), `BaseModels` (modelo original en safetensors, si cabe, descarga), `FineTuneRunner` (lanza `lucia_train.py` y lee su progreso; convierte modelos), `Adapters` (los LoRA y cuál está en uso). `FineTuneWindow`: el asistente.
 - `Services/DocumentIndex.cs`: la carpeta de documentos (trozos por palabras; PDF con PdfPig, .docx a mano).
 - `App.xaml.cs`: arranque, instancia única y el gestor global de errores (un fallo inesperado se registra en `logs\engine.log`, se avisa y la aplicación sigue).
 - `Chat/`: `ThreadStore` (JSON por conversación), `Markdown` (render a WPF) y `PendingAnswer` (la respuesta que llega: la llena el hilo del streaming, la lee la interfaz al repintar, con el texto del indicador de espera y el ritmo de repintado).
@@ -162,10 +197,12 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-10-21): **404 pruebas**, todas pasan; el banco tarda **unos 45 s** (sin
-contar la compilación). Cobertura de líneas: **92,8 %** de lo instrumentado (se instrumenta el
-ensamblado `sOCLucia` entero) y **92,8 %** sobre toda la app (4750 de 5117 líneas ejecutables de
-C#; el 2026-10-03, 91,5 %).
+`Lucia.Tests` (xUnit, 2026-10-22): **454 pruebas**, todas pasan; el banco tarda **unos 50 s** (sin
+contar la compilación). Cobertura de líneas: **92,5 %** de lo instrumentado (se instrumenta el
+ensamblado `sOCLucia` entero) y **92,5 %** sobre toda la app (6058 de 6551 líneas ejecutables de
+C#; el 2026-10-21, 92,8 %). Enseñar a Lucia se prueba con un Python de mentira (el mismo `FakeLlama`
+con `FAKE_PYTHON`) que cuenta etapas y pasos como el script y deja el adaptador; la instalación real
+del entorno y el entrenamiento real se probaron a mano en la RTX 3050 Ti (ver arriba).
 
 Se prueba la lógica (documentos de texto, HTML, RTF, .docx y PDF; herramientas del agente; el
 cliente de chat en streaming; la puerta de editores; descargas con reanudación y SHA-256; catálogo

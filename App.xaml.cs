@@ -117,6 +117,17 @@ public partial class App : Application
                 var query = args[++i];
                 WhenLoaded(window, () => window.OpenSettingsForTest().SearchForTest(query));
             }
+            else if (args[i] == "--teach")
+            {
+                // Enseñar a Lucia; con --teach-run <fichero> carga esos ejemplos y entrena sin tocar nada (prueba de punta a punta).
+                var run = Array.IndexOf(args, "--teach-run") is var r and >= 0 && r + 1 < args.Length ? args[r + 1] : null;
+                WhenLoaded(window, () =>
+                {
+                    var teach = new FineTuneWindow { Owner = window };
+                    teach.Show();
+                    if (run is not null) _ = teach.RunForTestAsync(run);
+                });
+            }
             else if (args[i] == "--about")
                 WhenLoaded(window, () => new AboutWindow { Owner = window }.Show());
         }

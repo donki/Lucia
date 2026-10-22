@@ -99,6 +99,12 @@ opcion socLucia.token de VS Code. Ctrl+Alt+L abre el chat (Ctrl+Alt+I lo usa Cop
 sOC Lucia. Sirve tambien Continue, Cline o cualquier cliente compatible con OpenAI, con la
 direccion http://127.0.0.1:41417/v1 y ese token.
 
+Enseñar a Lucia
+---------------
+Ajustes > Enseñar a Lucia: un asistente para que la IA aprenda de tus ejemplos (fine-tuning) en este
+PC. La primera vez instala las herramientas de entrenamiento (unos 4 GB con NVIDIA) en
+%LOCALAPPDATA%\sOCLucia\finetune; se quitan desde el mismo sitio de Ajustes.
+
 El fichero .msix
 ----------------
 Es el paquete de instalacion; sin firmar, Windows no lo instala (sirve para la Store si algun dia

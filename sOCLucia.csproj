@@ -9,9 +9,9 @@
     <RootNamespace>SocLucia</RootNamespace>
     <AssemblyName>sOCLucia</AssemblyName>
     <ApplicationTitle>sOC Lucia</ApplicationTitle>
-    <Version>2026.10.21.5</Version>
-    <AssemblyVersion>2026.10.21.5</AssemblyVersion>
-    <FileVersion>2026.10.21.5</FileVersion>
+    <Version>2026.10.22.0</Version>
+    <AssemblyVersion>2026.10.22.0</AssemblyVersion>
+    <FileVersion>2026.10.22.0</FileVersion>
     <Product>sOC Lucia</Product>
     <Company>Socratic</Company>
     <Copyright>Copyright © 2026 Socratic</Copyright>
@@ -33,6 +33,8 @@
 
   <ItemGroup>
     <Resource Include="Assets\logo.png" />
+    <!-- El script de entrenamiento va dentro del exe; PythonEnv lo escribe en finetune\ al usarlo. -->
+    <EmbeddedResource Include="FineTune\lucia_train.py" LogicalName="SocLucia.FineTune.lucia_train.py" />
   </ItemGroup>
 
   <ItemGroup>

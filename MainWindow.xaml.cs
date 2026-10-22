@@ -250,6 +250,9 @@ public partial class MainWindow : Window
             ShowThread(row.Thread);
     }
 
+    /// <summary>Abre una conversacion nueva (p. ej. para probar la IA recien enseñada).</summary>
+    public void NewConversation() => OnNewChat(this, new RoutedEventArgs());
+
     private void OnNewChat(object sender, RoutedEventArgs e)
     {
         _answering?.Cancel();

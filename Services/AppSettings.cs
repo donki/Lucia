@@ -84,6 +84,9 @@ public sealed class AppSettings
     /// <summary>IAs descargadas o importadas, con su nombre visible: los GGUF por si solos no dicen como se llaman.</summary>
     public List<InstalledModel> Installed { get; set; } = [];
 
+    /// <summary>Adaptadores entrenados con los ejemplos del usuario (Enseñar a Lucia), cada uno para su IA.</summary>
+    public List<FineTune.LoraAdapter> Adapters { get; set; } = [];
+
     /// <summary>Apunta (o reemplaza) la ficha de un GGUF instalado.</summary>
     public void Remember(InstalledModel model)
     {

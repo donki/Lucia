@@ -22,6 +22,7 @@ public sealed class EngineHost : IDisposable
     private int _port;
     private string? _modelPath;
     private int _context;
+    private string? _lora;
     private EnginePin.Archive? _archive;
     private bool _cudaFailed;
 
@@ -43,13 +44,15 @@ public sealed class EngineHost : IDisposable
         {
             // Otro modelo u otro contexto (Ajustes) piden reiniciar el motor; lo demas, reutilizarlo.
             var context = TokenLimits.Context(settings);
-            if (_process is { HasExited: false } && _modelPath == settings.ModelPath && _context == context && await HealthyAsync(_port, cancel))
+            var lora = FineTune.Adapters.ActiveFor(settings, settings.ModelPath)?.Path;
+            if (_process is { HasExited: false } && _modelPath == settings.ModelPath && _context == context && _lora == lora && await HealthyAsync(_port, cancel))
             {
                 Set(EngineState.Ready, null);
                 return BaseUrl;
             }
             if (_process is not null)
-                DiagLog.Write("motor", _context != context && _modelPath == settings.ModelPath ? $"se reinicia: contexto {_context} -> {context}" : "se reinicia (otro modelo o no responde)");
+                DiagLog.Write("motor", _context != context && _modelPath == settings.ModelPath ? $"se reinicia: contexto {_context} -> {context}"
+                    : _lora != lora && _modelPath == settings.ModelPath ? "se reinicia: otro adaptador" : "se reinicia (otro modelo o no responde)");
             Stop();
             var archive = _archive ?? EnginePin.ForThisMachine(allowCuda: !_cudaFailed);
             var folder = await EnsureBinariesAsync(archive, engineDownload, cancel);
@@ -69,6 +72,7 @@ public sealed class EngineHost : IDisposable
             _archive = archive;
             _modelPath = settings.ModelPath;
             _context = context;
+            _lora = lora;
             Set(EngineState.Ready, null);
             return BaseUrl;
         }
@@ -100,6 +104,16 @@ public sealed class EngineHost : IDisposable
     /// <summary>Si el modelo activo tiene su parte de vision descargada (sin arrancar nada).</summary>
     public static bool VisionAvailable(AppSettings settings) => settings.ModelPath is { Length: > 0 } p && File.Exists(ModelCatalog.MmprojPathFor(p));
     public string Accelerator => _archive?.Accelerator ?? "-";
+
+    /// <summary>El adaptador (lo aprendido) con el que arranco el motor, si hay.</summary>
+    public FineTune.LoraAdapter? Adapter { get; private set; }
+
+    /// <summary>La carpeta del motor (bajandolo si falta) para usar sus otras herramientas, como llama-quantize.</summary>
+    public async Task<string> EnsureBinariesForToolsAsync(CancellationToken cancel)
+    {
+        var archive = _archive ?? EnginePin.ForThisMachine(allowCuda: !_cudaFailed);
+        return await EnsureBinariesAsync(archive, null, cancel);
+    }
 
     private async Task<string> EnsureBinariesAsync(EnginePin.Archive archive, IProgress<Downloader.Progress>? progress, CancellationToken cancel)
     {
@@ -167,8 +181,15 @@ public sealed class EngineHost : IDisposable
         }
         else
             Vision = false;
+        // Lo aprendido con los ejemplos del usuario (Enseñar a Lucia): un adaptador LoRA encima de la IA.
+        Adapter = FineTune.Adapters.ActiveFor(settings, settings.ModelPath);
+        if (Adapter is not null)
+        {
+            info.ArgumentList.Add("--lora");
+            info.ArgumentList.Add(Adapter.Path);
+        }
         Log($"arrancando llama-server ({archive.Accelerator}) con {Path.GetFileName(settings.ModelPath)} en :{_port}");
-        DiagLog.Write("motor", $"arrancando llama-server {EnginePin.Build}-{archive.Accelerator}, modelo {Path.GetFileName(settings.ModelPath)}, contexto {TokenLimits.Context(settings)}, capas en GPU {gpuLayers}, vision {(Vision ? "si" : "no")}");
+        DiagLog.Write("motor", $"arrancando llama-server {EnginePin.Build}-{archive.Accelerator}, modelo {Path.GetFileName(settings.ModelPath)}, contexto {TokenLimits.Context(settings)}, capas en GPU {gpuLayers}, vision {(Vision ? "si" : "no")}, adaptador {Adapter?.Name ?? "ninguno"}");
         var loading = Stopwatch.StartNew();
         var process = Process.Start(info) ?? throw new InvalidOperationException("No se ha podido arrancar llama-server");
         ChildJob.Add(process);   // muere con la aplicacion, pase lo que pase

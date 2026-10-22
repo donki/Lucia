@@ -1,5 +1,45 @@
 # Changelog — sOC Lucia
 
+## 2026.10.22.0 — Enseñar a Lucia (fine-tuning guiado), modelos que no son GGUF y filtros en el buscador / Teach Lucia (guided fine-tuning), non-GGUF models and search filters
+
+**Español**
+
+- **Nuevo: Enseñar a Lucia** (Ajustes › Enseñar a Lucia…). Un asistente de cinco pasos para hacer
+  fine-tuning sin saber de fine-tuning: eliges la IA, añades ejemplos de preguntas y respuestas (de tus
+  conversaciones, de un fichero CSV o JSONL, o escritos a mano; con plantilla CSV), eliges cuánto
+  entrenar (Rápido, Equilibrado o A fondo, con el tiempo estimado) y Lucia entrena **en tu PC**. El
+  resultado es un complemento pequeño (un adaptador LoRA) que va encima de la IA y que activas,
+  desactivas o borras en Ajustes. Lucia dice antes si la IA cabe para entrenar en tu gráfica.
+- La primera vez instala sola, sin tocar el Python que puedas tener, las herramientas de entrenamiento
+  (unos 4 GB con NVIDIA) y baja el modelo original de la IA. Se pueden quitar desde Ajustes.
+- Probado en una RTX 3050 Ti de 4 GB con Qwen3.5 0.8B y 12 ejemplos: unos 80 s de entrenamiento, y
+  en el chat responde lo enseñado al pie de la letra.
+- **Nuevo: modelos que no son GGUF.** En el buscador, *Formato › GGUF y convertibles* enseña también
+  modelos de texto en safetensors; un botón los descarga, los convierte a GGUF y los instala.
+- **Nuevo: filtros en el buscador** de Hugging Face: tipo (texto, imagen a texto, texto a imagen,
+  voz…), tamaño máximo en parámetros, formato, orden (descargas, valoración, tendencia, recientes) y
+  solo licencias que permiten uso comercial.
+- Banco de pruebas: **454 pruebas** y **92,5 %** de toda la aplicación.
+
+**English**
+
+- **New: Teach Lucia** (Settings › Teach Lucia…). A five-step assistant to fine-tune without knowing
+  about fine-tuning: choose the AI, add examples of questions and answers (from your conversations, a
+  CSV or JSONL file, or written by hand; with a CSV template), choose how much to train (Quick,
+  Balanced or Deep, with the estimated time) and Lucia trains **on your PC**. The result is a small
+  add-on (a LoRA adapter) that goes on top of the AI and that you switch on, off or delete in Settings.
+  Lucia says beforehand whether the AI fits for training in your graphics card.
+- The first time it installs the training tools by itself (about 4 GB with NVIDIA), without touching
+  any Python you may have, and downloads the AI's original model. They can be removed from Settings.
+- Tested on an RTX 3050 Ti with 4 GB with Qwen3.5 0.8B and 12 examples: about 80 s of training, and in
+  the chat it answers what it was taught word for word.
+- **New: models that are not GGUF.** In the search, *Format › GGUF and convertible* also shows text
+  models in safetensors; one button downloads them, converts them to GGUF and installs them.
+- **New: search filters** for Hugging Face: type (text, image to text, text to image, speech…), maximum
+  size in parameters, format, order (downloads, likes, trending, recent) and only licences that allow
+  commercial use.
+- Test bench: **454 tests** and **92.5 %** of the whole application.
+
 ## 2026.10.21.5 — Conversaciones que el modelo rechazaba, y contexto automático / Conversations the model rejected, and automatic context
 
 **Español**

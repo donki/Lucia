@@ -32,7 +32,29 @@
                             <Button x:Name="SearchButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE721;" Margin="6,0,0,0" Click="OnSearchModels" />
                             <TextBox x:Name="SearchBox" Style="{StaticResource Field}" KeyDown="OnSearchKey" />
                         </DockPanel>
-                        <CheckBox x:Name="OnlyGgufCheck" Style="{StaticResource Check}" Margin="0,6,0,0" IsChecked="True" />
+                        <!-- Filtros: tipo, tamaño maximo, formato, orden y licencia comercial -->
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock x:Name="KindLabel" Style="{StaticResource HintText}" Margin="0,0,0,2" />
+                            <ComboBox x:Name="KindCombo" Grid.Row="1" Style="{StaticResource DeviceCombo}" />
+                            <TextBlock x:Name="SizeLabel" Grid.Column="2" Style="{StaticResource HintText}" Margin="0,0,0,2" />
+                            <ComboBox x:Name="SizeCombo" Grid.Row="1" Grid.Column="2" Style="{StaticResource DeviceCombo}" />
+                            <TextBlock x:Name="FormatLabel" Grid.Row="2" Style="{StaticResource HintText}" Margin="0,8,0,2" />
+                            <ComboBox x:Name="FormatCombo" Grid.Row="3" Style="{StaticResource DeviceCombo}" />
+                            <TextBlock x:Name="SortLabel" Grid.Row="2" Grid.Column="2" Style="{StaticResource HintText}" Margin="0,8,0,2" />
+                            <ComboBox x:Name="SortCombo" Grid.Row="3" Grid.Column="2" Style="{StaticResource DeviceCombo}" />
+                        </Grid>
+                        <CheckBox x:Name="CommercialCheck" Style="{StaticResource Check}" Margin="0,8,0,0" />
                         <TextBlock x:Name="SearchHint" Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap" />
                         <c:BusyIndicator x:Name="SearchBusy" />
                         <StackPanel x:Name="SearchList" Margin="0,4,0,0" />
@@ -72,6 +94,32 @@
                         <TextBlock x:Name="ContextTokensLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
                         <TextBox x:Name="ContextTokensBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnContextTokensChanged" KeyDown="OnLimitKey" />
                         <TextBlock x:Name="ContextTokensHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Enseñar a Lucia: fine-tuning guiado y los adaptadores entrenados -->
+                <Border x:Name="TeachCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="TeachTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="TeachHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,10" />
+                        <Button x:Name="TeachButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Click="OnTeach" />
+                        <TextBlock x:Name="AdaptersLabel" Style="{StaticResource FieldLabel}" Margin="0,14,0,2" />
+                        <StackPanel x:Name="AdapterList" />
+                        <TextBlock x:Name="TeachDisk" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                        <WrapPanel Margin="0,6,0,0">
+                            <Button x:Name="RemoveEnvButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnRemoveEnv" />
+                            <Button x:Name="RemoveBasesButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnRemoveBases" />
+                        </WrapPanel>
+                        <c:BusyIndicator x:Name="TeachBusy" />
+                        <Border x:Name="ConvertBox" Visibility="Collapsed" Margin="0,8,0,0">
+                            <StackPanel>
+                                <TextBlock x:Name="ConvertText" Style="{StaticResource HintText}" TextWrapping="Wrap" />
+                                <DockPanel Margin="0,4,0,0">
+                                    <Button x:Name="CancelConvertButton" DockPanel.Dock="Right" Style="{StaticResource DangerIconButton}" Content="&#xE711;" Width="30" Height="30" Margin="8,0,0,0" Click="OnCancelConvert" />
+                                    <ProgressBar x:Name="ConvertBar" Height="8" Foreground="{DynamicResource Primary}" Background="{DynamicResource Separator}" BorderThickness="0" />
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
 
