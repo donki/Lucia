@@ -2,6 +2,7 @@ using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using SocLucia.Services;
 
 namespace SocLucia.Engine;
@@ -86,7 +87,7 @@ public static class ModelCatalog
         foreach (var entry in doc.RootElement.EnumerateArray())
         {
             var path = entry.GetProperty("path").GetString() ?? string.Empty;
-            if (!path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase) || path.Contains("-of-", StringComparison.OrdinalIgnoreCase) || path.Contains("mmproj", StringComparison.OrdinalIgnoreCase))
+            if (!path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase) || path.Contains("-of-", StringComparison.OrdinalIgnoreCase) || IsHelperFile(path))
                 continue;
             long? size = entry.TryGetProperty("size", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetInt64() : null;
             if (entry.TryGetProperty("lfs", out var lfs) && lfs.TryGetProperty("size", out var ls) && ls.ValueKind == JsonValueKind.Number)
@@ -99,7 +100,61 @@ public static class ModelCatalog
             if (hit is not null)
                 return hit;
         }
-        return files.OrderBy(f => f.Size ?? long.MaxValue).FirstOrDefault() ?? throw new FileNotFoundException("El repositorio no tiene ningún GGUF");
+        // Cuantizados con nombre propio («Q4_K_P», «IQ4_NL»…): por familia, de 4 bits a 8.
+        foreach (var family in QuantFamilies)
+        {
+            var hit = files.Where(f => Regex.IsMatch(System.IO.Path.GetFileName(f.Name), family, RegexOptions.IgnoreCase)).OrderBy(f => f.Size ?? long.MaxValue).FirstOrDefault();
+            if (hit is not null)
+                return hit;
+        }
+        // Sin pistas en el nombre: el mas pequeño de los que son modelo de verdad. Un fichero de menos del 5 %
+        // del mayor es un auxiliar con otro nombre (no hay un modelo veinte veces mas comprimido que otro).
+        var largest = files.Select(f => f.Size ?? 0).DefaultIfEmpty(0).Max();
+        return files.Where(f => largest == 0 || (f.Size ?? 0) >= largest / 20).OrderBy(f => f.Size ?? long.MaxValue).FirstOrDefault()
+               ?? throw new FileNotFoundException("El repositorio no tiene ningún GGUF");
+    }
+
+    private static readonly string[] QuantFamilies = [@"(?<![a-z0-9])I?Q4[_-]", @"(?<![a-z0-9])I?Q5[_-]", @"(?<![a-z0-9])I?Q3[_-]", @"(?<![a-z0-9])I?Q6[_-]", @"(?<![a-z0-9])Q8[_-]"];
+
+    /// <summary>
+    /// GGUF de un repositorio que no son una IA que se pueda usar sola: la parte de vision (mmproj), la
+    /// matriz de importancia (imatrix, para cuantizar) y los ayudantes de prediccion (MTP, draft). El
+    /// 2026-10-22, sin esto, Lucia bajaba «…imatrix.gguf» (0,18 GB) o «…FastMTP-32K.gguf» como si fueran la IA.
+    /// </summary>
+    public static bool IsHelperFile(string path)
+    {
+        var name = System.IO.Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+        return name.Contains("mmproj") || name.Contains("imatrix") || name.Contains("fastmtp") || name.Contains("draft")
+               || name.EndsWith("-mtp") || name.EndsWith("_mtp") || name.Contains("mtp-head") || name.Contains("-mtp-32k") || name.StartsWith("ggml-vocab")
+               || System.Text.RegularExpressions.Regex.IsMatch(name, @"(^|[-_.])(q?lora|adapter)([-_.]|$)");
+    }
+
+    /// <summary>
+    /// Si un GGUF es una IA de texto que Lucia puede cargar; si no, por que (texto para el usuario). Lo que
+    /// no lleva cabecera GGUF se deja pasar: si no carga, el motor ya dice por que (<see cref="EngineErrors"/>).
+    /// </summary>
+    public static string? Unusable(string path)
+    {
+        if (IsHelperFile(path))
+            return Localization.Loc.Get("ModelHelperFile");
+        try
+        {
+            using (var fs = File.OpenRead(path))
+            {
+                Span<byte> magic = stackalloc byte[4];
+                if (fs.Read(magic) < 4 || magic[0] != (byte)'G' || magic[1] != (byte)'G' || magic[2] != (byte)'U' || magic[3] != (byte)'F')
+                    return null;
+            }
+        }
+        catch (IOException) { return null; }
+        var info = GgufInfo.Read(path);
+        if (info is null) return Localization.Loc.Get("ModelNoArchitecture");
+        if (info.Architecture is "clip" or "imatrix")
+            return Localization.Loc.Get("ModelHelperFile");
+        // Un adaptador LoRA (general.type = adapter) solo funciona encima de su modelo base.
+        if (string.Equals(info.Type, "adapter", StringComparison.OrdinalIgnoreCase))
+            return Localization.Loc.Get("ModelIsAdapter");
+        return null;
     }
 
     /// <summary>

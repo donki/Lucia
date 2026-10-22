@@ -26,11 +26,13 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock x:Name="ConversationsTitle" Style="{StaticResource CardTitle}" FontSize="15" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                     <Button Grid.Column="1" x:Name="NewChatButton" Style="{StaticResource IconButton}" Content="&#xE710;" Click="OnNewChat" />
-                    <Button Grid.Column="2" x:Name="SettingsButton" Style="{StaticResource GhostIconButton}" Content="&#xE713;" Click="OnSettings" />
-                    <Button Grid.Column="3" x:Name="AboutButton" Style="{StaticResource GhostIconButton}" Content="&#xE946;" Click="OnAbout" />
+                    <Button Grid.Column="2" x:Name="DeleteAllButton" Style="{StaticResource GhostIconButton}" Content="&#xE74D;" Click="OnDeleteAllThreads" />
+                    <Button Grid.Column="3" x:Name="SettingsButton" Style="{StaticResource GhostIconButton}" Content="&#xE713;" Click="OnSettings" />
+                    <Button Grid.Column="4" x:Name="AboutButton" Style="{StaticResource GhostIconButton}" Content="&#xE946;" Click="OnAbout" />
                 </Grid>
                 <ListBox x:Name="ThreadList" Background="Transparent" BorderThickness="0" Margin="6,0,6,8"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="OnThreadSelected">

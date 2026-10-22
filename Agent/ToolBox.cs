@@ -281,15 +281,119 @@ public static class ToolBox
     }
 
     /// <summary>Busqueda en DuckDuckGo (version HTML, sin clave ni cuenta): titulo, direccion y resumen de los primeros resultados.</summary>
+    /// <summary>Lo que devuelve una busqueda que no encontro nada en ningun sitio (el freno del agente lo reconoce).</summary>
+    public const string NoResults = "[no results]";
+
+    /// <summary>
+    /// Buscar en internet. Primero DuckDuckGo; si no da nada o pone su pagina anti-robots (pasa: el
+    /// 2026-10-22 la devolvia a todas las busquedas y la IA se quedaba buscando en bucle), Stack Overflow
+    /// y Wikipedia por sus API abiertas. Si tampoco, se le dice a la IA que no insista con palabras parecidas.
+    /// </summary>
     private static async Task<string> SearchAsync(JsonObject args, CancellationToken cancel)
     {
         var query = Tool.Arg(args, "query").Trim();
         if (query.Length == 0) throw new ArgumentException("Empty query");
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://html.duckduckgo.com/html/?q=" + Uri.EscapeDataString(query));
-        request.Headers.TryAddWithoutValidation("Accept-Language", System.Globalization.CultureInfo.CurrentUICulture.Name + ",en;q=0.7");
-        using var response = await Engine.Downloader.Http.SendAsync(request, cancel);
+        var blocked = false;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://html.duckduckgo.com/html/?q=" + Uri.EscapeDataString(query));
+            request.Headers.TryAddWithoutValidation("Accept-Language", System.Globalization.CultureInfo.CurrentUICulture.Name + ",en;q=0.7");
+            using var response = await Engine.Downloader.Http.SendAsync(request, cancel);
+            response.EnsureSuccessStatusCode();
+            var html = await response.Content.ReadAsStringAsync(cancel);
+            var text = SearchResultsText(html);
+            if (text != NoResults) return text;
+            blocked = IsSearchBlocked(html);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            blocked = true;
+            Services.DiagLog.Write("agente", "DuckDuckGo no responde: " + ex.Message);
+        }
+        if (blocked) Services.DiagLog.Write("agente", "DuckDuckGo bloquea la busqueda; se prueba con Stack Overflow y Wikipedia");
+        var language = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        var others = await Task.WhenAll(
+            Fallback(() => StackOverflowAsync(query, cancel)),
+            Fallback(() => WikipediaAsync(query, language, cancel)),
+            language == "en" ? Task.FromResult(string.Empty) : Fallback(() => WikipediaAsync(query, "en", cancel)));
+        var found = string.Join(string.Empty, others.Where(o => o.Length > 0));
+        if (found.Length > 0)
+            return (blocked ? "(The web search engine blocked the request; these come from Stack Overflow and Wikipedia.)\n" : string.Empty) + found;
+        return NoResults + (blocked ? " The web search engine is blocking searches right now." : string.Empty)
+               + " Do not repeat the search with similar words: try a different approach (fetch_url on the official documentation or source code you know, broader or English terms once), or answer with what you know and say what you could not find.";
+
+        static async Task<string> Fallback(Func<Task<string>> search)
+        {
+            try { return await search(); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { Services.DiagLog.Write("agente", "busqueda alternativa fallida: " + ex.Message); return string.Empty; }
+        }
+    }
+
+    /// <summary>La pagina anti-robots de DuckDuckGo (desafio «anomaly») en vez de resultados.</summary>
+    public static bool IsSearchBlocked(string html) => html.Contains("anomaly", StringComparison.OrdinalIgnoreCase) || html.Contains("captcha", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Preguntas de Stack Overflow por relevancia (API publica de Stack Exchange, sin clave).</summary>
+    private static async Task<string> StackOverflowAsync(string query, CancellationToken cancel)
+    {
+        var url = "https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&pagesize=5&site=stackoverflow&q=" + Uri.EscapeDataString(query);
+        using var response = await Engine.Downloader.Http.GetAsync(url, cancel);
         response.EnsureSuccessStatusCode();
-        return SearchResultsText(await response.Content.ReadAsStringAsync(cancel));
+        await using var stream = await response.Content.ReadAsStreamAsync(cancel);
+        return StackOverflowText(await ReadMaybeGzipAsync(stream, cancel));
+    }
+
+    /// <summary>La API de Stack Exchange contesta siempre en gzip.</summary>
+    private static async Task<string> ReadMaybeGzipAsync(Stream stream, CancellationToken cancel)
+    {
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer, cancel);
+        var bytes = buffer.ToArray();
+        if (bytes.Length > 2 && bytes[0] == 0x1f && bytes[1] == 0x8b)
+        {
+            using var gz = new System.IO.Compression.GZipStream(new MemoryStream(bytes), System.IO.Compression.CompressionMode.Decompress);
+            using var reader = new StreamReader(gz, Encoding.UTF8);
+            return await reader.ReadToEndAsync(cancel);
+        }
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    public static string StackOverflowText(string json)
+    {
+        var sb = new StringBuilder();
+        if (JsonNode.Parse(json)?["items"] is not JsonArray items) return string.Empty;
+        foreach (var item in items.OfType<JsonObject>().Take(5))
+        {
+            var title = System.Net.WebUtility.HtmlDecode(item["title"]?.GetValue<string>() ?? string.Empty);
+            var link = item["link"]?.GetValue<string>() ?? string.Empty;
+            if (title.Length == 0 || link.Length == 0) continue;
+            var answered = item["is_answered"]?.GetValue<bool>() == true ? "answered" : "unanswered";
+            var tags = item["tags"] is JsonArray t ? string.Join(", ", t.Select(x => x?.GetValue<string>())) : string.Empty;
+            sb.AppendLine($"- Stack Overflow ({answered}): {title}\n   {link}\n   tags: {tags}");
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Articulos de Wikipedia en ese idioma (API publica).</summary>
+    private static async Task<string> WikipediaAsync(string query, string language, CancellationToken cancel)
+    {
+        var url = $"https://{language}.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=3&srsearch=" + Uri.EscapeDataString(query);
+        using var response = await Engine.Downloader.Http.GetAsync(url, cancel);
+        response.EnsureSuccessStatusCode();
+        return WikipediaText(await response.Content.ReadAsStringAsync(cancel), language);
+    }
+
+    public static string WikipediaText(string json, string language)
+    {
+        var sb = new StringBuilder();
+        if (JsonNode.Parse(json)?["query"]?["search"] is not JsonArray items) return string.Empty;
+        foreach (var item in items.OfType<JsonObject>())
+        {
+            var title = item["title"]?.GetValue<string>() ?? string.Empty;
+            if (title.Length == 0) continue;
+            var snippet = Regex.Replace(System.Net.WebUtility.HtmlDecode(Regex.Replace(item["snippet"]?.GetValue<string>() ?? string.Empty, "<[^>]+>", string.Empty)), @"\s+", " ").Trim();
+            sb.AppendLine($"- Wikipedia ({language}): {title}\n   https://{language}.wikipedia.org/wiki/{Uri.EscapeDataString(title.Replace(' ', '_'))}\n   {snippet}");
+        }
+        return sb.ToString();
     }
 
     /// <summary>Los primeros 8 resultados de la pagina HTML de DuckDuckGo, sin anuncios y con la direccion real.</summary>
@@ -309,7 +413,7 @@ public static class ToolBox
             sb.AppendLine($"{++n}. {title}\n   {href}\n   {snippet}");
             if (n >= 8) break;
         }
-        return n == 0 ? "[no results]" : sb.ToString();
+        return n == 0 ? NoResults : sb.ToString();
 
         static string Clean(string s) => Regex.Replace(System.Net.WebUtility.HtmlDecode(Regex.Replace(s, "<[^>]+>", string.Empty)), @"\s+", " ").Trim();
     }

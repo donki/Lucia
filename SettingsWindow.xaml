@@ -213,6 +213,7 @@
                         </DockPanel>
                         <TextBlock x:Name="AgentMaxLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
                         <TextBox x:Name="AgentMaxBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnAgentMaxChanged" KeyDown="OnLimitKey" />
+                        <CheckBox x:Name="AgentUnlimitedCheck" Style="{StaticResource Check}" Margin="0,6,0,0" Click="OnAgentUnlimitedChanged" />
                         <TextBlock x:Name="AgentMaxHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
                         <TextBlock x:Name="PermTitle" Style="{StaticResource FieldLabel}" Margin="0,14,0,2" />
                         <TextBlock x:Name="PermHint" Style="{StaticResource HintText}" Margin="0,0,0,6" />

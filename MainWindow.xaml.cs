@@ -83,6 +83,7 @@ public partial class MainWindow : Window
         Title = Loc.Get("AppTitle");
         ConversationsTitle.Text = Loc.Get("Conversations");
         NewChatButton.ToolTip = Loc.Get("NewChat");
+        DeleteAllButton.ToolTip = Loc.Get("DeleteAllChats");
         SettingsButton.ToolTip = Loc.Get("Settings");
         AboutButton.ToolTip = Loc.Get("AboutTooltip");
         if (IsLoaded) RefreshThreadList();   // los avisos de renombrar/borrar de cada fila
@@ -232,6 +233,7 @@ public partial class MainWindow : Window
     private void RefreshThreadList()
     {
         var selected = _current;
+        DeleteAllButton.IsEnabled = _threads.Count > 0;
         ThreadList.ItemsSource = null;
         ThreadList.ItemsSource = _threads.Select(t => new ThreadRow(t)).ToList();
         if (selected is not null)
@@ -605,6 +607,21 @@ public partial class MainWindow : Window
             ShowThread(null);
     }
 
+    /// <summary>Borra todas las conversaciones guardadas (con sus adjuntos), tras confirmarlo; queda una nueva vacia.</summary>
+    private void OnDeleteAllThreads(object sender, RoutedEventArgs e)
+    {
+        var all = ThreadStore.LoadAll();
+        if (all.Count == 0) return;
+        if (!PromptWindow.Confirm(this, Loc.Get("DeleteAllChats"), Loc.Format("DeleteAllChatsConfirm", all.Count))) return;
+        _answering?.Cancel();
+        foreach (var thread in all)
+            ThreadStore.Delete(thread);
+        _threads.Clear();
+        DiagLog.Write("chat", $"borradas todas las conversaciones ({all.Count})");
+        RefreshThreadList();
+        ShowThread(null);
+    }
+
     // ------------------------------------------------------------------ enviar y responder
 
     private void OnComposerKey(object sender, KeyEventArgs e)
@@ -812,14 +829,14 @@ public partial class MainWindow : Window
     private async Task AnswerLoopAsync(ChatThread thread, CancellationToken cancel)
     {
         var settings = AppSettings.Current;
-        var tools = thread.WorkMode ? ToolBox.Definitions(settings) : ToolBox.QuestionDefinitions(settings);
+        JsonArray? tools = thread.WorkMode ? ToolBox.Definitions(settings) : ToolBox.QuestionDefinitions(settings);
         var question = thread.Messages.LastOrDefault(m => m.Role == "user")?.Content ?? string.Empty;
         string? context = null;
         // El freno del modo agente: tope de acciones y nada de repetir lo que ya fallo igual (Agent/ToolLoopGuard).
         var guard = new ToolLoopGuard(settings.AgentMaxActions);
         for (var round = 0; ; round++)
         {
-            if (round >= guard.MaxCalls + ToolLoopGuard.MaxRepeats + 2)
+            if (!guard.Unlimited && round >= guard.MaxCalls + ToolLoopGuard.MaxRepeats + 2)
             {
                 // Vueltas sin fin aunque cada una pida poco: tambien se para y se dice.
                 StopTurn(thread, guard, GuardStop.Cap);
@@ -952,6 +969,10 @@ public partial class MainWindow : Window
                     {
                         var (output, label) = await RunToolAsync(thread, call, cancel);
                         guard.After(call, label, output);
+                        // Sin avanzar: a la segunda se le pide otro enfoque; al parar, que conteste con lo que tiene.
+                        var note = guard.Stopped == GuardStop.NoProgress ? ToolLoopGuard.NoProgressAnswer : guard.TakeNudge();
+                        if (note is not null && thread.Messages.LastOrDefault() is { Role: "tool" } last && last.ToolCallId == call.Id)
+                            last.Content += "\n\n" + note;
                     }
                     else
                     {
@@ -967,6 +988,15 @@ public partial class MainWindow : Window
                     }
                 }
                 ThreadStore.Save(thread);
+                if (guard.Stopped == GuardStop.NoProgress && tools is not null)
+                {
+                    // Una ultima vuelta sin herramientas: la IA contesta con lo que tiene y dice que no encontro.
+                    DiagLog.Write("agente", $"sin avanzar tras {guard.Fruitless} acciones sin resultado; se pide la respuesta sin herramientas");
+                    _trace?.Event("agente", "no progress: final answer without tools");
+                    Messages.Children.Add(ToolBubble(Resource.Internet, Loc.Get("AgentNoProgressTitle"), Loc.Get("AgentNoProgress")));
+                    tools = null;
+                    continue;
+                }
                 if (guard.Stopped != GuardStop.None)
                 {
                     StopTurn(thread, guard, guard.Stopped);
@@ -1061,6 +1091,7 @@ public partial class MainWindow : Window
         {
             GuardStop.Repeats => Loc.Format("AgentStoppedRepeats", guard.LastFailedLabel ?? "?", guard.LastError ?? string.Empty),
             GuardStop.Failures => Loc.Format("AgentStoppedFailures", guard.LastFailedLabel ?? "?", guard.LastError ?? string.Empty),
+            GuardStop.NoProgress => Loc.Format("AgentStoppedNoProgress", guard.Fruitless, guard.LastFailedLabel ?? "?"),
             _ => Loc.Format("AgentStoppedCap", guard.Calls),
         };
         DiagLog.Write("agente", $"respuesta parada: {reason} tras {guard.Calls} acciones");

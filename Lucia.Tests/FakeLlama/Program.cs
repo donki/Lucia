@@ -30,6 +30,10 @@ if (Environment.GetEnvironmentVariable("FAKE_PYTHON") is { Length: > 0 } mode &&
     Say(System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object> { ["event"] = "done", ["adapter"] = adapter, ["examples"] = 12 }));
     return 0;
 }
+// Como llama-server cuando no puede cargar la IA: sus lineas « E » por la salida de error y fuera.
+if (Environment.GetEnvironmentVariable("FAKE_LLAMA_STDERR") is { Length: > 0 } stderr)
+    foreach (var line in stderr.Split('|'))
+        Console.Error.WriteLine(line);
 if (int.TryParse(Environment.GetEnvironmentVariable("FAKE_LLAMA_EXIT"), out var code))
     return code;
 Thread.Sleep(Timeout.Infinite);

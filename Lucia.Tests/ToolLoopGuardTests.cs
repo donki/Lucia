@@ -42,7 +42,8 @@ public class ToolLoopGuardTests
         Assert.Equal(GuardVerdict.Stop, guard.Before(Call("system_info", "{}")));
         Assert.Equal(GuardStop.Cap, guard.Stopped);
         Assert.Equal(GuardVerdict.Stop, guard.Before(Call("list_folder", "{}")));   // parado, parado
-        Assert.Equal(ToolLoopGuard.MinMaxCalls, new ToolLoopGuard(0).MaxCalls);
+        Assert.Equal(ToolLoopGuard.MinMaxCalls, new ToolLoopGuard(-3).MaxCalls);
+        Assert.False(new ToolLoopGuard(5).Unlimited);
         Assert.Equal(ToolLoopGuard.MaxMaxCalls, new ToolLoopGuard(1000).MaxCalls);
     }
 
@@ -98,5 +99,28 @@ public class ToolLoopGuardTests
                         ToolLoopGuard.Key(Call("run_command", "{\"command\":\"Get-Location\"}")));
         Assert.NotEqual(ToolLoopGuard.Key(Call("read_file", "{\"path\":\"a\"}")), ToolLoopGuard.Key(Call("list_folder", "{\"path\":\"a\"}")));
         Assert.Equal("x|nojson", ToolLoopGuard.Key(Call("x", "no json")));
+    }
+
+    [Fact]
+    public void Sin_limite_no_para_por_numero_pero_si_por_repetir_lo_que_fallo()
+    {
+        var guard = new ToolLoopGuard(ToolLoopGuard.UnlimitedCalls);
+        Assert.True(guard.Unlimited);
+        for (var i = 0; i < 500; i++)
+        {
+            var call = Call("read_file", $$"""{"path":"f{{i}}.txt"}""");
+            Assert.Equal(GuardVerdict.Run, guard.Before(call));
+            Assert.False(guard.After(call, "read_file", "contenido"));
+        }
+        Assert.Equal(500, guard.Calls);
+        Assert.Equal(GuardStop.None, guard.Stopped);
+        // Los otros frenos siguen: tres fallos seguidos de la misma herramienta paran
+        for (var i = 0; i < 3; i++)
+        {
+            var bad = Call("run_command", $$"""{"command":"roto {{i}}"}""");
+            guard.Before(bad);
+            guard.After(bad, "run_command", "[error] no existe");
+        }
+        Assert.Equal(GuardStop.Failures, guard.Stopped);
     }
 }

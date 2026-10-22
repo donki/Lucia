@@ -8,7 +8,7 @@ namespace SocLucia.Engine;
 /// entreno y lo que ocupa cada token en la cache (capas, cabezas KV y su tamaño). Solo se lee la
 /// cabecera (los metadatos), nunca los pesos; los arrays largos (el vocabulario) se saltan.
 /// </summary>
-public sealed record GgufInfo(string Architecture, int? ContextLength, int? Layers, int? HeadsKv, int? KeyLength, int? ValueLength, int? FullAttentionInterval)
+public sealed record GgufInfo(string Architecture, int? ContextLength, int? Layers, int? HeadsKv, int? KeyLength, int? ValueLength, int? FullAttentionInterval, string? Type = null)
 {
     /// <summary>Bytes de cache (K y V en F16) por token de contexto; null si la cabecera no lo dice.</summary>
     public long? KvBytesPerToken
@@ -77,7 +77,7 @@ public sealed record GgufInfo(string Architecture, int? ContextLength, int? Laye
             var embedding = Int("embedding_length");
             var key = Int("attention.key_length") ?? (heads is > 0 && embedding is > 0 ? embedding / heads : null);
             return new GgufInfo(arch, Int("context_length"), Int("block_count"), Int("attention.head_count_kv") ?? heads, key,
-                Int("attention.value_length") ?? key, Int("full_attention_interval"));
+                Int("attention.value_length") ?? key, Int("full_attention_interval"), values.GetValueOrDefault("general.type") as string);
         }
         catch (Exception ex) when (ex is EndOfStreamException or IOException or InvalidDataException or OverflowException)
         {

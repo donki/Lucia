@@ -114,6 +114,11 @@ public static class ModelDownloads
                 Raise(Changed);
             });
             var path = await ModelCatalog.DownloadAsync(model, file, progress, cancel);
+            if (ModelCatalog.Unusable(path) is { } why)
+            {
+                try { System.IO.File.Delete(path); } catch (Exception) { }
+                throw new InvalidOperationException(Localization.Loc.Format("ModelNotUsable", System.IO.Path.GetFileName(path), why));
+            }
             var settings = AppSettings.Current;
             settings.Remember(new InstalledModel { Name = model.Name, Path = path, License = model.License, Repo = model.Repo });
             // Con varias a la vez, se queda activa la ultima que se pidio (o esta, si no hay ninguna activa).

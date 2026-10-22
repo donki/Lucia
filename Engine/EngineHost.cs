@@ -60,7 +60,7 @@ public sealed class EngineHost : IDisposable
             {
                 await StartAsync(folder, archive, settings, cancel);
             }
-            catch (Exception) when (archive.Accelerator == "cuda" && !cancel.IsCancellationRequested)
+            catch (Exception ex) when (archive.Accelerator == "cuda" && !cancel.IsCancellationRequested && ex is not EngineLoadException { ModelProblem: true })
             {
                 // CUDA que no arranca (driver viejo, DLL que falta): se sigue con Vulkan y no se insiste en esta sesion.
                 Log($"CUDA no arranca; se prueba con Vulkan");
@@ -70,6 +70,7 @@ public sealed class EngineHost : IDisposable
                 await StartAsync(folder, archive, settings, cancel);
             }
             _archive = archive;
+            if (settings.BrokenModels.Remove(settings.ModelPath!)) settings.Save();
             _modelPath = settings.ModelPath;
             _context = context;
             _lora = lora;
@@ -86,6 +87,12 @@ public sealed class EngineHost : IDisposable
         catch (Exception ex)
         {
             DiagLog.Write("motor", "no arranca: " + DiagLog.Describe(ex));
+            if (ex is EngineLoadException { ModelProblem: true } && settings.ModelPath is { } broken)
+            {
+                // Se recuerda para avisarlo en la lista de IA instaladas (hasta que arranque bien).
+                settings.BrokenModels[broken] = ex.Message;
+                try { settings.Save(); } catch (Exception) { }
+            }
             Stop();
             Set(EngineState.Error, ex.Message);
             throw;
@@ -194,8 +201,16 @@ public sealed class EngineHost : IDisposable
         var process = Process.Start(info) ?? throw new InvalidOperationException("No se ha podido arrancar llama-server");
         ChildJob.Add(process);   // muere con la aplicacion, pase lo que pase
         _process = process;
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) Log(e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) Log(e.Data); };
+        // Las lineas de error se guardan para explicar en claro por que no carga (EngineErrors).
+        var errors = new List<string>();
+        void Take(string? line)
+        {
+            if (line is null) return;
+            Log(line);
+            if (EngineErrors.IsErrorLine(line)) lock (errors) if (errors.Count < 40) errors.Add(line);
+        }
+        process.OutputDataReceived += (_, e) => Take(e.Data);
+        process.ErrorDataReceived += (_, e) => Take(e.Data);
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
@@ -206,8 +221,16 @@ public sealed class EngineHost : IDisposable
             cancel.ThrowIfCancellationRequested();
             if (process.HasExited)
             {
-                DiagLog.Write("motor", $"llama-server se ha cerrado al cargar (codigo {process.ExitCode}) a los {loading.Elapsed.TotalSeconds:0.0} s");
-                throw new InvalidOperationException(string.Format(Localization.Loc.Get("EngineExited"), process.ExitCode));
+                process.WaitForExit();   // que lleguen las ultimas lineas de su salida
+                string why;
+                bool modelProblem;
+                lock (errors)
+                {
+                    why = EngineErrors.Explain(errors.ToList(), process.ExitCode, settings.ModelName ?? Path.GetFileName(settings.ModelPath!));
+                    modelProblem = EngineErrors.IsModelProblem(errors.ToList());
+                }
+                DiagLog.Write("motor", $"llama-server se ha cerrado al cargar (codigo {process.ExitCode}) a los {loading.Elapsed.TotalSeconds:0.0} s: {why}");
+                throw new EngineLoadException(why, modelProblem);
             }
             if (await HealthyAsync(_port, cancel))
             {

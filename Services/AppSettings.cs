@@ -31,7 +31,7 @@ public sealed class AppSettings
     /// <summary>Longitud maxima de una respuesta, en tokens.</summary>
     public int MaxAnswerTokens { get; set; } = 2048;
 
-    /// <summary>Modo agente: acciones (herramientas) como mucho por respuesta; luego para y lo dice.</summary>
+    /// <summary>Modo agente: acciones (herramientas) como mucho por respuesta; luego para y lo dice. 0 = sin limite.</summary>
     public int AgentMaxActions { get; set; } = Agent.ToolLoopGuard.DefaultMaxCalls;
 
     /// <summary>Idioma de la interfaz: «es», «en» o null (el del sistema).</summary>
@@ -86,6 +86,9 @@ public sealed class AppSettings
 
     /// <summary>IAs descargadas o importadas, con su nombre visible: los GGUF por si solos no dicen como se llaman.</summary>
     public List<InstalledModel> Installed { get; set; } = [];
+
+    /// <summary>IA que no han podido arrancar en este PC (ruta → por que, en claro). Se borra al arrancar bien.</summary>
+    public Dictionary<string, string> BrokenModels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Adaptadores entrenados con los ejemplos del usuario (Enseñar a Lucia), cada uno para su IA.</summary>
     public List<FineTune.LoraAdapter> Adapters { get; set; } = [];

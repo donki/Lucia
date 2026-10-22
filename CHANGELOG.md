@@ -1,5 +1,45 @@
 # Changelog — sOC Lucia
 
+## 2026.10.22.2 — Errores del motor en claro, IA que sí se pueden usar y búsquedas que no se quedan en bucle / Clear engine errors, usable AIs and searches that do not loop
+
+**Español**
+
+- **Errores del motor en claro.** Si una IA no carga, Lucia ya no dice solo «el motor ha terminado con
+  el código 1»: explica el motivo (arquitectura que el motor no conoce, fichero modificado o a medias,
+  adaptador LoRA en vez de IA, datos que faltan, sin memoria) y qué hacer. La IA queda marcada con ⚠
+  en Ajustes hasta que arranque bien, y un fallo del fichero ya no se reintenta inútilmente con Vulkan.
+- **Se baja el fichero correcto de cada repositorio.** Con nombres de compresión propios (Q4_K_P,
+  APEX…) Lucia cogía el fichero más pequeño, que a veces era un auxiliar (`imatrix`, ayudante
+  `FastMTP`, parte de visión, adaptador LoRA) y por eso salía como «óptimo». Ahora reconoce esas
+  compresiones, descarta los auxiliares y no instala (ni deja importar) lo que no es una IA de texto.
+- **Búsquedas que no se quedan en bucle.** DuckDuckGo estaba devolviendo su página anti-robots y la
+  IA buscaba lo mismo con otras palabras sin parar. Ahora, si DuckDuckGo no da nada, se busca en
+  Stack Overflow y Wikipedia; y si dos acciones seguidas no dan nada útil (o son búsquedas casi
+  iguales) se le pide a la IA otro enfoque, y a la cuarta deja de buscar y contesta con lo que sabe.
+- **Acciones sin límite** en el modo agente (Ajustes › Modo trabajo › «Sin límite»): sigue hasta
+  acabar o hasta que pulses parar; los frenos de repetir lo que falla y de no avanzar siguen.
+- **Borrar todas las conversaciones** con un botón (papelera junto a «+»), con confirmación.
+- Banco de pruebas: **497 pruebas** y **92,9 %** de toda la aplicación.
+
+**English**
+
+- **Clear engine errors.** If an AI does not load, Lucia no longer only says «the engine exited with
+  code 1»: it explains why (an architecture the engine does not know, a modified or half-downloaded
+  file, a LoRA adapter instead of an AI, missing data, out of memory) and what to do. The AI is marked
+  with ⚠ in Settings until it starts fine, and a file problem is no longer pointlessly retried on Vulkan.
+- **The right file is downloaded from each repository.** With custom quant names (Q4_K_P, APEX…) Lucia
+  took the smallest file, sometimes an auxiliary one (`imatrix`, `FastMTP` helper, vision part, LoRA
+  adapter), which is why it showed as «optimal». It now knows those quants, skips auxiliary files and
+  does not install (or import) anything that is not a text AI.
+- **Searches that do not loop.** DuckDuckGo was returning its anti-bot page and the AI kept searching
+  the same thing in other words. Now, if DuckDuckGo gives nothing, Stack Overflow and Wikipedia are
+  searched; and if two actions in a row give nothing useful (or are almost the same search) the AI is
+  asked for another approach, and at the fourth it stops searching and answers with what it knows.
+- **Unlimited actions** in agent mode (Settings › Work mode › «No limit»): it goes on until it finishes
+  or you press stop; the brakes on repeating failures and on making no progress remain.
+- **Delete all conversations** with one button (bin next to «+»), with confirmation.
+- Test bench: **497 tests** and **92.9 %** of the whole application.
+
 ## 2026.10.22.1 — Varias descargas a la vez, enlaces a ficheros y más Markdown / Several downloads at once, file links and more Markdown
 
 **Español**

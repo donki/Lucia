@@ -55,6 +55,7 @@ internal static class Sandbox
         s.Permissions.Clear();
         s.Installed.Clear();
         s.Adapters.Clear();
+        s.BrokenModels.Clear();
         s.Pending = null;   // una descarga a medias de otra prueba no se retoma en esta
         s.PendingDownloads.Clear();
         s.ContextTokens = Engine.TokenLimits.ContextDefault;

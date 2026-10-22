@@ -109,9 +109,7 @@ public partial class SettingsWindow : Window
         WorkFolderBox.Text = s.WorkFolder;
         WorkFolderButton.ToolTip = Loc.Get("WorkFolderPick");
         OpenCommandLogButton.Content = Loc.Get("OpenCommandLog");
-        AgentMaxLabel.Text = Loc.Get("AgentMaxActions");
-        AgentMaxBox.Text = s.AgentMaxActions.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        AgentMaxHint.Text = Loc.Format("AgentMaxActionsHint", ToolLoopGuard.MinMaxCalls, ToolLoopGuard.MaxMaxCalls, ToolLoopGuard.DefaultMaxCalls);
+        PaintAgentMax();
         PermTitle.Text = Loc.Get("PermSection");
         PermHint.Text = Loc.Get("PermSectionHint");
         PaintPermissions();
@@ -535,6 +533,10 @@ public partial class SettingsWindow : Window
         long size = 0;
         try { size = new FileInfo(model.Path).Length; } catch (Exception) { }
         text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{Path.GetFileName(model.Path)} · {Human(size)}" + (model.License is { Length: > 0 } l ? " · " + l : string.Empty), TextTrimming = TextTrimming.CharacterEllipsis });
+        // Lo que se sabe de por que no sirve: no es una IA (auxiliar, sin arquitectura) o ya fallo al arrancar.
+        var problem = ModelCatalog.IsHelperFile(model.Path) ? Loc.Get("ModelHelperFile") : AppSettings.Current.BrokenModels.GetValueOrDefault(model.Path);
+        if (problem is not null)
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = "⚠ " + problem, Foreground = (Brush)FindResource("Danger"), TextWrapping = TextWrapping.Wrap });
         grid.Children.Add(text);
         var use = new Button
         {
@@ -698,6 +700,11 @@ public partial class SettingsWindow : Window
     {
         if (Desktop.Current.PickFiles(this, null, "GGUF (*.gguf)|*.gguf", multiselect: false) is not [var file])
             return;
+        if (ModelCatalog.Unusable(file) is { } why)
+        {
+            PromptWindow.Alert(this, Loc.Get("ModelImport"), Loc.Format("ModelNotUsable", Path.GetFileName(file), why));
+            return;
+        }
         var name = ModelCatalog.NameFromFile(file);
         if (string.Equals(Path.GetDirectoryName(Path.GetFullPath(file)), Path.GetFullPath(Paths.Models).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
             AppSettings.Current.Remember(new InstalledModel { Name = name, Path = file });
@@ -1229,10 +1236,37 @@ public partial class SettingsWindow : Window
         PaintLimits();
     }
 
+    /// <summary>El tope de acciones del modo agente, o «sin limite».</summary>
+    private void PaintAgentMax()
+    {
+        var s = AppSettings.Current;
+        AgentMaxLabel.Text = Loc.Get("AgentMaxActions");
+        var unlimited = s.AgentMaxActions == ToolLoopGuard.UnlimitedCalls;
+        AgentMaxBox.Text = (unlimited ? ToolLoopGuard.DefaultMaxCalls : s.AgentMaxActions).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        AgentMaxBox.IsEnabled = !unlimited;
+        AgentUnlimitedCheck.IsChecked = unlimited;
+        AgentUnlimitedCheck.Content = Loc.Get("AgentUnlimited");
+        AgentMaxHint.Text = Loc.Format("AgentMaxActionsHint", ToolLoopGuard.MinMaxCalls, ToolLoopGuard.MaxMaxCalls, ToolLoopGuard.DefaultMaxCalls)
+                            + (unlimited ? " " + Loc.Get("AgentUnlimitedHint") : string.Empty);
+    }
+
+    /// <summary>Sin limite de acciones (0); al quitarlo vuelve el numero de la casilla.</summary>
+    private void OnAgentUnlimitedChanged(object sender, RoutedEventArgs e)
+    {
+        var s = AppSettings.Current;
+        var unlimited = AgentUnlimitedCheck.IsChecked == true;
+        s.AgentMaxActions = unlimited ? ToolLoopGuard.UnlimitedCalls
+            : TokenLimits.Parse(AgentMaxBox.Text, ToolLoopGuard.MinMaxCalls, ToolLoopGuard.MaxMaxCalls) ?? ToolLoopGuard.DefaultMaxCalls;
+        s.Save();
+        DiagLog.Write("ajustes", unlimited ? "acciones por respuesta: sin limite" : $"acciones como mucho por respuesta: {s.AgentMaxActions}");
+        PaintAgentMax();
+    }
+
     /// <summary>El tope de acciones del modo agente: al salir de la casilla o con Intro; si no vale, se dice y se deja el de antes.</summary>
     private void OnAgentMaxChanged(object sender, RoutedEventArgs e)
     {
         var s = AppSettings.Current;
+        if (s.AgentMaxActions == ToolLoopGuard.UnlimitedCalls) return;
         var culture = System.Globalization.CultureInfo.InvariantCulture;
         if (AgentMaxBox.Text.Trim() == s.AgentMaxActions.ToString(culture)) return;
         if (TokenLimits.Parse(AgentMaxBox.Text, ToolLoopGuard.MinMaxCalls, ToolLoopGuard.MaxMaxCalls) is not { } value)

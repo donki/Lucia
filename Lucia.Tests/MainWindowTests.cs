@@ -325,6 +325,130 @@ public sealed class MainWindowTests : UiTest
     }
 
     [Fact]
+    public void BorrarTodasLasConversaciones_ConConfirmacion()
+    {
+        foreach (var old in ThreadStore.LoadAll()) ThreadStore.Delete(old);
+        string? attachments = null;
+        for (var i = 0; i < 3; i++)
+        {
+            var t = new ChatThread { Title = $"Charla {i}", Messages = [new StoredMessage { Role = "user", Content = "hola" }] };
+            ThreadStore.Save(t);
+            if (i == 0) { ThreadStore.Attach(t, Path.Combine(AppContext.BaseDirectory, "FakeLlama.exe")); attachments = ThreadStore.FilesFolder(t); }
+        }
+        Ui.Run(() =>
+        {
+            var w = Open();
+            var button = Ui.Find<Button>(w, "DeleteAllButton");
+            Assert.True(button.IsEnabled);
+            Assert.Equal(Loc.Get("DeleteAllChats"), button.ToolTip);
+            Ui.Answer("Cancel");
+            Ui.Click(button);
+            Assert.Equal(3, ThreadStore.LoadAll().Count);   // cancelado: nada
+            string? message = null;
+            Ui.Answer("Yes", m => message = m);
+            Ui.Click(button);
+            Assert.Equal(Loc.Format("DeleteAllChatsConfirm", 3), message);
+            Assert.Empty(ThreadStore.LoadAll());
+            Assert.False(Directory.Exists(attachments));   // tambien los adjuntos
+            Assert.Empty(Ui.Find<ListBox>(w, "ThreadList").Items);
+            Assert.False(button.IsEnabled);
+        });
+    }
+
+    [Fact]
+    public void ModoAgente_BuscandoSinResultados_CambiaDeEnfoque_YAcabaContestando()
+    {
+        // 2026-10-22: con DuckDuckGo devolviendo su pagina anti-robots, la IA buscaba lo mismo con otras palabras sin fin.
+        Net.Other = r =>
+        {
+            var url = r.RequestUri!.ToString();
+            if (url.StartsWith("https://html.duckduckgo.com/", StringComparison.Ordinal))
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("<html>anomaly</html>") };
+            if (url.Contains("stackexchange", StringComparison.Ordinal) || url.Contains("wikipedia", StringComparison.Ordinal))
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("{}") };
+            return null;
+        };
+        string[] queries = ["cryptopp hex", "Crypto++ hexadecimal transform", "transformación datos hexadecimales cifrado", "cryptopp.dll formato"];
+        foreach (var q in queries)
+            Net.Answers.Enqueue(new FakeHttp.Answer("Voy a intentar buscar información…", Tools: [(ToolBox.WebSearch, new System.Text.Json.Nodes.JsonObject { ["query"] = q }.ToJsonString())]));
+        Net.Answers.Enqueue(new FakeHttp.Answer("No he encontrado nada concreto; con lo que sé, Crypto++ usa HexEncoder y HexDecoder."));
+        Ui.Run(() =>
+        {
+            var w = Open();
+            Ui.Click(Ui.Find<ButtonBase>(w, "WorkModeButton"));
+            Ask(w, "¿Cómo transforma Cryptopp.dll los datos hexadecimales?");
+            Assert.Contains("No he encontrado nada concreto", Bubbles(w));
+            Assert.Contains(Loc.Get("AgentNoProgress"), Bubbles(w));
+        });
+        var tools = ThreadStore.LoadAll().Single().Messages.Where(m => m.Role == "tool").ToList();
+        Assert.Equal(4, tools.Count);   // cuatro busquedas y se deja de buscar
+        Assert.Contains("[Lucia] This is the second action", tools[1].Content);
+        Assert.Contains(ToolLoopGuard.NoProgressAnswer, tools[3].Content);
+        // La ultima peticion al modelo va sin herramientas: tiene que contestar con lo que tiene
+        Assert.Null(Net.ChatRequests[^1]["tools"]);
+        Assert.NotNull(Net.ChatRequests[0]["tools"]);
+        Assert.Equal(5, Net.ChatRequests.Count);
+    }
+
+    [Fact]
+    public void ModoAgente_SinLimite_SigueHastaAcabar()
+    {
+        AppSettings.Current.AgentMaxActions = ToolLoopGuard.UnlimitedCalls;
+        try
+        {
+            // Mas que el tope mas alto que se puede poner (100) y una respuesta al final.
+            for (var i = 0; i < ToolLoopGuard.MaxMaxCalls + 5; i++)
+                Net.Answers.Enqueue(new FakeHttp.Answer(Tools: [(ToolBox.SystemInfo, "{}")]));
+            Net.Answers.Enqueue(new FakeHttp.Answer("Ya está todo."));
+            Ui.Run(() =>
+            {
+                var w = Open();
+                Ui.Click(Ui.Find<ButtonBase>(w, "WorkModeButton"));
+                Ask(w, "dime cosas del PC sin parar");
+                Assert.Contains("Ya está todo.", Bubbles(w));
+                Assert.DoesNotContain(Loc.Format("AgentStoppedCap", 0)[..20], Bubbles(w));
+            });
+            Assert.Equal(ToolLoopGuard.MaxMaxCalls + 5, ThreadStore.LoadAll().Single().Messages.Count(m => m.Role == "tool"));
+        }
+        finally
+        {
+            AppSettings.Current.AgentMaxActions = ToolLoopGuard.DefaultMaxCalls;
+        }
+    }
+
+    [Fact]
+    public void Ajustes_SinLimiteDeAcciones_SeMarcaYSeQuita()
+    {
+        Ui.Run(() =>
+        {
+            var w = new SettingsWindow();
+            Ui.Expect<SettingsWindow>(s =>
+            {
+                var check = Ui.Find<CheckBox>(s, "AgentUnlimitedCheck");
+                var box = Ui.Find<TextBox>(s, "AgentMaxBox");
+                Assert.False(check.IsChecked);
+                Assert.True(box.IsEnabled);
+                box.Text = "40";
+                Ui.Call(s, "OnAgentMaxChanged", box, new RoutedEventArgs());
+                check.IsChecked = true;
+                Ui.Call(s, "OnAgentUnlimitedChanged", check, new RoutedEventArgs());
+                Assert.Equal(ToolLoopGuard.UnlimitedCalls, AppSettings.Current.AgentMaxActions);
+                Assert.False(box.IsEnabled);
+                Assert.EndsWith(Loc.Get("AgentUnlimitedHint"), Ui.Find<TextBlock>(s, "AgentMaxHint").Text);
+                Ui.Call(s, "OnAgentMaxChanged", box, new RoutedEventArgs());   // con la casilla apagada no toca nada
+                Assert.Equal(ToolLoopGuard.UnlimitedCalls, AppSettings.Current.AgentMaxActions);
+                check.IsChecked = false;
+                Ui.Call(s, "OnAgentUnlimitedChanged", check, new RoutedEventArgs());
+                Assert.Equal(ToolLoopGuard.DefaultMaxCalls, AppSettings.Current.AgentMaxActions);   // vuelve el numero (15 por defecto)
+                Assert.True(box.IsEnabled);
+                s.Close();
+            });
+            w.ShowDialog();
+        });
+        AppSettings.Current.AgentMaxActions = ToolLoopGuard.DefaultMaxCalls;
+    }
+
+    [Fact]
     public void ModoAgente_ElTopeDeAccionesPara_YLoDice()
     {
         AppSettings.Current.AgentMaxActions = 3;
