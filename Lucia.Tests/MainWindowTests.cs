@@ -325,6 +325,53 @@ public sealed class MainWindowTests : UiTest
     }
 
     [Fact]
+    public void ControlDeContexto_EncimaDelChat_MuestraElRango_YSeAjusta()
+    {
+        // Un modelo de verdad con cabecera: el rango sale de ahi.
+        var model = Path.Combine(Sandbox.NewFolder("ctx"), "Prueba-Q4_K_M.gguf");
+        File.WriteAllBytes(model, FakeGguf.Build(("general.architecture", "qwen35"), ("qwen35.context_length", 32768u),
+            ("qwen35.block_count", 24u), ("qwen35.attention.head_count_kv", 2u), ("qwen35.attention.key_length", 128u), ("qwen35.embedding_length", 2048u)));
+        AppSettings.Current.ModelPath = model;
+        AppSettings.Current.ModelName = "Prueba";
+        AppSettings.Current.AutoContext = true;
+        TokenLimits.Pc = new PcProfile("cpu", 8, 16L << 30, "RTX", 4L << 30);
+        try
+        {
+            Ui.Run(() =>
+            {
+                var w = Open();
+                var border = Ui.Find<Border>(w, "ContextBorder");
+                Assert.Equal(Visibility.Visible, border.Visibility);
+                var slider = Ui.Find<Slider>(w, "ContextSlider");
+                var range = TokenLimits.RangeFor(AppSettings.Current);
+                Assert.Equal(range.Min, (int)slider.Minimum);
+                Assert.Equal(range.Max, (int)slider.Maximum);
+                Assert.False(slider.IsEnabled);   // en automatico, el deslizador bloqueado
+                Assert.EndsWith(Loc.Get("ContextAutoShort"), Ui.Find<TextBlock>(w, "ContextButtonText").Text);
+                // Abrir el popup y quitar el automatico
+                var auto = Ui.Find<CheckBox>(w, "ContextAutoCheck");
+                Assert.True(auto.IsChecked);
+                auto.IsChecked = false;
+                auto.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert.False(AppSettings.Current.AutoContext);
+                Assert.True(slider.IsEnabled);
+                // Mover el deslizador fija el contexto a mano
+                slider.Value = range.Min;
+                Assert.Equal(range.Min, AppSettings.Current.ContextTokens);
+                Assert.Equal(MainWindow.ContextShort(range.Min), Ui.Find<TextBlock>(w, "ContextButtonText").Text);
+                // Sin modelo, el control se esconde
+                AppSettings.Current.ModelPath = null;
+                w.ModelChanged();
+                Assert.Equal(Visibility.Collapsed, Ui.Find<Border>(w, "ContextBorder").Visibility);
+            });
+        }
+        finally
+        {
+            TokenLimits.Pc = PcProfile.Detect("auto");
+        }
+    }
+
+    [Fact]
     public void BorrarTodasLasConversaciones_ConConfirmacion()
     {
         foreach (var old in ThreadStore.LoadAll()) ThreadStore.Delete(old);

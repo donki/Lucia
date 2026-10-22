@@ -102,6 +102,8 @@ public partial class MainWindow : Window
         ThinkText.Text = Loc.Get("ThinkToggle");
         ThinkButton.ToolTip = Loc.Get("ThinkingHint");
         ThinkButton.IsChecked = AppSettings.Current.Thinking;
+        ContextTitle.Text = Loc.Get("ContextTitle");
+        PaintContext();
         PaintAttachments();
         PaintEngineStatus();
         if (_current is not null)
@@ -179,6 +181,7 @@ public partial class MainWindow : Window
     public void ModelChanged()
     {
         PaintModels();
+        PaintContext();
         PaintEngineStatus();
         if (AppSettings.Current.HasModel)
             _ = WarmUpAsync();
@@ -302,6 +305,63 @@ public partial class MainWindow : Window
         AppSettings.Current.Thinking = ThinkButton.IsChecked == true;
         AppSettings.Current.Save();
     }
+
+    // ------------------------------------------------------------------ contexto (encima del chat)
+
+    private Engine.TokenLimits.ContextRange? _contextRange;
+    private bool _paintingContext;
+
+    /// <summary>El control de contexto: su rango sale de la IA activa (cabecera del GGUF) y cambia al cambiar de IA.</summary>
+    private void PaintContext()
+    {
+        var s = AppSettings.Current;
+        ContextBorder.Visibility = s.HasModel ? Visibility.Visible : Visibility.Collapsed;
+        if (!s.HasModel) { if (ContextPopup is not null) ContextPopup.IsOpen = false; return; }
+        _paintingContext = true;
+        try
+        {
+            var range = _contextRange = Engine.TokenLimits.RangeFor(s);
+            var value = Math.Clamp(Engine.TokenLimits.Context(s), range.Min, range.Max);
+            ContextAutoCheck.Content = Loc.Get("AutoContext");
+            ContextAutoCheck.IsChecked = s.AutoContext;
+            ContextSlider.Minimum = range.Min;
+            ContextSlider.Maximum = Math.Max(range.Min, range.Max);
+            ContextSlider.IsEnabled = !s.AutoContext;
+            ContextSlider.Value = value;
+            ContextMinText.Text = ContextShort(range.Min);
+            ContextMaxText.Text = ContextShort(range.Max);
+            ContextValueText.Text = Loc.Format("ContextValue", value);
+            ContextButtonText.Text = ContextShort(value) + (s.AutoContext ? " " + Loc.Get("ContextAutoShort") : string.Empty);
+            ContextButton.ToolTip = Loc.Format("ContextButtonTip", range.Min, range.Max);
+            ContextPopupHint.Text = (range.Trained is { } tr ? Loc.Format("ContextTrainedShort", tr) : Loc.Get("ContextUnknownModel")) + ". " + Loc.Get("ContextRestart");
+        }
+        finally { _paintingContext = false; }
+    }
+
+    private void OnContextAuto(object sender, RoutedEventArgs e)
+    {
+        if (_paintingContext) return;
+        var s = AppSettings.Current;
+        s.AutoContext = ContextAutoCheck.IsChecked == true;
+        s.Save();
+        DiagLog.Write("chat", $"contexto automatico: {(s.AutoContext ? "si" : "no")} (en uso al reiniciar: {Engine.TokenLimits.Context(s)})");
+        PaintContext();
+    }
+
+    private void OnContextSlider(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_paintingContext || _contextRange is null) return;
+        var s = AppSettings.Current;
+        var value = Math.Clamp((int)Math.Round(e.NewValue), _contextRange.Min, _contextRange.Max);
+        ContextValueText.Text = Loc.Format("ContextValue", value);
+        ContextButtonText.Text = ContextShort(value);
+        // Ajustar a mano apaga el automatico; el motor se recarga con el nuevo contexto en la siguiente pregunta.
+        if (s.AutoContext) { s.AutoContext = false; ContextAutoCheck.IsChecked = false; ContextSlider.IsEnabled = true; }
+        if (s.ContextTokens != value) { s.ContextTokens = value; s.Save(); }
+    }
+
+    /// <summary>8192 → «8k», 18432 → «18k», 40960 → «40k».</summary>
+    internal static string ContextShort(int tokens) => tokens % 1024 == 0 ? $"{tokens / 1024}k" : $"{tokens / 1024.0:0.#}k";
 
     // ------------------------------------------------------------------ adjuntos
 

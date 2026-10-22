@@ -1,5 +1,19 @@
 # Changelog — sOC Lucia
 
+## 2026.10.22.3 — Contexto ajustable encima del chat / Context adjustable above the chat
+
+**Español**
+
+- **Control de contexto encima del chat** (junto a «Pensar»): muestra el contexto en uso y, al pulsarlo,
+  el **mínimo y el máximo** que admite la IA activa en tu PC, con un deslizador para ajustarlo sin pasar
+  por Ajustes. El rango cambia al cambiar de IA. El automático sigue estando; moverlo a mano lo apaga.
+
+**English**
+
+- **Context control above the chat** (next to «Think»): shows the context in use and, when clicked, the
+  **minimum and maximum** the active AI allows on your PC, with a slider to adjust it without opening
+  Settings. The range changes when you switch AI. Automatic is still there; moving it by hand turns it off.
+
 ## 2026.10.22.2 — Errores del motor en claro, IA que sí se pueden usar y búsquedas que no se quedan en bucle / Clear engine errors, usable AIs and searches that do not loop
 
 **Español**
