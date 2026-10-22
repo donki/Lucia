@@ -44,9 +44,25 @@ public sealed record ChatUsage(int? PromptTokens, int? CompletionTokens, double?
     }
 }
 
+/// <summary>
+/// La plantilla de chat del modelo rechazó la conversación (error de Jinja en llama-server, 500): por ejemplo
+/// Qwen3 exige encontrar la última pregunta del usuario y la lanza si no está. Lleva el detalle técnico para
+/// el registro, nunca para la interfaz.
+/// </summary>
+public sealed class ChatTemplateException(string detail) : Exception(detail);
+
 /// <summary>Cliente del <c>/v1/chat/completions</c> de llama-server, en streaming (SSE), con herramientas.</summary>
 public static class ChatClient
 {
+    /// <summary>Si un error del servidor es de la plantilla de chat (Jinja) y no de la red ni del modelo.</summary>
+    public static bool IsTemplateError(string message)
+    {
+        var m = message.ToLowerInvariant();
+        return m.Contains("jinja") || m.Contains("chat template") || m.Contains("apply_chat_template")
+            || m.Contains("no user query") || m.Contains("raise_exception") || m.Contains("system message must be")
+            || (m.Contains("template") && m.Contains("exception"));
+    }
+
     /// <summary>La temperatura con la que se pregunta (va tambien como parametro a MLflow).</summary>
     public const double Temperature = 0.7;
 
@@ -92,7 +108,13 @@ public static class ChatClient
         if (!response.IsSuccessStatusCode)
         {
             var text = await response.Content.ReadAsStringAsync(cancel);
-            throw new HttpRequestException($"{(int)response.StatusCode}: {Trim(text)}");
+            var detail = Trim(text);
+            // La plantilla de chat del modelo rechaza la conversacion (Jinja): no es un fallo nuestro ni del
+            // servidor, y su traza no debe salir a la interfaz. Se distingue para avisar en claro y, si habia
+            // herramientas, reintentar sin ellas.
+            if (IsTemplateError(detail))
+                throw new ChatTemplateException(detail);
+            throw new HttpRequestException($"{(int)response.StatusCode}: {detail}");
         }
         var calls = new SortedDictionary<int, ToolCall>();
         string? finish = null;

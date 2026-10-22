@@ -56,6 +56,7 @@ internal static class Sandbox
         s.Installed.Clear();
         s.Pending = null;   // una descarga a medias de otra prueba no se retoma en esta
         s.ContextTokens = Engine.TokenLimits.ContextDefault;
+        s.AutoContext = false;   // las pruebas fijan el contexto a mano; el automatico se prueba aparte
         s.MaxAnswerTokens = Engine.TokenLimits.AnswerDefault;
         s.EditorDoor = new EditorDoorSettings { Token = "token-de-prueba" };
         return s;

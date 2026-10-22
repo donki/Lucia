@@ -67,7 +67,9 @@
                         <TextBlock x:Name="AnswerTokensLabel" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
                         <TextBox x:Name="AnswerTokensBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnAnswerTokensChanged" KeyDown="OnLimitKey" />
                         <TextBlock x:Name="AnswerTokensHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
-                        <TextBlock x:Name="ContextTokensLabel" Style="{StaticResource FieldLabel}" Margin="0,14,0,4" />
+                        <CheckBox x:Name="AutoContextCheck" Style="{StaticResource Check}" Margin="0,14,0,0" Click="OnAutoContextChanged" />
+                        <TextBlock x:Name="AutoContextHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
+                        <TextBlock x:Name="ContextTokensLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
                         <TextBox x:Name="ContextTokensBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnContextTokensChanged" KeyDown="OnLimitKey" />
                         <TextBlock x:Name="ContextTokensHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
                     </StackPanel>

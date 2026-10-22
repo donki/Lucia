@@ -710,6 +710,17 @@ public partial class MainWindow : Window
                 await AnswerLoopAsync(thread, cancel);
             }
             catch (OperationCanceledException) { _pendingAnswers.Clear(); outcome = "cancelled"; }
+            catch (ChatTemplateException tpl)
+            {
+                // El modelo rechazo la conversacion por su plantilla de chat: el detalle (Jinja) va al registro,
+                // nunca a la interfaz (General 6.9); al usuario, una frase clara en su idioma.
+                outcome = "error";
+                failure = DiagLog.Describe(tpl);
+                DiagLog.Write("chat", "la plantilla del modelo rechazo la conversacion: " + DiagLog.Scrub(tpl.Message));
+                var failed = new StoredMessage { Role = "assistant", Content = Loc.Get("AnswerTemplateRejected") };
+                thread.Messages.Add(failed);
+                if (thread == _current) Messages.Children.Add(Bubble("assistant", failed.Content, null));
+            }
             catch (Exception ex)
             {
                 outcome = "error";
@@ -837,14 +848,29 @@ public partial class MainWindow : Window
                     context = await Task.Run(() => ToolBox.ContextPrompt(settings, question), cancel);
                     if (docsSpan is not null) _trace!.Documents(docsSpan, context);
                 }
-                var history = thread.Messages.TakeLast(30).ToList();   // copia: la conversacion puede crecer mientras
+                // Los ultimos mensajes, siempre con la ultima pregunta dentro: sin ella, la plantilla de algunos
+                // modelos (Qwen3) rechaza la conversacion con un 500. Copia: la conversacion puede crecer mientras.
+                var history = ConversationWindow.Select(thread.Messages);
                 var system = SystemPrompt(settings, thread.WorkMode, context);
                 var messages = await Task.Run(() => MessagesFor(system, history), cancel);
                 DiagLog.Write("chat", $"pregunta preparada a los {clock.ElapsedMilliseconds} ms: {messages.Count} mensajes, {messages.Sum(m => m.Content.Length)} caracteres, {messages.Sum(m => m.Images?.Count ?? 0)} imagenes");
                 DiagLog.SetPhase("esperando el primer trozo de la IA");
                 live.Advance(AnswerPhase.Waiting);
                 var llm = _trace?.Llm(round + 1, messages.Count, settings.Thinking);
-                await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, settings.Thinking, TokenLimits.Answer(settings), tools, live, cancel));
+                try
+                {
+                    await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, settings.Thinking, TokenLimits.Answer(settings), tools, live, cancel));
+                }
+                catch (ChatTemplateException tplEx) when (tools is { Count: > 0 })
+                {
+                    // El modelo rechazo la conversacion por su plantilla: red de seguridad: se reintenta una vez
+                    // sin herramientas (por si son lo que la confunde). Si vuelve a fallar, sube y se avisa en claro.
+                    DiagLog.Write("chat", "la plantilla rechazo la conversacion; se reintenta sin herramientas: " + DiagLog.Scrub(tplEx.Message));
+                    live = new PendingAnswer();
+                    BeginWait(bubble, live);
+                    RepaintBubble(bubble, string.Empty, null, streaming: true);
+                    await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, settings.Thinking, TokenLimits.Answer(settings), null, live, cancel));
+                }
                 var got = live.Read();
                 answer.Content = got.Content.Trim();
                 answer.Reasoning = got.Reasoning?.Trim();

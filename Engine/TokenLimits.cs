@@ -33,18 +33,29 @@ public static class TokenLimits
     private const long GiB = 1024 * MiB;
 
     /// <summary>
-    /// Hasta donde se puede llevar el contexto con esta IA en este PC: <see cref="Max"/> (lo que se
-    /// admite), <see cref="Fast"/> (lo que cabe entero en la grafica, o en la memoria sin apretar si
-    /// no hay grafica: hasta ahi va rapido; si se desconoce, null) y <see cref="Trained"/> (el de la IA).
+    /// Hasta donde se puede llevar el contexto con esta IA en este PC: <see cref="Min"/> (lo mínimo
+    /// sensato), <see cref="Max"/> (lo máximo que se admite), <see cref="Fast"/> (lo que cabe entero en la
+    /// gráfica, o en la memoria sin apretar si no hay gráfica: hasta ahí va rápido; null si se desconoce) y
+    /// <see cref="Trained"/> (el contexto con el que se entrenó la IA, de la cabecera del GGUF).
     /// </summary>
-    public sealed record ContextRange(int Max, int? Fast, int? Trained);
+    public sealed record ContextRange(int Min, int Max, int? Fast, int? Trained)
+    {
+        /// <summary>
+        /// El contexto que Lucia elige sola: lo más grande que cabe en la gráfica y va rápido; si eso no se
+        /// puede leer, el máximo que admite la IA en este PC. Siempre dentro de [<see cref="Min"/>, <see cref="Max"/>].
+        /// </summary>
+        public int Auto => Math.Clamp(Fast ?? Max, Min, Max);
+
+        /// <summary>Si el máximo salió de la cabecera de la IA (y no del tope de reserva por no poder leerla).</summary>
+        public bool FromModel => Trained is not null;
+    }
 
     public static ContextRange RangeFor(GgufInfo? info, long modelBytes, PcProfile pc)
     {
         var trained = info?.ContextLength;
         var upper = Math.Clamp(trained ?? ContextUnknownMax, ContextMin, ContextCeiling);
         if (info?.KvBytesPerToken is not { } perToken)
-            return new ContextRange(upper, null, trained);
+            return new ContextRange(Math.Min(ContextMin, upper), upper, null, trained);
         long fast, hard;
         if (pc.HasUsableGpu)
         {
@@ -60,7 +71,7 @@ public static class TokenLimits
         }
         var max = Math.Clamp(Floor(hard / perToken), ContextMin, upper);
         var quick = Math.Clamp(Floor(fast / perToken), ContextMin, max);
-        return new ContextRange(max, quick, trained);
+        return new ContextRange(Math.Min(ContextMin, max), max, quick, trained);
     }
 
     /// <summary>El rango de la IA activa en este PC (lee la cabecera del GGUF, guardada mientras no cambie).</summary>
@@ -72,8 +83,15 @@ public static class TokenLimits
         return RangeFor(GgufInfo.Read(path), bytes, Pc);
     }
 
-    /// <summary>El contexto con el que arranca el motor: el ajustado, dentro de lo que admiten la IA y el PC.</summary>
-    public static int Context(AppSettings settings) => Math.Clamp(settings.ContextTokens, ContextMin, RangeFor(settings).Max);
+    /// <summary>
+    /// El contexto con el que arranca el motor. En automático (por defecto) lo elige Lucia de los límites de
+    /// la IA; a mano, el valor ajustado, siempre dentro de [mínimo, máximo] de la IA en este PC.
+    /// </summary>
+    public static int Context(AppSettings settings)
+    {
+        var range = RangeFor(settings);
+        return settings.AutoContext ? range.Auto : Math.Clamp(settings.ContextTokens, range.Min, range.Max);
+    }
 
     /// <summary>El tope por respuesta ajustado, dentro de sus limites.</summary>
     public static int Answer(AppSettings settings) => Math.Clamp(settings.MaxAnswerTokens, AnswerMin, AnswerMax);

@@ -130,6 +130,30 @@ public class TokenLimitsTests
         Assert.Equal(16384, TokenLimits.RangeFor(Dense with { ContextLength = 16384 }, (long)(2.5 * GiB), pc).Max);
         // Un modelo que no cabe en la grafica: el minimo rapido.
         Assert.Equal(TokenLimits.ContextMin, TokenLimits.RangeFor(Dense, 6 * GiB, pc).Fast);
+        // Automatico: lo mas grande que cabe en la grafica (Fast), siempre dentro de [Min, Max].
+        Assert.Equal(TokenLimits.ContextMin, range.Min);
+        Assert.Equal(range.Fast, range.Auto);
+        Assert.InRange(range.Auto, range.Min, range.Max);
+        Assert.True(range.FromModel);
+    }
+
+    [Fact]
+    public void El_automatico_siempre_cae_dentro_del_rango_de_la_IA()
+    {
+        var gpu = new PcProfile("cpu", 16, 16 * GiB, "RTX 3050 Ti", 4 * GiB);
+        // Con grafica y cabecera: Auto = Fast.
+        var r = TokenLimits.RangeFor(Dense, (long)(2.5 * GiB), gpu);
+        Assert.Equal(r.Fast, r.Auto);
+        // Sin poder leer lo que ocupa cada token (no KV): Auto = Max (no hay Fast).
+        var noKv = TokenLimits.RangeFor(new GgufInfo("x", 40960, null, null, null, null, null), 0, gpu);
+        Assert.Null(noKv.Fast);
+        Assert.Equal(noKv.Max, noKv.Auto);
+        Assert.Equal(40960, noKv.Max);
+        // Sin cabecera: cae a los valores de siempre y lo dice (FromModel false).
+        var none = TokenLimits.RangeFor(null, 0, gpu);
+        Assert.False(none.FromModel);
+        Assert.Equal(TokenLimits.ContextUnknownMax, none.Auto);
+        Assert.InRange(none.Auto, none.Min, none.Max);
     }
 
     [Fact]
@@ -139,7 +163,7 @@ public class TokenLimitsTests
         var range = TokenLimits.RangeFor(Dense with { ContextLength = 131072 }, (long)(2.5 * GiB), cpu);
         Assert.Equal(57344, range.Fast);
         Assert.Equal(82944, range.Max);
-        Assert.Equal(new TokenLimits.ContextRange(TokenLimits.ContextUnknownMax, null, null), TokenLimits.RangeFor(null, 0, cpu));
+        Assert.Equal(new TokenLimits.ContextRange(TokenLimits.ContextMin, TokenLimits.ContextUnknownMax, null, null), TokenLimits.RangeFor(null, 0, cpu));
         Assert.Equal(TokenLimits.ContextCeiling, TokenLimits.RangeFor(Dense with { ContextLength = 1_000_000, KeyLength = 1, ValueLength = 1 }, 0, cpu).Max);
         Assert.Equal(TokenLimits.ContextMin, TokenLimits.RangeFor(Dense with { ContextLength = 512 }, 0, cpu).Max);
     }
@@ -150,12 +174,17 @@ public class TokenLimitsTests
         var s = Sandbox.ResetSettings();
         try
         {
+            s.AutoContext = false;
             s.ModelPath = Path.Combine(Sandbox.NewFolder("lim"), "dummy.gguf");
             File.WriteAllBytes(s.ModelPath, [1, 2, 3]);   // sin cabecera: tope de siempre
             s.ContextTokens = 100_000;
             Assert.Equal(TokenLimits.ContextUnknownMax, TokenLimits.Context(s));
             s.ContextTokens = 100;
             Assert.Equal(TokenLimits.ContextMin, TokenLimits.Context(s));
+            // En automatico, el ajuste a mano se ignora y se usa el que elige Lucia.
+            s.AutoContext = true;
+            Assert.Equal(TokenLimits.RangeFor(s).Auto, TokenLimits.Context(s));
+            s.AutoContext = false;
             File.WriteAllBytes(s.ModelPath, FakeGguf.Llama(4096));
             File.SetLastWriteTimeUtc(s.ModelPath, DateTime.UtcNow.AddMinutes(2));
             s.ContextTokens = 8192;

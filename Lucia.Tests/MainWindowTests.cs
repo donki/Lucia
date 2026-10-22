@@ -404,6 +404,72 @@ public sealed class MainWindowTests : UiTest
     }
 
     [Fact]
+    public void SiLaPlantillaRechazaLaConversacion_MensajeLimpioYAlRegistro_SinElStackDeJinja()
+    {
+        const string jinja = "While executing CallExpression at line 79, column 24: Jinja Exception: No user query found in messages.";
+        var error = new FakeHttp.Answer(Status: 500, Error: "{\"error\":{\"message\":\"" + jinja + "\",\"code\":500}}");
+        Net.Answers.Enqueue(error);   // la primera llamada…
+        Net.Answers.Enqueue(error);   // …y el reintento sin herramientas: ambos fallan, para que salga el mensaje limpio
+        if (File.Exists(DiagLog.Current)) File.Delete(DiagLog.Current);
+        Ui.Run(() =>
+        {
+            var w = Open();
+            Ask(w, "hola");
+            var bubbles = Bubbles(w);
+            Assert.Contains(Loc.Get("AnswerTemplateRejected"), bubbles);     // al usuario, en claro
+            Assert.DoesNotContain("Jinja", bubbles);                         // nunca el stack
+            Assert.DoesNotContain("No user query", bubbles);
+            Assert.DoesNotContain("line 79", bubbles);
+        });
+        var log = File.ReadAllText(DiagLog.Current);
+        Assert.Contains("No user query found in messages", log);            // el detalle, solo en el registro
+    }
+
+    [Fact]
+    public void SiLaPlantillaRechaza_ConHerramientas_SeReintentaSinEllas()
+    {
+        Net.Answers.Enqueue(new FakeHttp.Answer(Status: 500, Error: "{\"error\":{\"message\":\"Jinja Exception: No user query found in messages.\"}}"));
+        Net.Answers.Enqueue(new FakeHttp.Answer("Ya está, sin herramientas."));
+        Ui.Run(() =>
+        {
+            var w = Open();
+            Ui.Click(Ui.Find<ButtonBase>(w, "WorkModeButton"));
+            Ask(w, "haz algo");
+            Assert.Contains("Ya está, sin herramientas.", Bubbles(w));
+            Assert.Equal(2, Net.ChatRequests.Count);
+            Assert.True(Net.ChatRequests[0].ContainsKey("tools"));           // la primera, con herramientas
+            Assert.False(Net.ChatRequests[1].ContainsKey("tools"));          // el reintento, sin ellas
+        });
+    }
+
+    [Fact]
+    public void ModoAgente_TrasMuchasVueltas_LaPreguntaSiempreVaAlModelo()
+    {
+        // 15 vueltas de herramienta (asistente + resultado) harian caer la pregunta de una ventana ciega de 30.
+        for (var i = 0; i < 14; i++)
+            Net.Answers.Enqueue(new FakeHttp.Answer(Tools: [(ToolBox.SystemInfo, "{}")]));
+        Net.Answers.Enqueue(new FakeHttp.Answer("Hecho."));
+        AppSettings.Current.AgentMaxActions = 20;
+        try
+        {
+            Ui.Run(() =>
+            {
+                var w = Open();
+                Ui.Click(Ui.Find<ButtonBase>(w, "WorkModeButton"));
+                Ask(w, "la pregunta original");
+                Assert.Contains("Hecho.", Bubbles(w));
+                // En cada peticion al modelo hay siempre al menos un mensaje de usuario.
+                Assert.All(Net.ChatRequests, r => Assert.Contains(r["messages"]!.AsArray(), m => m!["role"]!.GetValue<string>() == "user"));
+                Assert.Contains("la pregunta original", Net.ChatRequests[^1]["messages"]!.AsArray().Select(m => m!["content"]?.ToString()));
+            });
+        }
+        finally
+        {
+            AppSettings.Current.AgentMaxActions = ToolLoopGuard.DefaultMaxCalls;
+        }
+    }
+
+    [Fact]
     public void Parar_CortaLaRespuesta()
     {
         Net.Answers.Enqueue(new FakeHttp.Answer("no llega", DelayMs: 10_000));

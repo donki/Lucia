@@ -1,5 +1,37 @@
 # Changelog — sOC Lucia
 
+## 2026.10.21.5 — Conversaciones que el modelo rechazaba, y contexto automático / Conversations the model rejected, and automatic context
+
+**Español**
+
+- **Arreglo: «No se ha podido responder: 500… No user query found in messages».** En modo agente, tras
+  muchas vueltas de herramienta, la pregunta original se salía de la ventana de mensajes que se le manda
+  al modelo, y la plantilla de chat de Qwen3 rechazaba la conversación. Ahora la última pregunta del
+  usuario **siempre viaja** con la conversación, así que no vuelve a pasar.
+- Si aun así un modelo rechaza la conversación por su plantilla, Lucia ya **no enseña el error técnico**
+  (la traza de Jinja): muestra una frase clara («el modelo rechazó la conversación; reformula o empieza un
+  chat nuevo»), apunta el detalle en el registro y, si había herramientas, reintenta una vez sin ellas.
+- **Nuevo: contexto automático** (Ajustes › Respuestas y contexto, activado por defecto). Lucia elige el
+  contexto de los límites de la propia IA: lo más grande que cabe rápido en tu gráfica, dentro de lo que
+  la IA admite. Enseña el valor elegido y el rango (mínimo–máximo) de la IA en tu PC. Desactívalo para
+  ponerlo a mano, acotado por ese mismo rango. Cambiarlo reinicia la IA en la siguiente pregunta.
+- Banco de pruebas: **404 pruebas** y **92,8 %** de toda la aplicación.
+
+**English**
+
+- **Fix: «Could not answer: 500… No user query found in messages».** In agent mode, after many tool
+  rounds, the original question fell out of the message window sent to the model, and Qwen3's chat
+  template rejected the conversation. Now the user's last question **always travels** with the
+  conversation, so it no longer happens.
+- If a model still rejects the conversation through its template, Lucia no longer **shows the technical
+  error** (the Jinja stack): it shows a clear sentence («the model rejected the conversation; rephrase or
+  start a new chat»), records the detail in the log and, if there were tools, retries once without them.
+- **New: automatic context** (Settings › Answers and context, on by default). Lucia picks the context
+  from the AI's own limits: the biggest that fits fast in your graphics card, within what the AI allows.
+  It shows the chosen value and the AI's range (minimum–maximum) on your PC. Turn it off to set it by
+  hand, bounded by that same range. Changing it restarts the AI at the next question.
+- Test suite: **404 tests** and **92.8 %** of the whole app.
+
 ## 2026.10.21.4 — El modo agente no se atasca, y esperas con indicador / The agent no longer gets stuck, and waits with an indicator
 
 **Español**

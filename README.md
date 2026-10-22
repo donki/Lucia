@@ -45,7 +45,8 @@ esa misma IA.
   en la conversación con abrir y guardar como. Mientras se genera se para llama-server (no caben las
   dos en la gráfica); si la gráfica no puede, CPU. Ajustes › Imágenes instala o quita el motor y el modelo.
 - **Respuestas y contexto** (Ajustes): tokens máximos por respuesta (256–32 768, por defecto 2048; el
-  triple con «Pensar») y contexto (2048 hasta lo que admiten la IA y el PC, por defecto 8192). El tope del
+  triple con «Pensar») y contexto **automático por defecto** (Lucia elige lo más grande que cabe rápido en
+  la gráfica, dentro de los límites de la IA; se puede poner a mano, acotado por ese rango). El tope del
   contexto sale de la cabecera del GGUF (contexto de entrenamiento y cache por token, `Engine/GgufInfo.cs`)
   y de la memoria de la gráfica (`Engine/TokenLimits.cs`); cambiarlo reinicia el motor en la siguiente
   pregunta. La puerta de editores usa el máximo de Ajustes si el cliente no trae el suyo y, si lo trae,
@@ -161,9 +162,9 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-10-21): **388 pruebas**, todas pasan; el banco tarda **unos 36 s** (sin
-contar la compilación). Cobertura de líneas: **92,7 %** de lo instrumentado (se instrumenta el
-ensamblado `sOCLucia` entero) y **92,7 %** sobre toda la app (4713 de 5083 líneas ejecutables de
+`Lucia.Tests` (xUnit, 2026-10-21): **404 pruebas**, todas pasan; el banco tarda **unos 45 s** (sin
+contar la compilación). Cobertura de líneas: **92,8 %** de lo instrumentado (se instrumenta el
+ensamblado `sOCLucia` entero) y **92,8 %** sobre toda la app (4750 de 5117 líneas ejecutables de
 C#; el 2026-10-03, 91,5 %).
 
 Se prueba la lógica (documentos de texto, HTML, RTF, .docx y PDF; herramientas del agente; el

@@ -207,19 +207,32 @@ public sealed class SettingsWindowTests : UiTest
 
     private static void Leave(TextBox box) => box.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent));
 
+    /// <summary>Lee un fichero aunque el llama-server de mentira lo tenga abierto para escribir (lectura compartida).</summary>
+    private static string ReadShared(string path)
+    {
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var r = new StreamReader(fs);
+            return r.ReadToEnd();
+        }
+        catch (IOException) { return string.Empty; }
+    }
+
     [Fact]
     public void Ajustes_RespuestasYContexto_SeValidanAlSalir_YElMotorArrancaConElNuevoContexto()
     {
         var args = Path.Combine(Sandbox.NewFolder("fakellama-args"), "args.log");
         Environment.SetEnvironmentVariable("FAKE_LLAMA_LOG", args);
+        AppSettings.Current.AutoContext = false;   // este caso prueba el ajuste a mano; el automatico va aparte
         try
         {
             Ui.Run(() =>
             {
                 var main = new MainWindow();
                 main.Show();
-                Ui.WaitFor(() => File.Exists(args) && File.ReadAllText(args).Contains("|-c|") && App.Engine.State == EngineState.Ready);
-                Assert.Contains("|-c|8192|", File.ReadAllText(args));
+                Ui.WaitFor(() => File.Exists(args) && ReadShared(args).Contains("|-c|") && App.Engine.State == EngineState.Ready);
+                Assert.Contains("|-c|8192|", ReadShared(args));
                 Settings(s =>
                 {
                     Assert.Equal(Loc.Get("LimitsTitle"), Ui.Find<TextBlock>(s, "LimitsTitle").Text);
@@ -243,6 +256,8 @@ public sealed class SettingsWindowTests : UiTest
                     Assert.Equal(3000, AppSettings.Current.MaxAnswerTokens);
 
                     var context = Ui.Find<TextBox>(s, "ContextTokensBox");
+                    Assert.False(Ui.Find<CheckBox>(s, "AutoContextCheck").IsChecked);
+                    Assert.True(context.IsEnabled);
                     Assert.Equal("8192", context.Text);
                     var hint = Ui.Find<TextBlock>(s, "ContextTokensHint").Text;
                     Assert.StartsWith(Loc.Format("ContextTokensHint", TokenLimits.ContextMin, TokenLimits.ContextUnknownMax, TokenLimits.ContextDefault), hint);   // el modelo de prueba no tiene cabecera
@@ -258,7 +273,7 @@ public sealed class SettingsWindowTests : UiTest
                 }, main);
                 Assert.Equal(EngineState.Ready, App.Engine.State);   // cambiar el contexto no corta nada en el momento…
                 Ui.Wait(App.Engine.EnsureReadyAsync(null, CancellationToken.None));   // …la siguiente peticion lo reinicia con el nuevo
-                Ui.WaitFor(() => File.ReadAllText(args).Contains("|-c|16384|"));   // el llama-server de mentira apunta sus argumentos al arrancar
+                Ui.WaitFor(() => ReadShared(args).Contains("|-c|16384|"));   // el llama-server de mentira apunta sus argumentos al arrancar
             });
             Assert.Contains("contexto 8192 -> 16384", File.ReadAllText(DiagLog.Current));
         }
@@ -267,7 +282,42 @@ public sealed class SettingsWindowTests : UiTest
             Environment.SetEnvironmentVariable("FAKE_LLAMA_LOG", null);
             AppSettings.Current.ContextTokens = TokenLimits.ContextDefault;
             AppSettings.Current.MaxAnswerTokens = TokenLimits.AnswerDefault;
+            AppSettings.Current.AutoContext = true;
         }
+    }
+
+    [Fact]
+    public void Ajustes_ContextoAutomatico_EligeSolo_YApagaLaCasillaManual()
+    {
+        // Un modelo con cabecera: 32 capas, contexto de entrenamiento 32768.
+        var model = Path.Combine(Sandbox.NewFolder("auto"), "Prueba-Q4_K_M.gguf");
+        File.WriteAllBytes(model, FakeGguf.Llama(32768));
+        AppSettings.Current.ModelPath = model;
+        AppSettings.Current.ModelName = "Prueba";
+        AppSettings.Current.AutoContext = true;
+        var range = TokenLimits.RangeFor(AppSettings.Current);
+        Ui.Run(() => Settings(s =>
+        {
+            var auto = Ui.Find<CheckBox>(s, "AutoContextCheck");
+            var context = Ui.Find<TextBox>(s, "ContextTokensBox");
+            Ui.WaitFor(() => !Ui.Find<Controls.BusyIndicator>(s, "LimitsBusy").IsBusy && context.Text == range.Auto.ToString());
+            Assert.Equal(Loc.Get("AutoContext"), auto.Content);
+            Assert.True(auto.IsChecked);
+            Assert.False(context.IsEnabled);                            // en automatico no se toca a mano
+            Assert.InRange(range.Auto, range.Min, range.Max);
+            var hint = Ui.Find<TextBlock>(s, "ContextTokensHint").Text;
+            Assert.Contains(Loc.Format("AutoContextChosen", range.Auto, "")[..12], hint);   // «Automático: N (…)»
+            Assert.Contains(range.Min.ToString("N0", System.Globalization.CultureInfo.CurrentCulture), hint);   // el rango mín-máx
+            // Apagarlo enciende la casilla a mano.
+            Ui.Click(auto);
+            Assert.False(AppSettings.Current.AutoContext);
+            Assert.True(context.IsEnabled);
+            // Encenderlo otra vez la vuelve a apagar.
+            Ui.Click(auto);
+            Assert.True(AppSettings.Current.AutoContext);
+            Assert.False(context.IsEnabled);
+        }));
+        AppSettings.Current.AutoContext = true;
     }
 
     [Fact]

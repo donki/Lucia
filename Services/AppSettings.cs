@@ -22,8 +22,11 @@ public sealed class AppSettings
     /// <summary>Dejar que el modelo «piense» antes de responder (mas lento, a veces mejor).</summary>
     public bool Thinking { get; set; }
 
-    /// <summary>Tokens de contexto que se piden al motor.</summary>
+    /// <summary>Tokens de contexto que se piden al motor (cuando no es automatico).</summary>
     public int ContextTokens { get; set; } = 8192;
+
+    /// <summary>Que Lucia elija sola el contexto de los limites de la IA (por defecto si). Si no, manda <see cref="ContextTokens"/>.</summary>
+    public bool AutoContext { get; set; } = true;
 
     /// <summary>Longitud maxima de una respuesta, en tokens.</summary>
     public int MaxAnswerTokens { get; set; } = 2048;

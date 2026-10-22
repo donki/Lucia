@@ -930,16 +930,44 @@ public partial class SettingsWindow : Window
         var culture = System.Globalization.CultureInfo.InvariantCulture;
         AnswerTokensBox.Text = TokenLimits.Answer(s).ToString(culture);
         AnswerTokensHint.Text = Loc.Format("AnswerTokensHint", TokenLimits.AnswerMin, TokenLimits.AnswerMax, TokenLimits.AnswerDefault);
+        AutoContextCheck.Content = Loc.Get("AutoContext");
+        AutoContextCheck.IsChecked = s.AutoContext;
+        AutoContextHint.Text = Loc.Get("AutoContextHint");
+        ContextTokensLabel.Text = Loc.Get("ContextTokensLabel");
         ContextTokensBox.Text = s.ContextTokens.ToString(culture);
-        // El maximo depende de la cabecera del GGUF (se lee del disco): fuera del hilo de la interfaz.
+        ContextTokensBox.IsEnabled = !s.AutoContext;   // en automatico, la casilla a mano se apaga
+        // El maximo/minimo dependen de la cabecera del GGUF (se lee del disco): fuera del hilo de la interfaz.
         _ = RunBusyAsync(LimitsBusy, Loc.Get("LimitsLoading"), () => TokenLimits.RangeFor(s), range =>
         {
-            var hint = Loc.Format("ContextTokensHint", TokenLimits.ContextMin, range.Max, TokenLimits.ContextDefault);
-            if (range.Fast is { } fast) hint += " " + Loc.Format("ContextFast", fast);
-            if (range.Trained is { } trained) hint += " " + Loc.Format("ContextTrained", trained);
-            if (s.ContextTokens > range.Max) hint += " " + Loc.Format("ContextCapped", range.Max);
-            ContextTokensHint.Text = hint + " " + Loc.Get("ContextRestart");
+            if (s.AutoContext)
+            {
+                ContextTokensBox.Text = range.Auto.ToString(culture);
+                // «Automático: 8192, el máximo que cabe en tu gráfica» (o el que admite la IA si no se sabe).
+                var why = range.Fast is not null && range.Auto == range.Fast ? Loc.Get("AutoContextFast")
+                        : range.FromModel ? Loc.Get("AutoContextModelMax") : Loc.Get("AutoContextDefault");
+                ContextTokensHint.Text = Loc.Format("AutoContextChosen", range.Auto, why) + " "
+                    + Loc.Format("ContextRange", range.Min, range.Max, range.Trained is { } tr ? Loc.Format("ContextTrainedShort", tr) : Loc.Get("ContextUnknownModel"))
+                    + " " + Loc.Get("ContextRestart");
+            }
+            else
+            {
+                var hint = Loc.Format("ContextTokensHint", range.Min, range.Max, TokenLimits.ContextDefault);
+                if (range.Fast is { } fast) hint += " " + Loc.Format("ContextFast", fast);
+                if (range.Trained is { } trained) hint += " " + Loc.Format("ContextTrained", trained);
+                if (s.ContextTokens > range.Max) hint += " " + Loc.Format("ContextCapped", range.Max);
+                ContextTokensHint.Text = hint + " " + Loc.Get("ContextRestart");
+            }
         });
+    }
+
+    private void OnAutoContextChanged(object sender, RoutedEventArgs e)
+    {
+        var s = AppSettings.Current;
+        s.AutoContext = AutoContextCheck.IsChecked == true;
+        s.Save();
+        // El motor se reinicia con el nuevo contexto en la siguiente pregunta (no se corta ahora).
+        DiagLog.Write("ajustes", $"contexto automatico: {(s.AutoContext ? "si" : "no")} (en uso al reiniciar el motor: {TokenLimits.Context(s)})");
+        PaintLimits();
     }
 
     private void OnLimitKey(object sender, System.Windows.Input.KeyEventArgs e)
@@ -994,9 +1022,9 @@ public partial class SettingsWindow : Window
         var s = AppSettings.Current;
         if (ContextTokensBox.Text.Trim() == s.ContextTokens.ToString(System.Globalization.CultureInfo.InvariantCulture)) return;
         var range = TokenLimits.RangeFor(s);
-        if (TokenLimits.Parse(ContextTokensBox.Text, TokenLimits.ContextMin, range.Max) is not { } value)
+        if (TokenLimits.Parse(ContextTokensBox.Text, range.Min, range.Max) is not { } value)
         {
-            PromptWindow.Alert(this, Loc.Get("ContextTokensLabel"), Loc.Format("NumberOutOfRange", ContextTokensBox.Text.Trim(), TokenLimits.ContextMin, range.Max));
+            PromptWindow.Alert(this, Loc.Get("ContextTokensLabel"), Loc.Format("NumberOutOfRange", ContextTokensBox.Text.Trim(), range.Min, range.Max));
             PaintLimits();
             return;
         }
