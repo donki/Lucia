@@ -67,7 +67,7 @@ public partial class SettingsWindow : Window
         ModelsFolderBox.Text = Paths.Models;
         ModelsFolderButton.ToolTip = Loc.Get("ModelsFolderPick");
         ModelsFolderHint.Text = Loc.Get("ModelsFolderHint");
-        CancelDownloadButton.ToolTip = Loc.Get("ModelCancel");
+        PaintDownload();
         InstalledLabel.Text = Loc.Get("ModelsInstalled");
         CatalogLabel.Text = Loc.Get("CatalogLabel");
         PaintFilters();
@@ -552,7 +552,7 @@ public partial class SettingsWindow : Window
             Style = (Style)FindResource("DangerIconButton"),
             Content = "\uE74D",
             ToolTip = Loc.Get("ModelDelete"),
-            IsEnabled = !ModelDownloads.Busy,
+            IsEnabled = !ModelDownloads.IsDownloading(model.Repo ?? ModelCatalog.All.FirstOrDefault(m => m.Name == model.Name)?.Repo ?? string.Empty),
             VerticalAlignment = VerticalAlignment.Center,
         };
         delete.Click += (_, _) => DeleteModel(model);
@@ -608,7 +608,7 @@ public partial class SettingsWindow : Window
         if (installed)
         {
             // Ya esta en el disco: el boton es borrarla (los GGUF pesan gigas).
-            button = new Button { Style = (Style)FindResource("DangerIconButton"), Content = "\uE74D", ToolTip = Loc.Get("ModelDelete"), IsEnabled = !ModelDownloads.Busy, VerticalAlignment = VerticalAlignment.Center };
+            button = new Button { Style = (Style)FindResource("DangerIconButton"), Content = "\uE74D", ToolTip = Loc.Get("ModelDelete"), IsEnabled = !ModelDownloads.IsDownloading(model.Repo), VerticalAlignment = VerticalAlignment.Center };
             button.Click += (_, _) =>
             {
                 var file = ModelCatalog.InstalledFiles().FirstOrDefault(i => i.Name == model.Name);
@@ -617,7 +617,7 @@ public partial class SettingsWindow : Window
         }
         else
         {
-            button = new Button { Style = (Style)FindResource("IconButton"), Content = "\uE896", ToolTip = fit == ModelFit.TooBig ? Loc.Get("FitTooBig") : Loc.Get("ModelInstall"), IsEnabled = fit != ModelFit.TooBig && !ModelDownloads.Busy, VerticalAlignment = VerticalAlignment.Center };
+            button = new Button { Style = (Style)FindResource("IconButton"), Content = "\uE896", ToolTip = fit == ModelFit.TooBig ? Loc.Get("FitTooBig") : ModelDownloads.IsDownloading(model.Repo) ? Loc.Get("ModelDownloadingNow") : Loc.Get("ModelInstall"), IsEnabled = fit != ModelFit.TooBig && !ModelDownloads.IsDownloading(model.Repo), VerticalAlignment = VerticalAlignment.Center };
             button.Click += (_, _) => { ModelDownloads.Start(model); PaintModel(); };
         }
         Grid.SetColumn(button, 1);
@@ -625,48 +625,40 @@ public partial class SettingsWindow : Window
         return grid;
     }
 
-    /// <summary>La descarga vive en ModelDownloads (sigue con esta ventana cerrada); aqui solo se pinta.</summary>
+    /// <summary>Las descargas viven en ModelDownloads (siguen con esta ventana cerrada); aqui solo se pintan, una fila por descarga.</summary>
     private void PaintDownload()
     {
-        var download = ModelDownloads.Current;
-        if (download is null)
+        var downloads = ModelDownloads.All;
+        DownloadList.Children.Clear();
+        foreach (var download in downloads)
         {
-            if (DownloadBox.Visibility == Visibility.Visible && !_downloadJustFinished)
-                DownloadBox.Visibility = Visibility.Collapsed;
-            return;
+            var row = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
+            row.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Format("ModelInstalling", download.Model.Name, download.Total is { } t ? $"{Human(download.Received)} / {Human(t)}" : Human(download.Received)) });
+            var line = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var cancel = new Button { Style = (Style)FindResource("DangerIconButton"), Content = "", Width = 30, Height = 30, Margin = new Thickness(8, 0, 0, 0), ToolTip = Loc.Get("ModelCancel") };
+            var repo = download.Model.Repo;
+            cancel.Click += (_, _) => ModelDownloads.Cancel(repo);
+            DockPanel.SetDock(cancel, Dock.Right);
+            line.Children.Add(cancel);
+            line.Children.Add(new ProgressBar { Height = 8, Foreground = (Brush)FindResource("Primary"), Background = (Brush)FindResource("Separator"), BorderThickness = new Thickness(0), IsIndeterminate = download.Fraction is null, Value = (download.Fraction ?? 0) * 100 });
+            row.Children.Add(line);
+            DownloadList.Children.Add(row);
         }
-        _downloadJustFinished = false;
-        DownloadBox.Visibility = Visibility.Visible;
-        CancelDownloadButton.Visibility = Visibility.Visible;
-        DownloadBar.Visibility = Visibility.Visible;
-        DownloadBar.IsIndeterminate = download.Fraction is null;
-        DownloadBar.Value = (download.Fraction ?? 0) * 100;
-        DownloadText.Text = Loc.Format("ModelInstalling", download.Model.Name, download.Total is { } t ? $"{Human(download.Received)} / {Human(t)}" : Human(download.Received));
+        if (downloads.Count > 0) DownloadText.Visibility = Visibility.Collapsed;
     }
-
-    private bool _downloadJustFinished;
 
     private void OnDownloadFinished(CatalogModel model, Exception? error)
     {
-        DownloadBar.IsIndeterminate = false;
+        PaintDownload();
         if (error is null)
         {
-            _downloadJustFinished = true;
-            DownloadBox.Visibility = Visibility.Visible;
-            DownloadBar.Visibility = Visibility.Collapsed;
-            CancelDownloadButton.Visibility = Visibility.Collapsed;
-            DownloadText.Text = Loc.Get("ModelInstalled");
+            DownloadText.Text = Loc.Format("ModelInstalledName", model.Name);
+            DownloadText.Visibility = Visibility.Visible;
         }
-        else
-        {
-            DownloadBox.Visibility = Visibility.Collapsed;
-            if (error is not OperationCanceledException)
-                PromptWindow.Alert(this, Loc.Get("Error"), error.Message);
-        }
+        else if (error is not OperationCanceledException)
+            PromptWindow.Alert(this, Loc.Get("Error"), error.Message);
         PaintModel();
     }
-
-    private void OnCancelDownload(object sender, RoutedEventArgs e) => ModelDownloads.Cancel();
 
     /// <summary>Cambiar la carpeta de modelos: se elige, se mueven los GGUF que haya y se apunta el activo a su nueva ruta.</summary>
     private async void OnPickModelsFolder(object sender, RoutedEventArgs e)

@@ -639,7 +639,7 @@ public class FineTuneWindowTests : UiTest
                 Ui.Click(Ui.Find<Button>(t, "TryButton"));
                 });
                 new FineTuneWindow { Owner = main }.ShowDialog();
-                Ui.WaitFor(() => File.Exists(args) && File.ReadAllText(args).Contains("|--lora|"), 20_000);
+                Ui.WaitFor(() => File.Exists(args) && File.ReadAllText(args).Contains("|--lora|"), 32_000);   // con la cobertura midiendo, arrancar el motor tarda mas
                 Assert.Contains("|--lora|" + adapter!.Path, File.ReadAllText(args));
                 Ui.WaitFor(() => App.Engine.Adapter is not null);
                 Assert.Equal("Mi estilo", App.Engine.Adapter!.Name);

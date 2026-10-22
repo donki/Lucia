@@ -180,7 +180,10 @@ public static class ToolBox
     public static string QuestionPrompt(AppSettings settings)
         => "Answer the user directly. You also have tools for this PC (files, commands, clipboard, opening things), the user's documents, scheduling and memory: " +
            "use one only when the request clearly needs it (a file, a command, a document, a reminder), one step at a time, and give a short reason; the user approves each action. " +
-           $"The working folder is `{settings.WorkFolder}`. Never destroy data unless asked for exactly that.";
+           $"The working folder is `{settings.WorkFolder}`. Never destroy data unless asked for exactly that. " + PathsHint;
+
+    /// <summary>Las rutas completas se ven como enlaces en el chat: un clic abre el fichero o la carpeta.</summary>
+    public const string PathsHint = "When you mention a file or folder on this PC, write its full absolute path (for example `C:\\Users\\me\\Documents\\notes.md`): the user can click it to open it.";
 
     private static IEnumerable<Tool> FreeTools(AppSettings settings) => Free.Where(t => t.Name != Remember || settings.MemoryEnabled);
 
@@ -228,7 +231,7 @@ public static class ToolBox
                "Prefer the specific tools (read_file, list_folder, write_file, fetch_url) over run_command when they fit; one step per call, read the result before the next. " +
                "The user sees and approves each action, so give a short reason. Never destroy data (delete, format, overwrite, force push) unless the user asked for exactly that. " +
                "If an action fails, read the error and change your approach; never repeat the same failing command unchanged. If one path cannot work (for example, a program with a window gives no console output, so reading its bytes will not reveal what it does), say so and propose a real alternative or ask the user, instead of trying it again. " +
-               "When you are done, answer the user in their language and summarise what you did.";
+               "When you are done, answer the user in their language and summarise what you did. " + PathsHint;
     }
 
     public static void Log(Tool tool, string detail, string outcome)

@@ -81,6 +81,9 @@ public sealed class AppSettings
     /// <summary>Descarga a medias al cerrar la aplicacion: se retoma en el siguiente arranque (el .part sigue en la carpeta de modelos).</summary>
     public PendingDownload? Pending { get; set; }
 
+    /// <summary>Descargas a medias al cerrar (varias a la vez); se retoman en el siguiente arranque. Sustituye a <see cref="Pending"/>.</summary>
+    public List<PendingDownload> PendingDownloads { get; set; } = [];
+
     /// <summary>IAs descargadas o importadas, con su nombre visible: los GGUF por si solos no dicen como se llaman.</summary>
     public List<InstalledModel> Installed { get; set; } = [];
 

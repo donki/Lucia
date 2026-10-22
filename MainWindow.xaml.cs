@@ -153,7 +153,9 @@ public partial class MainWindow : Window
         if (ModelDownloads.Current is { } download)
         {
             // Una IA bajando en segundo plano: se ve aqui aunque Ajustes este cerrado.
-            EngineStatus.Text = Loc.Format("ModelInstalling", download.Model.Name, download.Total is { } t ? $"{Human(download.Received)} / {Human(t)}" : Human(download.Received));
+            var others = ModelDownloads.All.Count - 1;
+            var size = download.Total is { } t ? $"{Human(download.Received)} / {Human(t)}" : Human(download.Received);
+            EngineStatus.Text = others > 0 ? Loc.Format("ModelInstallingMore", download.Model.Name, size, others) : Loc.Format("ModelInstalling", download.Model.Name, size);
             EngineProgress.Visibility = Visibility.Visible;
             EngineProgress.IsIndeterminate = download.Fraction is null;
             EngineProgress.Value = (download.Fraction ?? 0) * 100;
@@ -260,6 +262,15 @@ public partial class MainWindow : Window
         ShowThread(null);
         Composer.Focus();
     }
+
+#if DEBUG
+    /// <summary>Solo para capturas: una conversacion de mentira (sin guardar) cuya respuesta es ese Markdown.</summary>
+    internal void ShowMarkdownForTest(string markdown) => ShowThread(new ChatThread
+    {
+        Title = "Markdown",
+        Messages = [new StoredMessage { Role = "user", Content = "Enséñame Markdown" }, new StoredMessage { Role = "assistant", Content = markdown }],
+    });
+#endif
 
     private void ShowThread(ChatThread? thread)
     {

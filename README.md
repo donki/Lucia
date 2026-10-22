@@ -22,7 +22,7 @@ esa misma IA.
   Face). La aplicación **analiza el PC** (procesador, RAM, gráfica y su memoria de vídeo): solo se
   enseñan los que caben, llevan **★ los óptimos** (caben enteros en la gráfica, o son ligeros para
   el procesador), se avisa de los que irán lentos y se recomienda el mayor de los óptimos. La
-  **descarga sigue en segundo plano** con Ajustes cerrado y **se retoma** donde iba si se cierra la
+  **descarga sigue en segundo plano** con Ajustes cerrado (**varias a la vez**, cada una con su barra y su cancelar) y **se retoma** donde iba si se cierra la
   aplicación a medias. Un **buscador de Hugging Face** encuentra más IA (repositorios GGUF), las pesa y
   las valora para este PC con el mismo criterio. Las IA **instaladas se pueden poner en uso o borrar**. También se puede **importar un GGUF** que ya tengas (se usa donde está, sin
   copiarlo). Cada modelo muestra su licencia antes de descargarse. La **carpeta de los modelos** se
@@ -33,7 +33,10 @@ esa misma IA.
   espera con un indicador que dice por dónde va («Cargando la IA…», «Lucia está pensando…»,
   «Razonando…»); la ventana no se bloquea nunca: motor, documentos, adjuntos, streaming y
   herramientas van fuera del hilo de la interfaz. Respuestas en streaming, Markdown (títulos,
-  listas, negrita, bloques de código con botón de copiar), botón de parar; cada pregunta se puede
+  listas anidadas, numeradas y de tareas, negrita, cursiva, tachado, citas, tablas, reglas y bloques de
+  código con botón de copiar), **enlaces clicables**: las direcciones web y las rutas de ficheros y
+  carpetas que existen en el PC (también con espacios, entre comillas, en código o con `:línea`) se
+  abren con un clic; la consigna pide a la IA rutas completas. Botón de parar; cada pregunta se puede
   copiar, editar y reenviar. Encima del redactor, el modo (Preguntas/Agente) y la IA en uso, que se
   cambia entre las instaladas sin pasar por Ajustes.
 - **Adjuntos**: ficheros de texto, código, .docx o PDF (van dentro de la pregunta) e **imágenes** (botón 📎,
@@ -175,7 +178,7 @@ el token que se muestra en Ajustes.
 - `FineTune/`: Enseñar a Lucia. `FineTunePin` (uv, Python, PyTorch y bibliotecas fijadas), `PythonEnv` (el entorno aislado y los convertidores de llama.cpp), `TrainingData` (ejemplos: conversaciones, CSV, JSONL, revisión), `BaseModels` (modelo original en safetensors, si cabe, descarga), `FineTuneRunner` (lanza `lucia_train.py` y lee su progreso; convierte modelos), `Adapters` (los LoRA y cuál está en uso). `FineTuneWindow`: el asistente.
 - `Services/DocumentIndex.cs`: la carpeta de documentos (trozos por palabras; PDF con PdfPig, .docx a mano).
 - `App.xaml.cs`: arranque, instancia única y el gestor global de errores (un fallo inesperado se registra en `logs\engine.log`, se avisa y la aplicación sigue).
-- `Chat/`: `ThreadStore` (JSON por conversación), `Markdown` (render a WPF) y `PendingAnswer` (la respuesta que llega: la llena el hilo del streaming, la lee la interfaz al repintar, con el texto del indicador de espera y el ritmo de repintado).
+- `Chat/`: `ThreadStore` (JSON por conversación), `Markdown` (render a WPF: bloques, tablas, citas y enlaces a webs y a rutas que existen; `LinkTarget` decide qué es enlace) y `PendingAnswer` (la respuesta que llega: la llena el hilo del streaming, la lee la interfaz al repintar, con el texto del indicador de espera y el ritmo de repintado).
 - `Editor/EditorDoor.cs`: la puerta para editores (`HttpListener`); `/v1/models` dice el contexto y si el modelo admite herramientas y visión.
 - `Agent/`: `CommandTool` (definición de la herramienta, ejecución con PowerShell y registro) y `CommandConfirmWindow`; el bucle de vueltas vive en `MainWindow.AnswerLoopAsync`.
 - `Services/TrayIcon.cs`: icono de bandeja (Shell_NotifyIcon) y `WindowsStartup` (HKCU\Run).
@@ -197,9 +200,9 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-10-22): **454 pruebas**, todas pasan; el banco tarda **unos 50 s** (sin
-contar la compilación). Cobertura de líneas: **92,5 %** de lo instrumentado (se instrumenta el
-ensamblado `sOCLucia` entero) y **92,5 %** sobre toda la app (6058 de 6551 líneas ejecutables de
+`Lucia.Tests` (xUnit, 2026-10-22): **468 pruebas**, todas pasan; el banco tarda **unos 50 s** (sin
+contar la compilación). Cobertura de líneas: **92,8 %** de lo instrumentado (se instrumenta el
+ensamblado `sOCLucia` entero) y **92,8 %** sobre toda la app (6187 de 6670 líneas ejecutables de
 C#; el 2026-10-21, 92,8 %). Enseñar a Lucia se prueba con un Python de mentira (el mismo `FakeLlama`
 con `FAKE_PYTHON`) que cuenta etapas y pasos como el script y deja el adaptador; la instalación real
 del entorno y el entrenamiento real se probaron a mano en la RTX 3050 Ti (ver arriba).

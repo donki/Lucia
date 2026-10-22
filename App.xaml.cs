@@ -128,6 +128,11 @@ public partial class App : Application
                     if (run is not null) _ = teach.RunForTestAsync(run);
                 });
             }
+            else if (args[i] == "--show-md" && i + 1 < args.Length)
+            {
+                var markdown = System.IO.File.ReadAllText(args[++i]);
+                WhenLoaded(window, () => window.ShowMarkdownForTest(markdown));
+            }
             else if (args[i] == "--about")
                 WhenLoaded(window, () => new AboutWindow { Owner = window }.Show());
         }

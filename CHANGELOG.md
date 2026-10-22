@@ -1,5 +1,35 @@
 # Changelog — sOC Lucia
 
+## 2026.10.22.1 — Varias descargas a la vez, enlaces a ficheros y más Markdown / Several downloads at once, file links and more Markdown
+
+**Español**
+
+- **Varias IA bajando a la vez.** En Ajustes, cada descarga tiene su barra y su botón de cancelar;
+  cancelar una no toca las demás (ni su fichero a medias). Al acabar, queda en uso la última que
+  pediste. Si cierras Lucia con varias a medias, todas se retoman al abrirla.
+- **Borrar IA instaladas mientras se descarga otra**: ya no se bloquean los botones de borrar; solo
+  queda bloqueada la que se está bajando.
+- **Enlaces a ficheros y carpetas**: en las respuestas, las rutas que existen en tu PC (también con
+  espacios, entre comillas, en código o con «:línea» al final) y las direcciones web salen como
+  enlaces; un clic las abre. La IA escribe ahora las rutas completas para que funcionen.
+- **Más Markdown** en las respuestas: tablas (con alineación), citas, reglas, tachado, listas
+  anidadas y de tareas (☐/☑), enlaces `[texto](dirección)` e imágenes como enlace.
+- Banco de pruebas: **468 pruebas** y **92,8 %** de toda la aplicación.
+
+**English**
+
+- **Several AIs downloading at once.** In Settings, each download has its own bar and cancel button;
+  cancelling one does not touch the others (nor their half-downloaded file). When they finish, the last
+  one you asked for is in use. If you close Lucia with several half-way, they all resume when you open it.
+- **Delete installed AIs while another downloads**: the delete buttons are no longer locked; only the
+  one being downloaded is.
+- **Links to files and folders**: in the answers, paths that exist on your PC (also with spaces, in
+  quotes, in code or with «:line» at the end) and web addresses are links; one click opens them. The AI
+  now writes full paths so they work.
+- **More Markdown** in the answers: tables (with alignment), quotes, rules, strikethrough, nested and
+  task lists (☐/☑), `[text](address)` links and images as links.
+- Test bench: **468 tests** and **92.8 %** of the whole application.
+
 ## 2026.10.22.0 — Enseñar a Lucia (fine-tuning guiado), modelos que no son GGUF y filtros en el buscador / Teach Lucia (guided fine-tuning), non-GGUF models and search filters
 
 **Español**

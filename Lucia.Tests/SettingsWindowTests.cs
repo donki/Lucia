@@ -462,8 +462,9 @@ public sealed class SettingsWindowTests : UiTest
             {
                 var install = Ui.All<Button>(Ui.Find<StackPanel>(s, "CatalogList")).First(b => Equals(b.ToolTip, Loc.Get("ModelInstall")) && b.IsEnabled);
                 Ui.Click(install);
-                Ui.WaitFor(() => Ui.Find<TextBlock>(s, "DownloadText").Text == Loc.Get("ModelInstalled"));
+                Ui.WaitFor(() => Ui.Find<TextBlock>(s, "DownloadText").Visibility == Visibility.Visible);
                 Assert.EndsWith("Nueva-Q4_K_M.gguf", AppSettings.Current.ModelPath);
+                Assert.Equal(Loc.Format("ModelInstalledName", AppSettings.Current.ModelName!), Ui.Find<TextBlock>(s, "DownloadText").Text);
                 Net.Other = _ => new HttpResponseMessage(HttpStatusCode.InternalServerError);
                 var again = Ui.All<Button>(Ui.Find<StackPanel>(s, "CatalogList")).First(b => Equals(b.ToolTip, Loc.Get("ModelInstall")) && b.IsEnabled);
                 Ui.Answer("Ok");
