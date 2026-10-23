@@ -19,7 +19,12 @@ public sealed record RemoteProvider(
     string KeyUrl,
     RemoteSignup Signup,
     bool ListsModels = true,
-    bool NeedsAccountId = false);
+    bool NeedsAccountId = false,
+    IReadOnlyList<string>? FreeModels = null)
+{
+    /// <summary>Modelos gratuitos conocidos (ejemplos; la lista real cambia, usa «ver modelos» o escribe el id).</summary>
+    public IReadOnlyList<string> Free => FreeModels ?? [];
+}
 
 /// <summary>Un modelo remoto que el usuario ha añadido (se guarda en los ajustes; la clave va aparte, cifrada).</summary>
 public sealed class RemoteModelRef
@@ -47,17 +52,28 @@ public static class RemoteModels
     /// <summary>Catálogo de proveedores con capa gratuita permanente y endpoint compatible con OpenAI.</summary>
     public static IReadOnlyList<RemoteProvider> Catalog { get; } =
     [
-        new("groq", "Groq", "https://api.groq.com/openai/v1", "https://console.groq.com/keys", RemoteSignup.Registration),
-        new("mistral", "Mistral AI", "https://api.mistral.ai/v1", "https://console.mistral.ai/api-keys", RemoteSignup.Phone),
-        new("cerebras", "Cerebras", "https://api.cerebras.ai/v1", "https://cloud.cerebras.ai/platform", RemoteSignup.Registration),
-        new("openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "https://openrouter.ai/keys", RemoteSignup.Registration),
-        new("siliconflow", "SiliconFlow", "https://api.siliconflow.cn/v1", "https://cloud.siliconflow.cn/account/ak", RemoteSignup.Phone),
-        new("nvidia", "NVIDIA NIM", "https://integrate.api.nvidia.com/v1", "https://build.nvidia.com/settings/api-keys", RemoteSignup.Registration),
-        new("google", "Google AI Studio", "https://generativelanguage.googleapis.com/v1beta/openai", "https://aistudio.google.com/apikey", RemoteSignup.Registration),
-        new("cohere", "Cohere", "https://api.cohere.ai/compatibility/v1", "https://dashboard.cohere.com/api-keys", RemoteSignup.Registration),
-        new("together", "Together AI", "https://api.together.xyz/v1", "https://api.together.ai/settings/api-keys", RemoteSignup.Card),
-        new("fireworks", "Fireworks AI", "https://api.fireworks.ai/inference/v1", "https://fireworks.ai/account/api-keys", RemoteSignup.Card),
-        new("cloudflare", "Cloudflare Workers AI", "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1", "https://dash.cloudflare.com/profile/api-tokens", RemoteSignup.Registration, NeedsAccountId: true),
+        new("groq", "Groq", "https://api.groq.com/openai/v1", "https://console.groq.com/keys", RemoteSignup.Registration,
+            FreeModels: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "qwen-2.5-32b"]),
+        new("google", "Google AI Studio", "https://generativelanguage.googleapis.com/v1beta/openai", "https://aistudio.google.com/apikey", RemoteSignup.Registration,
+            FreeModels: ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]),
+        new("openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "https://openrouter.ai/keys", RemoteSignup.Registration,
+            FreeModels: ["meta-llama/llama-3.3-70b-instruct:free", "deepseek/deepseek-r1:free", "google/gemini-2.0-flash-exp:free", "qwen/qwen-2.5-72b-instruct:free"]),
+        new("cerebras", "Cerebras", "https://api.cerebras.ai/v1", "https://cloud.cerebras.ai/platform", RemoteSignup.Registration,
+            FreeModels: ["llama-3.3-70b", "llama3.1-8b"]),
+        new("nvidia", "NVIDIA NIM", "https://integrate.api.nvidia.com/v1", "https://build.nvidia.com/settings/api-keys", RemoteSignup.Registration,
+            FreeModels: ["meta/llama-3.3-70b-instruct", "nvidia/llama-3.1-nemotron-70b-instruct", "qwen/qwen2.5-coder-32b-instruct"]),
+        new("mistral", "Mistral AI", "https://api.mistral.ai/v1", "https://console.mistral.ai/api-keys", RemoteSignup.Phone,
+            FreeModels: ["mistral-small-latest", "open-mistral-nemo"]),
+        new("cohere", "Cohere", "https://api.cohere.ai/compatibility/v1", "https://dashboard.cohere.com/api-keys", RemoteSignup.Registration,
+            FreeModels: ["command-r-08-2024", "command-r7b-12-2024"]),
+        new("siliconflow", "SiliconFlow", "https://api.siliconflow.cn/v1", "https://cloud.siliconflow.cn/account/ak", RemoteSignup.Phone,
+            FreeModels: ["Qwen/Qwen2.5-7B-Instruct", "THUDM/glm-4-9b-chat"]),
+        new("together", "Together AI", "https://api.together.xyz/v1", "https://api.together.ai/settings/api-keys", RemoteSignup.Card,
+            FreeModels: ["meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"]),
+        new("fireworks", "Fireworks AI", "https://api.fireworks.ai/inference/v1", "https://fireworks.ai/account/api-keys", RemoteSignup.Card,
+            FreeModels: ["accounts/fireworks/models/llama-v3p1-8b-instruct"]),
+        new("cloudflare", "Cloudflare Workers AI", "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1", "https://dash.cloudflare.com/profile/api-tokens", RemoteSignup.Registration, NeedsAccountId: true,
+            FreeModels: ["@cf/meta/llama-3.1-8b-instruct", "@cf/qwen/qwen1.5-14b-chat-awq"]),
     ];
 
     public static RemoteProvider? Provider(string id) =>

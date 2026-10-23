@@ -1,5 +1,33 @@
 # Changelog — sOC Lucia
 
+## 2026.10.23.8 — Catálogos navegables / Browsable catalogs
+
+**Español**
+
+- **Lista de modelos en línea gratuitos** (Ajustes › Modelos en línea): cada proveedor muestra ejemplos
+  de sus **modelos gratis** como botones que los **añaden con un clic**, junto a su enlace para conseguir
+  la clave y el aviso de que es un servicio externo con límites. Proveedores: Groq, Google AI Studio,
+  OpenRouter, Cerebras, NVIDIA, Mistral, Cohere, SiliconFlow, Together, Fireworks y Cloudflare.
+- **Catálogo de frameworks y servidores MCP** (Ajustes › Frameworks), cada uno con para qué sirve, su
+  motor, su licencia y **preparación de un clic**: REA, los servidores MCP oficiales (ficheros, fetch,
+  git, memoria, razonamiento por pasos, SQLite), **Playwright MCP**, **Context7** y **Serena**. Y, para
+  ingeniería inversa junto a REA y voz local, fichas informativas de **GitHub MCP, Ghidra, rizin/radare2
+  y whisper.cpp** (se instalan a mano). Las listas son actualizables.
+- Banco de pruebas: **579 pruebas**.
+
+**English**
+
+- **Free online-model list** (Settings › Online models): each provider shows examples of its **free
+  models** as buttons that **add them in one click**, next to its "get API key" link and the caveat that
+  it's an external service with limits. Providers: Groq, Google AI Studio, OpenRouter, Cerebras, NVIDIA,
+  Mistral, Cohere, SiliconFlow, Together, Fireworks and Cloudflare.
+- **Frameworks & MCP‑servers catalog** (Settings › Frameworks), each with its purpose, runtime, license
+  and **one‑click set‑up**: REA, the official MCP servers (files, fetch, git, memory, sequential
+  thinking, SQLite), **Playwright MCP**, **Context7** and **Serena**. Plus, for reverse engineering next
+  to REA and for local voice, informational entries for **GitHub MCP, Ghidra, rizin/radare2 and
+  whisper.cpp** (installed by hand). The lists are updatable.
+- Test bench: **579 tests**.
+
 ## 2026.10.23.7 — Multi-modelo / Multi-model
 
 **Español**

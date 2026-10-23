@@ -785,7 +785,10 @@ public partial class SettingsWindow : Window
         var text = new StackPanel();
         text.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold, Text = framework.Name });
         text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = framework.Description, TextWrapping = TextWrapping.Wrap });
-        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{framework.License} · {Frameworks.Binary(framework.Runtime)}" + (installed ? " · " + Loc.Get("FrameworkInstalled") : string.Empty), Foreground = installed ? (Brush)FindResource("Success") : (Brush)FindResource("TextSecondary") });
+        var meta = framework.Installable ? $"{framework.License} · {Frameworks.Binary(framework.Runtime)}" + (installed ? " · " + Loc.Get("FrameworkInstalled") : string.Empty) : framework.License;
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = meta, Foreground = installed ? (Brush)FindResource("Success") : (Brush)FindResource("TextSecondary") });
+        if (!framework.Installable && framework.Note is { Length: > 0 } note)
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = note, TextWrapping = TextWrapping.Wrap });
         grid.Children.Add(text);
 
         var open = new Button { Style = (Style)FindResource("GhostIconButton"), Content = "", ToolTip = Loc.Get("FrameworkOpen"), VerticalAlignment = VerticalAlignment.Center };
@@ -793,10 +796,14 @@ public partial class SettingsWindow : Window
         Grid.SetColumn(open, 1);
         grid.Children.Add(open);
 
-        var install = new Button { Style = (Style)FindResource("OutlineButton"), Content = IconLabel("", Loc.Get("FrameworkInstall")), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
-        install.Click += (_, _) => InstallFrameworkAsync(framework, install);
-        Grid.SetColumn(install, 2);
-        grid.Children.Add(install);
+        // Solo los que son servidor MCP de un clic llevan boton de instalar; los demas, solo abrir la web.
+        if (framework.Installable)
+        {
+            var install = new Button { Style = (Style)FindResource("OutlineButton"), Content = IconLabel("", Loc.Get("FrameworkInstall")), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+            install.Click += (_, _) => InstallFrameworkAsync(framework, install);
+            Grid.SetColumn(install, 2);
+            grid.Children.Add(install);
+        }
         return grid;
     }
 
@@ -957,7 +964,29 @@ public partial class SettingsWindow : Window
         row.Children.Add(test);
         row.Children.Add(modelBox);
         panel.Children.Add(row);
+
+        // Modelos gratuitos conocidos del proveedor: un clic los añade (lista de ejemplos, actualizable).
+        if (provider.Free.Count > 0)
+        {
+            var free = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+            foreach (var id in provider.Free)
+            {
+                var chip = new Button { Style = (Style)FindResource("OutlineButton"), Content = "+ " + id, Margin = new Thickness(0, 0, 6, 6), ToolTip = Loc.Get("OnlineAddModel") };
+                chip.Click += (_, _) => AddRemoteModel(provider.Id, id);
+                free.Children.Add(chip);
+            }
+            panel.Children.Add(free);
+        }
         return panel;
+    }
+
+    private void AddRemoteModel(string providerId, string modelId)
+    {
+        var s = AppSettings.Current;
+        if (!s.RemoteModels.Any(m => m.ProviderId == providerId && m.ModelId == modelId))
+            s.RemoteModels.Add(new RemoteModelRef { ProviderId = providerId, ModelId = modelId, Name = modelId });
+        s.Save();
+        PaintOnline();
     }
 
     private async Task FetchOnlineModelsAsync(RemoteProvider provider, ComboBox box, System.Windows.Controls.Primitives.ButtonBase button)

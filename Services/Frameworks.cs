@@ -27,7 +27,8 @@ public sealed record LlmFramework(
     string Url,
     string? SkillName = null,
     string? SkillMarkdown = null,
-    string? Note = null);
+    string? Note = null,
+    bool Installable = true);
 
 /// <summary>
 /// El catálogo de frameworks para IA y la preparación del entorno (detectar e instalar Node, Python o
@@ -70,7 +71,53 @@ public static class Frameworks
         SkillMarkdown: ReaSkill,
         Note: "REA advertises many tools; Lucia requests the compact schema to keep it usable. It works best with a capable model and a large context, and the first run downloads the package with npx (needs Node.js 22+). Some targets need extra tools (Ghidra, JADX, apktool…) that REA does not install.");
 
-    private static IReadOnlyList<LlmFramework> Default => [Rea];
+    private static IReadOnlyList<LlmFramework> Default =>
+    [
+        Rea,
+        // Servidores MCP oficiales (MIT) — se instalan solos con npx/uvx. {workfolder} = la carpeta de trabajo.
+        new("mcp-filesystem", "MCP · Files", "Read and write files in a folder (the official filesystem MCP server).",
+            FrameworkRuntime.Node, "filesystem", "npx", ["-y", "@modelcontextprotocol/server-filesystem", "{workfolder}"], new(), "MIT",
+            "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem"),
+        new("mcp-fetch", "MCP · Fetch", "Fetch a web page and return its text (the official fetch MCP server).",
+            FrameworkRuntime.Uv, "fetch", "uvx", ["mcp-server-fetch"], new(), "MIT",
+            "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch"),
+        new("mcp-git", "MCP · Git", "Read and operate on a Git repository (the official git MCP server).",
+            FrameworkRuntime.Uv, "git", "uvx", ["mcp-server-git", "--repository", "{workfolder}"], new(), "MIT",
+            "https://github.com/modelcontextprotocol/servers/tree/main/src/git"),
+        new("mcp-memory", "MCP · Memory", "A simple knowledge graph the model can remember across turns.",
+            FrameworkRuntime.Node, "memory", "npx", ["-y", "@modelcontextprotocol/server-memory"], new(), "MIT",
+            "https://github.com/modelcontextprotocol/servers/tree/main/src/memory"),
+        new("mcp-sequential-thinking", "MCP · Sequential thinking", "A tool for step-by-step reasoning over a problem.",
+            FrameworkRuntime.Node, "sequential-thinking", "npx", ["-y", "@modelcontextprotocol/server-sequential-thinking"], new(), "MIT",
+            "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking"),
+        new("mcp-sqlite", "MCP · SQLite", "Query a local SQLite database (read and write).",
+            FrameworkRuntime.Uv, "sqlite", "uvx", ["mcp-server-sqlite", "--db-path", "{workfolder}/lucia.db"], new(), "MIT",
+            "https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite"),
+        new("playwright", "Playwright MCP", "Drive a real browser (navigate, click, read, fill forms) for web tasks.",
+            FrameworkRuntime.Node, "playwright", "npx", ["-y", "@playwright/mcp@latest"], new(), "Apache-2.0",
+            "https://github.com/microsoft/playwright-mcp",
+            Note: "The first run downloads a browser."),
+        new("context7", "Context7", "Live, version-correct documentation for libraries, injected on demand.",
+            FrameworkRuntime.Node, "context7", "npx", ["-y", "@upstash/context7-mcp"], new(), "MIT",
+            "https://github.com/upstash/context7"),
+        new("serena", "Serena", "Semantic code navigation and editing over a language server (LSP) — good for large codebases.",
+            FrameworkRuntime.Uv, "serena", "uvx", ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server"], new(), "MIT",
+            "https://github.com/oraios/serena"),
+
+        // Para ingeniería inversa junto a REA, y voz local: se instalan a mano (no como servidor MCP de un clic).
+        new("github-mcp", "GitHub MCP", "GitHub's own MCP server (issues, PRs, code). Runs with Docker and a GitHub token.",
+            FrameworkRuntime.Node, "github", "", [], new(), "MIT", "https://github.com/github/github-mcp-server",
+            Note: "Needs Docker and a GitHub token; set it up by hand.", Installable: false),
+        new("ghidra", "Ghidra", "NSA's reverse-engineering suite (decompiler, disassembler). Pairs with REA for native binaries.",
+            FrameworkRuntime.Node, "", "", [], new(), "Apache-2.0", "https://ghidra-sre.org/",
+            Note: "Install by hand; REA can drive it.", Installable: false),
+        new("rizin", "rizin / radare2", "Open reverse-engineering framework (disassembler, analysis). Alternative to Ghidra for REA.",
+            FrameworkRuntime.Node, "", "", [], new(), "LGPL-3.0", "https://rizin.re/",
+            Note: "Install by hand; commercial use allowed (LGPL).", Installable: false),
+        new("whisper-cpp", "whisper.cpp", "Local speech-to-text (voice input), runs on this PC with no cloud.",
+            FrameworkRuntime.Node, "", "", [], new(), "MIT", "https://github.com/ggml-org/whisper.cpp",
+            Note: "Install by hand; local voice input is planned for Lucia.", Installable: false),
+    ];
 
     public static LlmFramework? ById(string id) =>
         Catalog.FirstOrDefault(f => string.Equals(f.Id, (id ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase)
@@ -168,11 +215,17 @@ public static class Frameworks
         if (runtime.StartsWith("[error]", StringComparison.Ordinal))
             return runtime + $"\n(The framework '{framework.Id}' needs {Binary(framework.Runtime)}.)";
 
+        if (!framework.Installable || framework.Command.Length == 0)
+            return $"[error] '{framework.Id}' is not a one-click MCP server; set it up by hand. {framework.Note} {framework.Url}".Trim();
+
+        // {workfolder}/{home} se sustituyen al instalar, para no hornear rutas en el catálogo.
+        var work = AppSettings.Current.WorkFolder;
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var config = new McpServerConfig
         {
             Name = framework.McpName,
             Command = framework.Command,
-            Args = [.. framework.Args],
+            Args = framework.Args.Select(a => a.Replace("{workfolder}", work).Replace("{home}", home)).ToList(),
             Env = new Dictionary<string, string>(framework.Env),
             Enabled = true,
         };
