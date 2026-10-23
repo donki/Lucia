@@ -25,6 +25,16 @@ public class SkillsFrameworksSettingsTests : UiTest
                 // Modelos en línea: la tarjeta se pinta y lista los proveedores (Groq entre ellos).
                 Assert.Equal(Loc.Get("OnlineTitle"), Ui.Find<TextBlock>(s, "OnlineTitle").Text);
                 Assert.Contains(Ui.All<TextBlock>(Ui.Find<StackPanel>(s, "OnlineProvidersList")), t => t.Text.Contains("Groq"));
+
+                // Ajustes por pestañas: las 7 con su texto localizado.
+                var tabs = Ui.Find<System.Windows.Controls.TabControl>(s, "Tabs");
+                Assert.Equal(7, tabs.Items.Count);
+                Assert.Equal(Loc.Get("TabFrameworks"), Ui.Find<System.Windows.Controls.TabItem>(s, "TabFrameworks").Header);
+
+                // El buscador salta a la pestaña del ajuste: «mcp» → Frameworks.
+                Ui.Find<TextBox>(s, "SettingsSearchBox").Text = "mcp";
+                Ui.Click(Ui.Find<System.Windows.Controls.Primitives.ButtonBase>(s, "SettingsSearchButton"));
+                Assert.Same(Ui.Find<System.Windows.Controls.TabItem>(s, "TabFrameworks"), tabs.SelectedItem);
                 s.Close();
             });
             w.ShowDialog();

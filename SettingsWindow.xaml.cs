@@ -147,6 +147,65 @@ public partial class SettingsWindow : Window
         LogsHint.Text = Loc.Get("LogsHint");
         CopyLogsButton.Content = IconLabel("\uE8C8", Loc.Get("CopyLogs"));
         OpenLogsFolderButton.Content = IconLabel("\uE838", Loc.Get("OpenLogsFolder"));
+        PaintTabs();
+    }
+
+    // ------------------------------------------------------------------ pesta\u00F1as y buscador de ajustes
+
+    private readonly List<(string Terms, System.Windows.Controls.TabItem Tab, FrameworkElement Anchor)> _settingsIndex = new();
+
+    private void PaintTabs()
+    {
+        TabLocal.Header = Loc.Get("TabLocalModels");
+        TabOnline.Header = Loc.Get("TabOnlineModels");
+        TabFrameworks.Header = Loc.Get("TabFrameworks");
+        TabSkills.Header = Loc.Get("TabSkills");
+        TabRag.Header = Loc.Get("TabRag");
+        TabConfig.Header = Loc.Get("TabConfig");
+        TabMore.Header = Loc.Get("TabMore");
+        SettingsSearchBox.ToolTip = Loc.Get("SettingsSearchPlaceholder");
+        SettingsSearchButton.ToolTip = Loc.Get("SettingsSearchDo");
+
+        _settingsIndex.Clear();
+        void Add(TextBlock title, System.Windows.Controls.TabItem tab, FrameworkElement anchor, string extra = "")
+            => _settingsIndex.Add(((title.Text + " " + extra).ToLowerInvariant(), tab, anchor));
+        Add(ModelTitle, TabLocal, CardLocalModels, "modelo local gguf llama");
+        Add(TeachTitle, TabLocal, TeachCard, "fine-tuning entrenar");
+        Add(OnlineTitle, TabOnline, OnlineCard, "api openai groq mistral clave key");
+        Add(FrameworksTitle, TabFrameworks, FrameworksCard, "rea node python uv");
+        Add(McpTitle, TabFrameworks, McpCard, "mcp servidor server");
+        Add(SkillsTitle, TabSkills, SkillsCard, "habilidad skill");
+        Add(DocsTitle, TabRag, CardDocs, "rag conocimiento documentos knowledge");
+        Add(InstructionsTitle, TabConfig, CardInstructions, "instrucciones internet letra font");
+        Add(DoorTitle, TabConfig, CardDoor, "vs code editor puerta");
+        Add(ImagesTitle, TabConfig, CardImages, "imagen image");
+        Add(TasksTitle, TabConfig, CardTasks, "tarea programada schedule");
+        Add(MemoryTitle, TabConfig, CardMemory, "memoria memory");
+        Add(WindowsTitle, TabConfig, CardWindows, "bandeja arranque tray startup");
+        Add(LimitsTitle, TabMore, CardContext, "contexto context tokens respuesta");
+        Add(WorkTitle, TabMore, CardWork, "permisos permissions agente trabajo");
+        Add(MlflowTitle, TabMore, MlflowCard, "mlflow trazas");
+        Add(LanguageTitle, TabMore, CardLanguage, "idioma language");
+        Add(DiagnosticsTitle, TabMore, CardDiagnostics, "diagnostico registro logs");
+    }
+
+    private void OnSettingsSearch(object sender, RoutedEventArgs e) => JumpToSetting(SettingsSearchBox.Text);
+
+    private void OnSettingsSearchKey(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter) { JumpToSetting(SettingsSearchBox.Text); e.Handled = true; }
+    }
+
+    /// <summary>Busca el ajuste por su texto, salta a su pesta\u00F1a y lo trae a la vista.</summary>
+    private void JumpToSetting(string query)
+    {
+        query = (query ?? string.Empty).Trim().ToLowerInvariant();
+        if (query.Length == 0) return;
+        var hit = _settingsIndex.FirstOrDefault(entry => entry.Terms.Contains(query));
+        if (hit.Anchor is null) return;
+        Tabs.SelectedItem = hit.Tab;
+        // La pesta\u00F1a se conecta al \u00E1rbol visual al seleccionarla; se desplaza en la siguiente vuelta.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () => { try { hit.Anchor.BringIntoView(); } catch (Exception) { } });
     }
 
     // ------------------------------------------------------------------ la IA

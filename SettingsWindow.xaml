@@ -4,7 +4,7 @@
         xmlns:loc="clr-namespace:SocLucia.Localization"
         xmlns:c="clr-namespace:SocLucia.Controls"
         Title="{loc:T SettingsTitle}"
-        Width="620" Height="760" MinWidth="520" MinHeight="520"
+        Width="920" Height="780" MinWidth="760" MinHeight="540"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource PageBackground}">
@@ -12,378 +12,436 @@
         <Grid DockPanel.Dock="Bottom" Margin="0,14,0,0">
             <Button x:Name="CloseButton" Style="{StaticResource IconButton}" Content="&#xE711;" HorizontalAlignment="Right" Click="OnClose" />
         </Grid>
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="0,0,10,0">
 
-                <!-- La IA -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="ModelTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,8" />
-                        <TextBlock x:Name="ModelCurrent" Style="{StaticResource BodyText}" />
-                        <TextBlock x:Name="ModelDetail" Style="{StaticResource HintText}" Margin="0,4,0,0" />
-                        <c:BusyIndicator x:Name="ModelBusy" />
-                        <TextBlock x:Name="InstalledLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,2" />
-                        <StackPanel x:Name="InstalledList" />
-                        <TextBlock x:Name="CatalogLabel" Style="{StaticResource FieldLabel}" Margin="0,14,0,2" />
-                        <TextBlock x:Name="ModelRam" Style="{StaticResource HintText}" Margin="0,0,0,6" />
-                        <StackPanel x:Name="CatalogList" />
-                        <TextBlock x:Name="SearchLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
-                        <DockPanel>
-                            <Button x:Name="SearchButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE721;" Margin="6,0,0,0" Click="OnSearchModels" />
-                            <TextBox x:Name="SearchBox" Style="{StaticResource Field}" KeyDown="OnSearchKey" />
-                        </DockPanel>
-                        <!-- Filtros: tipo, tamaño maximo, formato, orden y licencia comercial -->
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="8" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock x:Name="KindLabel" Style="{StaticResource HintText}" Margin="0,0,0,2" />
-                            <ComboBox x:Name="KindCombo" Grid.Row="1" Style="{StaticResource DeviceCombo}" />
-                            <TextBlock x:Name="SizeLabel" Grid.Column="2" Style="{StaticResource HintText}" Margin="0,0,0,2" />
-                            <ComboBox x:Name="SizeCombo" Grid.Row="1" Grid.Column="2" Style="{StaticResource DeviceCombo}" />
-                            <TextBlock x:Name="FormatLabel" Grid.Row="2" Style="{StaticResource HintText}" Margin="0,8,0,2" />
-                            <ComboBox x:Name="FormatCombo" Grid.Row="3" Style="{StaticResource DeviceCombo}" />
-                            <TextBlock x:Name="SortLabel" Grid.Row="2" Grid.Column="2" Style="{StaticResource HintText}" Margin="0,8,0,2" />
-                            <ComboBox x:Name="SortCombo" Grid.Row="3" Grid.Column="2" Style="{StaticResource DeviceCombo}" />
-                        </Grid>
-                        <CheckBox x:Name="CommercialCheck" Style="{StaticResource Check}" Margin="0,8,0,0" />
-                        <TextBlock x:Name="SearchHint" Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                        <c:BusyIndicator x:Name="SearchBusy" />
-                        <StackPanel x:Name="SearchList" Margin="0,4,0,0" />
-                        <!-- Descargas en marcha (varias a la vez), cada una con su barra y su boton de cancelar -->
-                        <StackPanel x:Name="DownloadList" Margin="0,8,0,0" />
-                        <TextBlock x:Name="DownloadText" Style="{StaticResource HintText}" Visibility="Collapsed" Margin="0,4,0,0" />
-                        <Button x:Name="ImportButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnImport" />
-                        <TextBlock x:Name="ImportHint" Style="{StaticResource HintText}" Margin="0,6,0,0" />
-                        <TextBlock x:Name="ModelsFolderLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
-                        <DockPanel>
-                            <Button x:Name="ModelsFolderButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8DA;" Margin="6,0,0,0" Click="OnPickModelsFolder" />
-                            <TextBox x:Name="ModelsFolderBox" Style="{StaticResource Field}" IsReadOnly="True" />
-                        </DockPanel>
-                        <TextBlock x:Name="ModelsFolderHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
-                        <TextBlock x:Name="MoveStatus" Style="{StaticResource HintText}" Margin="0,4,0,0" Visibility="Collapsed" />
-                        <c:BusyIndicator x:Name="MoveBusy" />
-                    </StackPanel>
-                </Border>
+        <!-- Buscador de ajustes: salta a la pestaña y a la sección que coincide (en todas las pestañas) -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <Button x:Name="SettingsSearchButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE721;" Margin="6,0,0,0" Click="OnSettingsSearch" />
+            <TextBox x:Name="SettingsSearchBox" Style="{StaticResource Field}" KeyDown="OnSettingsSearchKey" />
+        </DockPanel>
 
-                <!-- Respuestas y contexto: tokens por respuesta y memoria de la conversacion -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="LimitsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="LimitsHint" Style="{StaticResource HintText}" Margin="0,0,0,10" />
-                        <c:BusyIndicator x:Name="LimitsBusy" />
-                        <TextBlock x:Name="AnswerTokensLabel" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
-                        <TextBox x:Name="AnswerTokensBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnAnswerTokensChanged" KeyDown="OnLimitKey" />
-                        <TextBlock x:Name="AnswerTokensHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
-                        <CheckBox x:Name="AutoContextCheck" Style="{StaticResource Check}" Margin="0,14,0,0" Click="OnAutoContextChanged" />
-                        <TextBlock x:Name="AutoContextHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
-                        <TextBlock x:Name="ContextTokensLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
-                        <TextBox x:Name="ContextTokensBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnContextTokensChanged" KeyDown="OnLimitKey" />
-                        <TextBlock x:Name="ContextTokensHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
-                    </StackPanel>
-                </Border>
+        <TabControl x:Name="Tabs" Background="Transparent" BorderThickness="0">
 
-                <!-- Enseñar a Lucia: fine-tuning guiado y los adaptadores entrenados -->
-                <Border x:Name="TeachCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="TeachTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="TeachHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,10" />
-                        <Button x:Name="TeachButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Click="OnTeach" />
-                        <TextBlock x:Name="AdaptersLabel" Style="{StaticResource FieldLabel}" Margin="0,14,0,2" />
-                        <StackPanel x:Name="AdapterList" />
-                        <TextBlock x:Name="TeachDisk" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,12,0,0" />
-                        <WrapPanel Margin="0,6,0,0">
-                            <Button x:Name="RemoveEnvButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnRemoveEnv" />
-                            <Button x:Name="RemoveBasesButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnRemoveBases" />
-                        </WrapPanel>
-                        <c:BusyIndicator x:Name="TeachBusy" />
-                        <Border x:Name="ConvertBox" Visibility="Collapsed" Margin="0,8,0,0">
+            <!-- 1) Modelos locales -->
+            <TabItem x:Name="TabLocal">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,8,10,0">
+
+                        <!-- La IA -->
+                        <Border x:Name="CardLocalModels" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
                             <StackPanel>
-                                <TextBlock x:Name="ConvertText" Style="{StaticResource HintText}" TextWrapping="Wrap" />
-                                <DockPanel Margin="0,4,0,0">
-                                    <Button x:Name="CancelConvertButton" DockPanel.Dock="Right" Style="{StaticResource DangerIconButton}" Content="&#xE711;" Width="30" Height="30" Margin="8,0,0,0" Click="OnCancelConvert" />
-                                    <ProgressBar x:Name="ConvertBar" Height="8" Foreground="{DynamicResource Primary}" Background="{DynamicResource Separator}" BorderThickness="0" />
+                                <TextBlock x:Name="ModelTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,8" />
+                                <TextBlock x:Name="ModelCurrent" Style="{StaticResource BodyText}" />
+                                <TextBlock x:Name="ModelDetail" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                                <c:BusyIndicator x:Name="ModelBusy" />
+                                <TextBlock x:Name="InstalledLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,2" />
+                                <StackPanel x:Name="InstalledList" />
+                                <TextBlock x:Name="CatalogLabel" Style="{StaticResource FieldLabel}" Margin="0,14,0,2" />
+                                <TextBlock x:Name="ModelRam" Style="{StaticResource HintText}" Margin="0,0,0,6" />
+                                <StackPanel x:Name="CatalogList" />
+                                <TextBlock x:Name="SearchLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                                <DockPanel>
+                                    <Button x:Name="SearchButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE721;" Margin="6,0,0,0" Click="OnSearchModels" />
+                                    <TextBox x:Name="SearchBox" Style="{StaticResource Field}" KeyDown="OnSearchKey" />
                                 </DockPanel>
+                                <!-- Filtros: tipo, tamaño maximo, formato, orden y licencia comercial -->
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock x:Name="KindLabel" Style="{StaticResource HintText}" Margin="0,0,0,2" />
+                                    <ComboBox x:Name="KindCombo" Grid.Row="1" Style="{StaticResource DeviceCombo}" />
+                                    <TextBlock x:Name="SizeLabel" Grid.Column="2" Style="{StaticResource HintText}" Margin="0,0,0,2" />
+                                    <ComboBox x:Name="SizeCombo" Grid.Row="1" Grid.Column="2" Style="{StaticResource DeviceCombo}" />
+                                    <TextBlock x:Name="FormatLabel" Grid.Row="2" Style="{StaticResource HintText}" Margin="0,8,0,2" />
+                                    <ComboBox x:Name="FormatCombo" Grid.Row="3" Style="{StaticResource DeviceCombo}" />
+                                    <TextBlock x:Name="SortLabel" Grid.Row="2" Grid.Column="2" Style="{StaticResource HintText}" Margin="0,8,0,2" />
+                                    <ComboBox x:Name="SortCombo" Grid.Row="3" Grid.Column="2" Style="{StaticResource DeviceCombo}" />
+                                </Grid>
+                                <CheckBox x:Name="CommercialCheck" Style="{StaticResource Check}" Margin="0,8,0,0" />
+                                <TextBlock x:Name="SearchHint" Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                <c:BusyIndicator x:Name="SearchBusy" />
+                                <StackPanel x:Name="SearchList" Margin="0,4,0,0" />
+                                <!-- Descargas en marcha (varias a la vez), cada una con su barra y su boton de cancelar -->
+                                <StackPanel x:Name="DownloadList" Margin="0,8,0,0" />
+                                <TextBlock x:Name="DownloadText" Style="{StaticResource HintText}" Visibility="Collapsed" Margin="0,4,0,0" />
+                                <Button x:Name="ImportButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnImport" />
+                                <TextBlock x:Name="ImportHint" Style="{StaticResource HintText}" Margin="0,6,0,0" />
+                                <TextBlock x:Name="ModelsFolderLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                                <DockPanel>
+                                    <Button x:Name="ModelsFolderButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8DA;" Margin="6,0,0,0" Click="OnPickModelsFolder" />
+                                    <TextBox x:Name="ModelsFolderBox" Style="{StaticResource Field}" IsReadOnly="True" />
+                                </DockPanel>
+                                <TextBlock x:Name="ModelsFolderHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                                <TextBlock x:Name="MoveStatus" Style="{StaticResource HintText}" Margin="0,4,0,0" Visibility="Collapsed" />
+                                <c:BusyIndicator x:Name="MoveBusy" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Enseñar a Lucia: fine-tuning guiado y los adaptadores entrenados -->
+                        <Border x:Name="TeachCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="TeachTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="TeachHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                <Button x:Name="TeachButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Click="OnTeach" />
+                                <TextBlock x:Name="AdaptersLabel" Style="{StaticResource FieldLabel}" Margin="0,14,0,2" />
+                                <StackPanel x:Name="AdapterList" />
+                                <TextBlock x:Name="TeachDisk" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                                <WrapPanel Margin="0,6,0,0">
+                                    <Button x:Name="RemoveEnvButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnRemoveEnv" />
+                                    <Button x:Name="RemoveBasesButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnRemoveBases" />
+                                </WrapPanel>
+                                <c:BusyIndicator x:Name="TeachBusy" />
+                                <Border x:Name="ConvertBox" Visibility="Collapsed" Margin="0,8,0,0">
+                                    <StackPanel>
+                                        <TextBlock x:Name="ConvertText" Style="{StaticResource HintText}" TextWrapping="Wrap" />
+                                        <DockPanel Margin="0,4,0,0">
+                                            <Button x:Name="CancelConvertButton" DockPanel.Dock="Right" Style="{StaticResource DangerIconButton}" Content="&#xE711;" Width="30" Height="30" Margin="8,0,0,0" Click="OnCancelConvert" />
+                                            <ProgressBar x:Name="ConvertBar" Height="8" Foreground="{DynamicResource Primary}" Background="{DynamicResource Separator}" BorderThickness="0" />
+                                        </DockPanel>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
                     </StackPanel>
-                </Border>
+                </ScrollViewer>
+            </TabItem>
 
-                <!-- Instrucciones fijas -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="InstructionsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="InstructionsHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
-                        <TextBox x:Name="InstructionsBox" Style="{StaticResource Field}" Height="90" AcceptsReturn="True" TextWrapping="Wrap"
-                                 VerticalContentAlignment="Top" Padding="8,6" VerticalScrollBarVisibility="Auto" LostFocus="OnInstructionsChanged" />
-                        <CheckBox x:Name="InternetCheck" Style="{StaticResource Check}" Margin="0,12,0,0" Click="OnInternetChanged" />
-                        <TextBlock x:Name="InternetHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
-                        <DockPanel Margin="0,12,0,0">
-                            <TextBlock x:Name="FontSizeTitle" Style="{StaticResource BodyText}" VerticalAlignment="Center" />
-                            <TextBlock x:Name="FontSizeValue" Style="{StaticResource HintText}" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
-                            <Slider x:Name="FontSizeSlider" Minimum="12" Maximum="20" TickFrequency="1" IsSnapToTickEnabled="True" Width="180" Margin="12,0,0,0" HorizontalAlignment="Left" ValueChanged="OnFontSizeChanged" />
-                        </DockPanel>
-                        <TextBlock x:Name="FontSizeHint" Style="{StaticResource HintText}" Margin="0,2,0,0" />
+            <!-- 2) Modelos en línea -->
+            <TabItem x:Name="TabOnline">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,8,10,0">
+                        <!-- Modelos en línea: APIs compatibles con OpenAI (Free-LLM); el texto sale del dispositivo (opt-in) -->
+                        <Border x:Name="OnlineCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="OnlineTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="OnlineHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                <CheckBox x:Name="OnlineOptIn" Style="{StaticResource Check}" Margin="0,0,0,8" Click="OnOnlineOptIn" />
+                                <TextBlock x:Name="OnlineModelsLabel" Style="{StaticResource FieldLabel}" Margin="0,4,0,4" />
+                                <StackPanel x:Name="OnlineModelsList" />
+                                <TextBlock x:Name="OnlineProvidersLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                                <StackPanel x:Name="OnlineProvidersList" />
+                                <c:BusyIndicator x:Name="OnlineBusy" />
+                                <TextBlock x:Name="OnlineStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                </Border>
+                </ScrollViewer>
+            </TabItem>
 
-                <!-- Editores de codigo -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="DoorTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="DoorHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
-                        <CheckBox x:Name="DoorCheck" Style="{StaticResource Check}" Margin="0" Click="OnDoorChanged" />
-                        <StackPanel x:Name="DoorDetails" Margin="0,10,0,0">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="90" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <TextBlock x:Name="DoorUrlLabel" Style="{StaticResource HintText}" VerticalAlignment="Center" />
-                                <TextBox Grid.Column="1" x:Name="DoorUrl" Style="{StaticResource Field}" IsReadOnly="True" FontFamily="Cascadia Mono, Consolas" FontSize="12" />
-                                <Button Grid.Column="2" x:Name="CopyUrlButton" Style="{StaticResource GhostIconButton}" Content="&#xE8C8;" Click="OnCopyUrl" />
-                                <TextBlock Grid.Row="1" x:Name="DoorTokenLabel" Style="{StaticResource HintText}" VerticalAlignment="Center" />
-                                <TextBox Grid.Row="1" Grid.Column="1" x:Name="DoorToken" Style="{StaticResource Field}" IsReadOnly="True" FontFamily="Cascadia Mono, Consolas" FontSize="12" Margin="0,6,0,0" />
-                                <Button Grid.Row="1" Grid.Column="2" x:Name="CopyTokenButton" Style="{StaticResource GhostIconButton}" Content="&#xE8C8;" Margin="2,6,0,0" Click="OnCopyToken" />
-                                <Button Grid.Row="1" Grid.Column="3" x:Name="NewTokenButton" Style="{StaticResource GhostIconButton}" Content="&#xE72C;" Margin="2,6,0,0" Click="OnNewToken" />
-                                <TextBlock Grid.Row="2" x:Name="DoorPortLabel" Style="{StaticResource HintText}" VerticalAlignment="Center" />
-                                <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,6,0,0">
-                                    <TextBox x:Name="DoorPort" Style="{StaticResource Field}" Width="90" LostFocus="OnPortChanged" />
-                                    <TextBlock x:Name="DoorState" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="10,0,0,0" />
+            <!-- 3) Frameworks (incluye servidores MCP) -->
+            <TabItem x:Name="TabFrameworks">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,8,10,0">
+                        <!-- Frameworks para IA: preparar el entorno (Node, Python, uv) y conectar el framework (REA…) -->
+                        <Border x:Name="FrameworksCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="FrameworksTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="FrameworksHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <StackPanel x:Name="FrameworksList" />
+                                <c:BusyIndicator x:Name="FrameworkBusy" />
+                                <TextBlock x:Name="FrameworkStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- MCP: servidores de herramientas externas que amplian el agente -->
+                        <Border x:Name="McpCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="McpTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="McpHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <StackPanel x:Name="McpList" />
+                                <TextBlock x:Name="McpAddLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                                <TextBox x:Name="McpNameBox" Style="{StaticResource Field}" Margin="0,0,0,6" />
+                                <DockPanel>
+                                    <Button x:Name="McpAddButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" Margin="6,0,0,0" Click="OnAddMcp" />
+                                    <TextBox x:Name="McpCommandBox" Style="{StaticResource Field}" FontFamily="Cascadia Mono, Consolas" FontSize="12" />
+                                </DockPanel>
+                                <TextBlock x:Name="McpExamples" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                                <c:BusyIndicator x:Name="McpBusy" />
+                                <TextBlock x:Name="McpStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                                <Button x:Name="McpLogButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnOpenMcpLog" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 4) Habilidades / Skills -->
+            <TabItem x:Name="TabSkills">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,8,10,0">
+                        <!-- Habilidades (skills): instrucciones empaquetadas que el modelo carga a demanda -->
+                        <Border x:Name="SkillsCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="SkillsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="SkillsHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <StackPanel x:Name="SkillsList" />
+                                <TextBlock x:Name="SkillsAddLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                                <DockPanel>
+                                    <Button x:Name="SkillAddButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" Margin="6,0,0,0" Click="OnAddSkill" />
+                                    <Button x:Name="SkillBrowseButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE838;" Margin="6,0,0,0" Click="OnBrowseSkill" />
+                                    <TextBox x:Name="SkillSourceBox" Style="{StaticResource Field}" FontSize="12" />
+                                </DockPanel>
+                                <c:BusyIndicator x:Name="SkillBusy" />
+                                <TextBlock x:Name="SkillStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 5) RAG / Conocimiento -->
+            <TabItem x:Name="TabRag">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,8,10,0">
+                        <!-- Documentos que la IA tiene en cuenta -->
+                        <Border x:Name="CardDocs" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="DocsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="DocsHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                                <DockPanel>
+                                    <Button x:Name="DocsOpenButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8A7;" Margin="6,0,0,0" Click="OnOpenDocs" />
+                                    <Button x:Name="DocsFolderButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8DA;" Margin="6,0,0,0" Click="OnPickDocsFolder" />
+                                    <TextBox x:Name="DocsFolderBox" Style="{StaticResource Field}" IsReadOnly="True" />
+                                </DockPanel>
+                                <TextBlock x:Name="DocsCount" Style="{StaticResource HintText}" Margin="0,6,0,0" />
+                                <c:BusyIndicator x:Name="DocsBusy" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 6) Configuración -->
+            <TabItem x:Name="TabConfig">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,8,10,0">
+
+                        <!-- Instrucciones fijas -->
+                        <Border x:Name="CardInstructions" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="InstructionsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="InstructionsHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                                <TextBox x:Name="InstructionsBox" Style="{StaticResource Field}" Height="90" AcceptsReturn="True" TextWrapping="Wrap"
+                                         VerticalContentAlignment="Top" Padding="8,6" VerticalScrollBarVisibility="Auto" LostFocus="OnInstructionsChanged" />
+                                <CheckBox x:Name="InternetCheck" Style="{StaticResource Check}" Margin="0,12,0,0" Click="OnInternetChanged" />
+                                <TextBlock x:Name="InternetHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
+                                <DockPanel Margin="0,12,0,0">
+                                    <TextBlock x:Name="FontSizeTitle" Style="{StaticResource BodyText}" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="FontSizeValue" Style="{StaticResource HintText}" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    <Slider x:Name="FontSizeSlider" Minimum="12" Maximum="20" TickFrequency="1" IsSnapToTickEnabled="True" Width="180" Margin="12,0,0,0" HorizontalAlignment="Left" ValueChanged="OnFontSizeChanged" />
+                                </DockPanel>
+                                <TextBlock x:Name="FontSizeHint" Style="{StaticResource HintText}" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Editores de codigo -->
+                        <Border x:Name="CardDoor" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="DoorTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="DoorHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                                <CheckBox x:Name="DoorCheck" Style="{StaticResource Check}" Margin="0" Click="OnDoorChanged" />
+                                <StackPanel x:Name="DoorDetails" Margin="0,10,0,0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="90" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock x:Name="DoorUrlLabel" Style="{StaticResource HintText}" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" x:Name="DoorUrl" Style="{StaticResource Field}" IsReadOnly="True" FontFamily="Cascadia Mono, Consolas" FontSize="12" />
+                                        <Button Grid.Column="2" x:Name="CopyUrlButton" Style="{StaticResource GhostIconButton}" Content="&#xE8C8;" Click="OnCopyUrl" />
+                                        <TextBlock Grid.Row="1" x:Name="DoorTokenLabel" Style="{StaticResource HintText}" VerticalAlignment="Center" />
+                                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="DoorToken" Style="{StaticResource Field}" IsReadOnly="True" FontFamily="Cascadia Mono, Consolas" FontSize="12" Margin="0,6,0,0" />
+                                        <Button Grid.Row="1" Grid.Column="2" x:Name="CopyTokenButton" Style="{StaticResource GhostIconButton}" Content="&#xE8C8;" Margin="2,6,0,0" Click="OnCopyToken" />
+                                        <Button Grid.Row="1" Grid.Column="3" x:Name="NewTokenButton" Style="{StaticResource GhostIconButton}" Content="&#xE72C;" Margin="2,6,0,0" Click="OnNewToken" />
+                                        <TextBlock Grid.Row="2" x:Name="DoorPortLabel" Style="{StaticResource HintText}" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,6,0,0">
+                                            <TextBox x:Name="DoorPort" Style="{StaticResource Field}" Width="90" LostFocus="OnPortChanged" />
+                                            <TextBlock x:Name="DoorState" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock x:Name="DoorHow" Style="{StaticResource HintText}" Margin="0,10,0,0" />
                                 </StackPanel>
-                            </Grid>
-                            <TextBlock x:Name="DoorHow" Style="{StaticResource HintText}" Margin="0,10,0,0" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
+                            </StackPanel>
+                        </Border>
 
-                <!-- Modelos en línea: APIs compatibles con OpenAI (Free-LLM); el texto sale del dispositivo (opt-in) -->
-                <Border x:Name="OnlineCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="OnlineTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="OnlineHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                        <CheckBox x:Name="OnlineOptIn" Style="{StaticResource Check}" Margin="0,0,0,8" Click="OnOnlineOptIn" />
-                        <TextBlock x:Name="OnlineModelsLabel" Style="{StaticResource FieldLabel}" Margin="0,4,0,4" />
-                        <StackPanel x:Name="OnlineModelsList" />
-                        <TextBlock x:Name="OnlineProvidersLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
-                        <StackPanel x:Name="OnlineProvidersList" />
-                        <c:BusyIndicator x:Name="OnlineBusy" />
-                        <TextBlock x:Name="OnlineStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
-                    </StackPanel>
-                </Border>
+                        <!-- Imagenes generadas (stable-diffusion.cpp + Stable Diffusion 1.5) -->
+                        <Border x:Name="CardImages" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="ImagesTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="ImagesHint" Style="{StaticResource HintText}" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                <TextBlock x:Name="ImagesStatus" Style="{StaticResource BodyText}" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                <c:BusyIndicator x:Name="ImagesBusy" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="ImagesInstallButton" Style="{StaticResource OutlineButton}" Click="OnImagesInstall" />
+                                    <Button x:Name="ImagesFolderButton" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" Click="OnImagesFolder" />
+                                    <Button x:Name="ImagesRemoveButton" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" Click="OnImagesRemove" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
-                <!-- MCP: servidores de herramientas externas que amplian el agente -->
-                <Border x:Name="McpCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="McpTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="McpHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
-                        <StackPanel x:Name="McpList" />
-                        <TextBlock x:Name="McpAddLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
-                        <TextBox x:Name="McpNameBox" Style="{StaticResource Field}" Margin="0,0,0,6" />
-                        <DockPanel>
-                            <Button x:Name="McpAddButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" Margin="6,0,0,0" Click="OnAddMcp" />
-                            <TextBox x:Name="McpCommandBox" Style="{StaticResource Field}" FontFamily="Cascadia Mono, Consolas" FontSize="12" />
-                        </DockPanel>
-                        <TextBlock x:Name="McpExamples" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,0" />
-                        <c:BusyIndicator x:Name="McpBusy" />
-                        <TextBlock x:Name="McpStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
-                        <Button x:Name="McpLogButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnOpenMcpLog" />
-                    </StackPanel>
-                </Border>
+                        <!-- Tareas programadas -->
+                        <Border x:Name="CardTasks" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="TasksTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="TasksHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                                <StackPanel x:Name="TasksList" />
+                                <TextBlock x:Name="TasksEmpty" Style="{StaticResource HintText}" />
+                            </StackPanel>
+                        </Border>
 
-                <!-- Habilidades (skills): instrucciones empaquetadas que el modelo carga a demanda -->
-                <Border x:Name="SkillsCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="SkillsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="SkillsHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
-                        <StackPanel x:Name="SkillsList" />
-                        <TextBlock x:Name="SkillsAddLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
-                        <DockPanel>
-                            <Button x:Name="SkillAddButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" Margin="6,0,0,0" Click="OnAddSkill" />
-                            <Button x:Name="SkillBrowseButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE838;" Margin="6,0,0,0" Click="OnBrowseSkill" />
-                            <TextBox x:Name="SkillSourceBox" Style="{StaticResource Field}" FontSize="12" />
-                        </DockPanel>
-                        <c:BusyIndicator x:Name="SkillBusy" />
-                        <TextBlock x:Name="SkillStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
-                    </StackPanel>
-                </Border>
+                        <!-- Lo que la IA sabe del usuario -->
+                        <Border x:Name="CardMemory" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="MemoryTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="MemoryHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                                <CheckBox x:Name="MemoryCheck" Style="{StaticResource Check}" Margin="0,0,0,8" Click="OnMemoryChanged" />
+                                <StackPanel x:Name="MemoryList" />
+                                <TextBlock x:Name="MemoryEmpty" Style="{StaticResource HintText}" />
+                                <Button x:Name="MemoryClearButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnClearMemory" />
+                                <c:BusyIndicator x:Name="MemoryBusy" />
+                            </StackPanel>
+                        </Border>
 
-                <!-- Frameworks para IA: preparar el entorno (Node, Python, uv) y conectar el framework (REA…) -->
-                <Border x:Name="FrameworksCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="FrameworksTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="FrameworksHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
-                        <StackPanel x:Name="FrameworksList" />
-                        <c:BusyIndicator x:Name="FrameworkBusy" />
-                        <TextBlock x:Name="FrameworkStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                        <!-- Windows: bandeja y arranque -->
+                        <Border x:Name="CardWindows" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="WindowsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <CheckBox x:Name="TrayCheck" Style="{StaticResource Check}" Margin="0" Click="OnTrayChanged" />
+                                <TextBlock x:Name="TrayHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
+                                <CheckBox x:Name="StartupCheck" Style="{StaticResource Check}" Click="OnStartupChanged" />
+                                <TextBlock x:Name="StartupHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                </Border>
+                </ScrollViewer>
+            </TabItem>
 
-                <!-- MLflow: cada interaccion como traza de GenAI (o ejecuciones en servidores viejos); apagado por defecto -->
-                <Border x:Name="MlflowCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="MlflowTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="MlflowWhat" Style="{StaticResource HintText}" Margin="0,0,0,8" />
-                        <CheckBox x:Name="MlflowCheck" Style="{StaticResource Check}" Margin="0" Click="OnMlflowEnabled" />
-                        <TextBlock x:Name="MlflowUriLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
-                        <TextBox x:Name="MlflowUriBox" Style="{StaticResource Field}" LostFocus="OnMlflowUriChanged" />
-                        <TextBlock x:Name="MlflowUriHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
-                        <TextBlock x:Name="MlflowExperimentLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
-                        <TextBox x:Name="MlflowExperimentBox" Style="{StaticResource Field}" LostFocus="OnMlflowExperimentChanged" />
-                        <TextBlock x:Name="MlflowUserLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
-                        <TextBox x:Name="MlflowUserBox" Style="{StaticResource Field}" LostFocus="OnMlflowUserChanged" />
-                        <TextBlock x:Name="MlflowPasswordLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
-                        <c:RevealPasswordBox x:Name="MlflowPasswordBox" Left="OnMlflowPasswordChanged" />
-                        <TextBlock x:Name="MlflowTokenLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
-                        <c:RevealPasswordBox x:Name="MlflowTokenBox" Left="OnMlflowTokenChanged" />
-                        <TextBlock x:Name="MlflowAuthHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
-                        <CheckBox x:Name="MlflowTextCheck" Style="{StaticResource Check}" Margin="0,12,0,0" Click="OnMlflowTextChanged" />
-                        <TextBlock x:Name="MlflowTextWarning" Style="{StaticResource HintText}" Foreground="{DynamicResource Danger}" Margin="22,2,0,0" />
-                        <TextBlock x:Name="MlflowTextNote" Style="{StaticResource HintText}" Margin="22,2,0,0" />
-                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                            <Button x:Name="MlflowTestButton" Style="{StaticResource OutlineButton}" Click="OnMlflowTest" />
-                            <c:BusyIndicator x:Name="MlflowBusy" Margin="10,0,0,0" />
-                            <TextBlock x:Name="MlflowTestStatus" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="360" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
+            <!-- 7) Más opciones -->
+            <TabItem x:Name="TabMore">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,8,10,0">
 
-                <!-- Modo trabajo -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="WorkTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="WorkHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
-                        <TextBlock x:Name="WorkFolderLabel" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
-                        <DockPanel>
-                            <Button x:Name="WorkFolderButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8DA;" Margin="6,0,0,0" Click="OnPickWorkFolder" />
-                            <TextBox x:Name="WorkFolderBox" Style="{StaticResource Field}" LostFocus="OnWorkFolderChanged" />
-                        </DockPanel>
-                        <TextBlock x:Name="AgentMaxLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
-                        <TextBox x:Name="AgentMaxBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnAgentMaxChanged" KeyDown="OnLimitKey" />
-                        <CheckBox x:Name="AgentUnlimitedCheck" Style="{StaticResource Check}" Margin="0,6,0,0" Click="OnAgentUnlimitedChanged" />
-                        <TextBlock x:Name="AgentMaxHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
-                        <TextBlock x:Name="PermTitle" Style="{StaticResource FieldLabel}" Margin="0,14,0,2" />
-                        <TextBlock x:Name="PermHint" Style="{StaticResource HintText}" Margin="0,0,0,6" />
-                        <StackPanel x:Name="PermList" />
-                        <Button x:Name="OpenCommandLogButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnOpenCommandLog" />
-                    </StackPanel>
-                </Border>
+                        <!-- Respuestas y contexto: tokens por respuesta y memoria de la conversacion -->
+                        <Border x:Name="CardContext" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="LimitsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="LimitsHint" Style="{StaticResource HintText}" Margin="0,0,0,10" />
+                                <c:BusyIndicator x:Name="LimitsBusy" />
+                                <TextBlock x:Name="AnswerTokensLabel" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
+                                <TextBox x:Name="AnswerTokensBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnAnswerTokensChanged" KeyDown="OnLimitKey" />
+                                <TextBlock x:Name="AnswerTokensHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                                <CheckBox x:Name="AutoContextCheck" Style="{StaticResource Check}" Margin="0,14,0,0" Click="OnAutoContextChanged" />
+                                <TextBlock x:Name="AutoContextHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
+                                <TextBlock x:Name="ContextTokensLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                                <TextBox x:Name="ContextTokensBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnContextTokensChanged" KeyDown="OnLimitKey" />
+                                <TextBlock x:Name="ContextTokensHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
 
-                <!-- Imagenes generadas (stable-diffusion.cpp + Stable Diffusion 1.5) -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="ImagesTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="ImagesHint" Style="{StaticResource HintText}" Margin="0,0,0,8" TextWrapping="Wrap" />
-                        <TextBlock x:Name="ImagesStatus" Style="{StaticResource BodyText}" Margin="0,0,0,8" TextWrapping="Wrap" />
-                        <c:BusyIndicator x:Name="ImagesBusy" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button x:Name="ImagesInstallButton" Style="{StaticResource OutlineButton}" Click="OnImagesInstall" />
-                            <Button x:Name="ImagesFolderButton" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" Click="OnImagesFolder" />
-                            <Button x:Name="ImagesRemoveButton" Style="{StaticResource OutlineButton}" Margin="8,0,0,0" Click="OnImagesRemove" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
+                        <!-- Modo trabajo -->
+                        <Border x:Name="CardWork" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="WorkTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="WorkHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                                <TextBlock x:Name="WorkFolderLabel" Style="{StaticResource FieldLabel}" Margin="0,0,0,4" />
+                                <DockPanel>
+                                    <Button x:Name="WorkFolderButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8DA;" Margin="6,0,0,0" Click="OnPickWorkFolder" />
+                                    <TextBox x:Name="WorkFolderBox" Style="{StaticResource Field}" LostFocus="OnWorkFolderChanged" />
+                                </DockPanel>
+                                <TextBlock x:Name="AgentMaxLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                                <TextBox x:Name="AgentMaxBox" Style="{StaticResource Field}" Width="140" HorizontalAlignment="Left" LostFocus="OnAgentMaxChanged" KeyDown="OnLimitKey" />
+                                <CheckBox x:Name="AgentUnlimitedCheck" Style="{StaticResource Check}" Margin="0,6,0,0" Click="OnAgentUnlimitedChanged" />
+                                <TextBlock x:Name="AgentMaxHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                                <TextBlock x:Name="PermTitle" Style="{StaticResource FieldLabel}" Margin="0,14,0,2" />
+                                <TextBlock x:Name="PermHint" Style="{StaticResource HintText}" Margin="0,0,0,6" />
+                                <StackPanel x:Name="PermList" />
+                                <Button x:Name="OpenCommandLogButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnOpenCommandLog" />
+                            </StackPanel>
+                        </Border>
 
-                <!-- Documentos que la IA tiene en cuenta -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="DocsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="DocsHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
-                        <DockPanel>
-                            <Button x:Name="DocsOpenButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8A7;" Margin="6,0,0,0" Click="OnOpenDocs" />
-                            <Button x:Name="DocsFolderButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE8DA;" Margin="6,0,0,0" Click="OnPickDocsFolder" />
-                            <TextBox x:Name="DocsFolderBox" Style="{StaticResource Field}" IsReadOnly="True" />
-                        </DockPanel>
-                        <TextBlock x:Name="DocsCount" Style="{StaticResource HintText}" Margin="0,6,0,0" />
-                        <c:BusyIndicator x:Name="DocsBusy" />
-                    </StackPanel>
-                </Border>
+                        <!-- MLflow: cada interaccion como traza de GenAI (o ejecuciones en servidores viejos); apagado por defecto -->
+                        <Border x:Name="MlflowCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="MlflowTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="MlflowWhat" Style="{StaticResource HintText}" Margin="0,0,0,8" />
+                                <CheckBox x:Name="MlflowCheck" Style="{StaticResource Check}" Margin="0" Click="OnMlflowEnabled" />
+                                <TextBlock x:Name="MlflowUriLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                                <TextBox x:Name="MlflowUriBox" Style="{StaticResource Field}" LostFocus="OnMlflowUriChanged" />
+                                <TextBlock x:Name="MlflowUriHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                                <TextBlock x:Name="MlflowExperimentLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
+                                <TextBox x:Name="MlflowExperimentBox" Style="{StaticResource Field}" LostFocus="OnMlflowExperimentChanged" />
+                                <TextBlock x:Name="MlflowUserLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
+                                <TextBox x:Name="MlflowUserBox" Style="{StaticResource Field}" LostFocus="OnMlflowUserChanged" />
+                                <TextBlock x:Name="MlflowPasswordLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
+                                <c:RevealPasswordBox x:Name="MlflowPasswordBox" Left="OnMlflowPasswordChanged" />
+                                <TextBlock x:Name="MlflowTokenLabel" Style="{StaticResource FieldLabel}" Margin="0,10,0,4" />
+                                <c:RevealPasswordBox x:Name="MlflowTokenBox" Left="OnMlflowTokenChanged" />
+                                <TextBlock x:Name="MlflowAuthHint" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                                <CheckBox x:Name="MlflowTextCheck" Style="{StaticResource Check}" Margin="0,12,0,0" Click="OnMlflowTextChanged" />
+                                <TextBlock x:Name="MlflowTextWarning" Style="{StaticResource HintText}" Foreground="{DynamicResource Danger}" Margin="22,2,0,0" />
+                                <TextBlock x:Name="MlflowTextNote" Style="{StaticResource HintText}" Margin="22,2,0,0" />
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button x:Name="MlflowTestButton" Style="{StaticResource OutlineButton}" Click="OnMlflowTest" />
+                                    <c:BusyIndicator x:Name="MlflowBusy" Margin="10,0,0,0" />
+                                    <TextBlock x:Name="MlflowTestStatus" Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="360" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
-                <!-- Tareas programadas -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="TasksTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="TasksHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
-                        <StackPanel x:Name="TasksList" />
-                        <TextBlock x:Name="TasksEmpty" Style="{StaticResource HintText}" />
-                    </StackPanel>
-                </Border>
+                        <!-- Idioma -->
+                        <Border x:Name="CardLanguage" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="LanguageTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,10" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" x:Name="SpanishButton" Style="{StaticResource OutlineButton}" Click="OnSpanish">
+                                        <StackPanel Orientation="Horizontal"><Image Source="{StaticResource FlagEs}" Width="21" Height="14" Margin="0,0,8,0" VerticalAlignment="Center" /><TextBlock Text="Español" VerticalAlignment="Center" /></StackPanel>
+                                    </Button>
+                                    <Button Grid.Column="2" x:Name="EnglishButton" Style="{StaticResource OutlineButton}" Click="OnEnglish">
+                                        <StackPanel Orientation="Horizontal"><Image Source="{StaticResource FlagUs}" Width="21" Height="14" Margin="0,0,8,0" VerticalAlignment="Center" /><TextBlock Text="English" VerticalAlignment="Center" /></StackPanel>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
 
-                <!-- Lo que la IA sabe del usuario -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="MemoryTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <TextBlock x:Name="MemoryHint" Style="{StaticResource HintText}" Margin="0,0,0,8" />
-                        <CheckBox x:Name="MemoryCheck" Style="{StaticResource Check}" Margin="0,0,0,8" Click="OnMemoryChanged" />
-                        <StackPanel x:Name="MemoryList" />
-                        <TextBlock x:Name="MemoryEmpty" Style="{StaticResource HintText}" />
-                        <Button x:Name="MemoryClearButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnClearMemory" />
-                        <c:BusyIndicator x:Name="MemoryBusy" />
+                        <!-- Diagnostico -->
+                        <Border x:Name="CardDiagnostics" Style="{StaticResource Card}" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="DiagnosticsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,6" />
+                                <TextBlock x:Name="DiagnosticsText" Style="{StaticResource HintText}" />
+                                <TextBlock x:Name="LogsHint" Style="{StaticResource HintText}" Margin="0,8,0,0" />
+                                <WrapPanel Margin="0,8,0,0">
+                                    <Button x:Name="CopyLogsButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnCopyLogs" />
+                                    <Button x:Name="OpenLogsFolderButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnOpenLogsFolder" />
+                                    <Button x:Name="OpenLogButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnOpenLog" />
+                                    <Button x:Name="OpenDataButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnOpenData" />
+                                </WrapPanel>
+                                <c:BusyIndicator x:Name="LogsBusy" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                </Border>
+                </ScrollViewer>
+            </TabItem>
 
-                <!-- Windows: bandeja y arranque -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="WindowsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                        <CheckBox x:Name="TrayCheck" Style="{StaticResource Check}" Margin="0" Click="OnTrayChanged" />
-                        <TextBlock x:Name="TrayHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
-                        <CheckBox x:Name="StartupCheck" Style="{StaticResource Check}" Click="OnStartupChanged" />
-                        <TextBlock x:Name="StartupHint" Style="{StaticResource HintText}" Margin="22,2,0,0" />
-                    </StackPanel>
-                </Border>
-
-                <!-- Idioma -->
-                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="LanguageTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,10" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="10" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0" x:Name="SpanishButton" Style="{StaticResource OutlineButton}" Click="OnSpanish">
-                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource FlagEs}" Width="21" Height="14" Margin="0,0,8,0" VerticalAlignment="Center" /><TextBlock Text="Español" VerticalAlignment="Center" /></StackPanel>
-                            </Button>
-                            <Button Grid.Column="2" x:Name="EnglishButton" Style="{StaticResource OutlineButton}" Click="OnEnglish">
-                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource FlagUs}" Width="21" Height="14" Margin="0,0,8,0" VerticalAlignment="Center" /><TextBlock Text="English" VerticalAlignment="Center" /></StackPanel>
-                            </Button>
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <!-- Diagnostico -->
-                <Border Style="{StaticResource Card}" Padding="20,16">
-                    <StackPanel>
-                        <TextBlock x:Name="DiagnosticsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,6" />
-                        <TextBlock x:Name="DiagnosticsText" Style="{StaticResource HintText}" />
-                        <TextBlock x:Name="LogsHint" Style="{StaticResource HintText}" Margin="0,8,0,0" />
-                        <WrapPanel Margin="0,8,0,0">
-                            <Button x:Name="CopyLogsButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnCopyLogs" />
-                            <Button x:Name="OpenLogsFolderButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnOpenLogsFolder" />
-                            <Button x:Name="OpenLogButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnOpenLog" />
-                            <Button x:Name="OpenDataButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnOpenData" />
-                        </WrapPanel>
-                        <c:BusyIndicator x:Name="LogsBusy" />
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </ScrollViewer>
+        </TabControl>
     </DockPanel>
 </Window>

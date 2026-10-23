@@ -1,5 +1,27 @@
 # Changelog — sOC Lucia
 
+## 2026.10.23.5 — Ajustes por pestañas / Tabbed settings
+
+**Español**
+
+- **Ajustes reorganizados en pestañas** (ventana más ancha): **Modelos locales · Modelos en línea ·
+  Frameworks · Habilidades · Conocimiento (RAG) · Configuración · Más opciones**. Nada se quita, solo
+  queda ordenado y fácil de encontrar.
+- **Buscador de ajustes** encima de las pestañas: escribe («mcp», «clave», «idioma», «contexto»…) y
+  salta a la pestaña y a la sección que coincide.
+- Todo sigue en español e inglés y con iconos en los botones.
+- Banco de pruebas: **559 pruebas**.
+
+**English**
+
+- **Settings reorganized into tabs** (wider window): **Local models · Online models · Frameworks ·
+  Skills · Knowledge (RAG) · Configuration · More options**. Nothing removed, just organized and easy
+  to find.
+- **Settings search** above the tabs: type ("mcp", "key", "language", "context"…) and it jumps to the
+  matching tab and section.
+- Still in Spanish and English, with icons on the buttons.
+- Test bench: **559 tests**.
+
 ## 2026.10.23.4 — Modelos en línea / Online models
 
 **Español**
