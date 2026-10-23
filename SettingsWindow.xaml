@@ -191,6 +191,34 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Habilidades (skills): instrucciones empaquetadas que el modelo carga a demanda -->
+                <Border x:Name="SkillsCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="SkillsTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="SkillsHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <StackPanel x:Name="SkillsList" />
+                        <TextBlock x:Name="SkillsAddLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                        <DockPanel>
+                            <Button x:Name="SkillAddButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" Margin="6,0,0,0" Click="OnAddSkill" />
+                            <Button x:Name="SkillBrowseButton" DockPanel.Dock="Right" Style="{StaticResource GhostIconButton}" Content="&#xE838;" Margin="6,0,0,0" Click="OnBrowseSkill" />
+                            <TextBox x:Name="SkillSourceBox" Style="{StaticResource Field}" FontSize="12" />
+                        </DockPanel>
+                        <c:BusyIndicator x:Name="SkillBusy" />
+                        <TextBlock x:Name="SkillStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Frameworks para IA: preparar el entorno (Node, Python, uv) y conectar el framework (REA…) -->
+                <Border x:Name="FrameworksCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="FrameworksTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="FrameworksHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <StackPanel x:Name="FrameworksList" />
+                        <c:BusyIndicator x:Name="FrameworkBusy" />
+                        <TextBlock x:Name="FrameworkStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                    </StackPanel>
+                </Border>
+
                 <!-- MLflow: cada interaccion como traza de GenAI (o ejecuciones en servidores viejos); apagado por defecto -->
                 <Border x:Name="MlflowCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
                     <StackPanel>

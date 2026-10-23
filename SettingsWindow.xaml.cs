@@ -73,6 +73,8 @@ public partial class SettingsWindow : Window
         PaintFilters();
         PaintTeach();
         PaintMcp();
+        PaintSkills();
+        PaintFrameworks();
         SearchLabel.Text = Loc.Get("SearchHf");
         SearchBox.ToolTip = SearchButton.ToolTip = Loc.Get("SearchHfTip");
         if (_hits is null) SearchHint.Text = Loc.Get("SearchHfHint");
@@ -472,6 +474,161 @@ public partial class SettingsWindow : Window
     {
         if (File.Exists(Mcp.McpClient.LogPath)) Desktop.Current.Open(Mcp.McpClient.LogPath);
         else PromptWindow.Alert(this, Loc.Get("McpTitle"), Loc.Get("McpNoLog"));
+    }
+
+    // ------------------------------------------------------------------ Habilidades (skills)
+
+    private System.Threading.CancellationTokenSource? _skill;
+
+    private void PaintSkills()
+    {
+        SkillsTitle.Text = Loc.Get("SkillsTitle");
+        SkillsHint.Text = Loc.Get("SkillsHint");
+        SkillsAddLabel.Text = Loc.Get("SkillsAddLabel");
+        SkillSourceBox.ToolTip = Loc.Get("SkillsAddPlaceholder");
+        SkillAddButton.ToolTip = Loc.Get("SkillsAdd");
+        SkillBrowseButton.ToolTip = Loc.Get("SkillsBrowse");
+        SkillsList.Children.Clear();
+        var skills = SkillStore.All();
+        if (skills.Count == 0)
+            SkillsList.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Get("SkillsNone") });
+        foreach (var skill in skills)
+            SkillsList.Children.Add(SkillRow(skill));
+    }
+
+    private UIElement SkillRow(Skill skill)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var text = new StackPanel();
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold, Text = skill.Name });
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = skill.Description, TextWrapping = TextWrapping.Wrap });
+        grid.Children.Add(text);
+
+        var on = new CheckBox { Style = (Style)FindResource("Check"), Content = Loc.Get("McpEnabled"), IsChecked = skill.Enabled, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
+        on.Click += (_, _) => { SkillStore.SetEnabled(skill.Name, on.IsChecked == true); };
+        Grid.SetColumn(on, 1);
+        grid.Children.Add(on);
+
+        var view = new Button { Style = (Style)FindResource("GhostIconButton"), Content = "", ToolTip = Loc.Get("SkillView"), VerticalAlignment = VerticalAlignment.Center };
+        view.Click += (_, _) => { if (Directory.Exists(skill.Folder)) Desktop.Current.Open(skill.Folder); };
+        Grid.SetColumn(view, 2);
+        grid.Children.Add(view);
+
+        var delete = new Button { Style = (Style)FindResource("DangerIconButton"), Content = "", ToolTip = Loc.Get("SkillDelete"), VerticalAlignment = VerticalAlignment.Center };
+        delete.Click += (_, _) =>
+        {
+            if (!PromptWindow.Confirm(this, Loc.Get("SkillDelete"), Loc.Format("SkillDeleteConfirm", skill.Name))) return;
+            SkillStore.Remove(skill.Name);
+            PaintSkills();
+        };
+        Grid.SetColumn(delete, 3);
+        grid.Children.Add(delete);
+        return grid;
+    }
+
+    private void OnBrowseSkill(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = Loc.Get("SkillsBrowse") };
+        if (dialog.ShowDialog(this) == true) SkillSourceBox.Text = dialog.FolderName;
+    }
+
+    private async void OnAddSkill(object sender, RoutedEventArgs e)
+    {
+        var source = SkillSourceBox.Text.Trim();
+        if (source.Length == 0) return;
+        SkillStatus.Visibility = Visibility.Collapsed;
+        SkillBusy.Start(Loc.Get("SkillAdding"));
+        SkillAddButton.IsEnabled = false;
+        _skill?.Cancel();
+        _skill = new System.Threading.CancellationTokenSource();
+        try
+        {
+            var (skill, message) = await SkillStore.InstallAsync(source, _skill.Token);
+            if (skill is not null) SkillSourceBox.Clear();
+            SkillStatus.Text = message;
+            SkillStatus.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            SkillStatus.Text = ex.Message;
+            SkillStatus.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            SkillBusy.Stop();
+            SkillAddButton.IsEnabled = true;
+            PaintSkills();
+        }
+    }
+
+    // ------------------------------------------------------------------ Frameworks para IA
+
+    private System.Threading.CancellationTokenSource? _framework;
+
+    private void PaintFrameworks()
+    {
+        FrameworksTitle.Text = Loc.Get("FrameworksTitle");
+        FrameworksHint.Text = Loc.Get("FrameworksHint");
+        FrameworksList.Children.Clear();
+        foreach (var framework in Frameworks.Catalog)
+            FrameworksList.Children.Add(FrameworkRow(framework));
+    }
+
+    private UIElement FrameworkRow(LlmFramework framework)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var installed = AppSettings.Current.McpServers.Any(s => string.Equals(s.Name, framework.McpName, StringComparison.OrdinalIgnoreCase));
+        var text = new StackPanel();
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold, Text = framework.Name });
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = framework.Description, TextWrapping = TextWrapping.Wrap });
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{framework.License} · {Frameworks.Binary(framework.Runtime)}" + (installed ? " · " + Loc.Get("FrameworkInstalled") : string.Empty), Foreground = installed ? (Brush)FindResource("Success") : (Brush)FindResource("TextSecondary") });
+        grid.Children.Add(text);
+
+        var open = new Button { Style = (Style)FindResource("GhostIconButton"), Content = "", ToolTip = Loc.Get("FrameworkOpen"), VerticalAlignment = VerticalAlignment.Center };
+        open.Click += (_, _) => Desktop.Current.Open(framework.Url);
+        Grid.SetColumn(open, 1);
+        grid.Children.Add(open);
+
+        var install = new Button { Style = (Style)FindResource("OutlineButton"), Content = IconLabel("", Loc.Get("FrameworkInstall")), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+        install.Click += (_, _) => InstallFrameworkAsync(framework, install);
+        Grid.SetColumn(install, 2);
+        grid.Children.Add(install);
+        return grid;
+    }
+
+    private async void InstallFrameworkAsync(LlmFramework framework, System.Windows.Controls.Primitives.ButtonBase button)
+    {
+        FrameworkStatus.Visibility = Visibility.Collapsed;
+        FrameworkBusy.Start(Loc.Format("FrameworkInstalling", framework.Name));
+        button.IsEnabled = false;
+        _framework?.Cancel();
+        _framework = new System.Threading.CancellationTokenSource();
+        try
+        {
+            var message = await Frameworks.InstallAsync(framework.Id, _framework.Token);
+            FrameworkStatus.Text = message;
+            FrameworkStatus.Visibility = Visibility.Visible;
+            (Owner as MainWindow)?.ModelChanged();
+        }
+        catch (Exception ex)
+        {
+            FrameworkStatus.Text = ex.Message;
+            FrameworkStatus.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            FrameworkBusy.Stop();
+            button.IsEnabled = true;
+            PaintSkills();
+            PaintFrameworks();
+        }
     }
 
     private void OnTeach(object sender, RoutedEventArgs e)

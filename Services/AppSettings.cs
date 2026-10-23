@@ -93,6 +93,9 @@ public sealed class AppSettings
     /// <summary>Servidores MCP configurados (herramientas externas que amplían el modo agente).</summary>
     public List<Mcp.McpServerConfig> McpServers { get; set; } = [];
 
+    /// <summary>Habilidades (skills) apagadas por su nombre; las que no estén aquí están encendidas.</summary>
+    public List<string> DisabledSkills { get; set; } = [];
+
     /// <summary>IA que no han podido arrancar en este PC (ruta → por que, en claro). Se borra al arrancar bien.</summary>
     public Dictionary<string, string> BrokenModels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 

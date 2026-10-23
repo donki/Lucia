@@ -1,5 +1,44 @@
 # Changelog — sOC Lucia
 
+## 2026.10.23.3 — Habilidades y frameworks para IA / Skills and AI frameworks
+
+**Español**
+
+- **Habilidades (skills).** Instrucciones empaquetadas que Lucia carga cuando una tarea encaja (como
+  las «skills» de los agentes). Cada una es una carpeta con un `SKILL.md` (cabecera con nombre y
+  descripción, y debajo las instrucciones). La IA las ve, carga la que toca (`use_skill`) y puede
+  instalar nuevas (`install_skill`) desde una carpeta, un `.zip`, un `SKILL.md` o una dirección de
+  internet; solo se aceptan licencias de uso comercial. En Ajustes › una tarjeta para añadirlas,
+  verlas, encenderlas o quitarlas.
+- **Frameworks para IA, con preparación del entorno.** Un catálogo de frameworks de licencia libre que
+  Lucia instala sola: prepara el motor que necesitan (Node.js, Python o uv; lo detecta y, si falta, lo
+  instala con winget) y conecta el framework como servidor MCP. La IA dispone de `list_frameworks`,
+  `install_framework` y `ensure_runtime`.
+- **REA — «Reverse Engineer Anything».** Primer framework del catálogo: ingeniería inversa de binarios
+  nativos, ensamblados .NET, APK de Android, apps JavaScript/Electron, firmware y capturas de red, todo
+  en el PC, para software que es tuyo o estás autorizado a analizar. Se registra como servidor MCP
+  (`npx -y rea-agents@latest mcp`, perfil de esquema compacto) y trae su propia habilidad. Necesita
+  **Node.js 22 o más**; rinde mejor con un modelo potente y contexto amplio.
+- Banco de pruebas: **549 pruebas**.
+
+**English**
+
+- **Skills.** Packaged instructions Lucia loads when a task matches (like agent skills). Each is a
+  folder with a `SKILL.md` (a header with name and description, then the instructions). The AI lists
+  them, loads the right one (`use_skill`) and can install new ones (`install_skill`) from a folder, a
+  `.zip`, a `SKILL.md` or an internet address; only commercial-use licences are accepted. Settings has
+  a card to add, view, enable or remove them.
+- **AI frameworks, with environment setup.** A catalogue of free-licence frameworks Lucia sets up by
+  itself: it prepares the runtime they need (Node.js, Python or uv; detected and, if missing, installed
+  with winget) and connects the framework as an MCP server. The AI gets `list_frameworks`,
+  `install_framework` and `ensure_runtime`.
+- **REA — "Reverse Engineer Anything".** The first catalogue framework: reverse engineering of native
+  binaries, .NET assemblies, Android APKs, JavaScript/Electron apps, firmware and packet captures, all
+  on the PC, for software you own or are authorized to examine. It is registered as an MCP server
+  (`npx -y rea-agents@latest mcp`, compact schema profile) and ships its own skill. It needs **Node.js
+  22+** and works best with a capable model and a large context.
+- Test bench: **549 tests**.
+
 ## 2026.10.23.2 — Comprimir el contexto para seguir / Compressing the context to keep going
 
 **Español**

@@ -26,7 +26,16 @@ public sealed record Tool(string Name, Resource Resource, string Description, Js
         Resource.Apps => Arg(args, "target"),
         Resource.Clipboard => Name == ToolBox.WriteClipboard ? Arg(args, "text") : string.Empty,
         Resource.Free => Name == ToolBox.Remember ? Arg(args, "fact") : Name == ToolBox.ScheduleTask ? Arg(args, "title") + " · " + Arg(args, "when") : Name == ToolBox.DeleteTask ? Arg(args, "id") : Arg(args, "name"),
-        Resource.Mcp => Name == ToolBox.AddMcpServer ? Arg(args, "name") + " · " + Arg(args, "command") : Name == ToolBox.InstallModel ? Arg(args, "model") : CompactArgs(args),
+        Resource.Mcp => Name switch
+        {
+            ToolBox.AddMcpServer => Arg(args, "name") + " · " + Arg(args, "command"),
+            ToolBox.InstallModel => Arg(args, "model"),
+            ToolBox.InstallFramework => Arg(args, "id"),
+            ToolBox.EnsureRuntime => Arg(args, "runtime"),
+            ToolBox.UseSkill => Arg(args, "name"),
+            ToolBox.InstallSkill => Arg(args, "source"),
+            _ => CompactArgs(args),
+        },
         _ => string.Empty,
     };
 
@@ -72,6 +81,12 @@ public static class ToolBox
     public const string AddMcpServer = "add_mcp_server";
     public const string ListMcpServers = "list_mcp_servers";
     public const string InstallModel = "install_model";
+    public const string ListSkills = "list_skills";
+    public const string UseSkill = "use_skill";
+    public const string InstallSkill = "install_skill";
+    public const string ListFrameworks = "list_frameworks";
+    public const string InstallFramework = "install_framework";
+    public const string EnsureRuntime = "ensure_runtime";
 
     private const int MaxChars = 12_000;
 
@@ -258,7 +273,51 @@ public static class ToolBox
             "Download and install an AI model so it is available in Lucia. Give a catalog name (Qwen3.5 4B, Gemma 4 12B…) or a Hugging Face GGUF repository id (e.g. unsloth/Qwen3.5-4B-GGUF). It downloads in the background; tell the user it may take a while and how big it is.",
             Params(("model", "Catalog name or Hugging Face repo id.")),
             (a, _) => Task.FromResult(InstallModelText(Tool.Arg(a, "model")))),
+        new(ListSkills, Resource.Mcp,
+            "List the skills installed in Lucia (packaged instructions you can load) and how to add more. A skill is a set of instructions for a kind of task; load one with use_skill when the task matches.",
+            Params(),
+            (_, _) => Task.FromResult(Services.SkillStore.ListText())),
+        new(UseSkill, Resource.Mcp,
+            "Load a skill's instructions into the conversation and follow them. Use it when the current task matches a skill from list_skills. The returned text is the instructions you must apply now.",
+            Params(("name", "The skill name, as shown by list_skills.")),
+            (a, _) => Task.FromResult(UseSkillText(Tool.Arg(a, "name")))),
+        new(InstallSkill, Resource.Mcp,
+            "Install a skill from a local folder with a SKILL.md, a .zip, a SKILL.md file, or an http(s) address to a .zip. Only skills whose licence allows commercial use are accepted. After installing, use it with use_skill.",
+            Params(("source", "A folder path, a .zip path, a SKILL.md path, or an http(s) address to a .zip.")),
+            async (a, c) => (await Services.SkillStore.InstallAsync(Tool.Arg(a, "source"), c)).Message),
+        new(ListFrameworks, Resource.Mcp,
+            "List the LLM frameworks Lucia can set up (reverse-engineering, analysis, agent toolkits…) with their runtime and whether they are already installed. Install one with install_framework.",
+            Params(),
+            (_, _) => Task.FromResult(Services.Frameworks.ListText())),
+        new(InstallFramework, Resource.Mcp,
+            "Set up an LLM framework from the catalog: it prepares the runtime it needs (Node.js, Python or uv) and registers it so you gain its tools for the rest of the conversation. Use list_frameworks first to get the id (e.g. 'rea').",
+            Params(("id", "The framework id from list_frameworks, e.g. rea.")),
+            (a, c) => Services.Frameworks.InstallAsync(Tool.Arg(a, "id"), c)),
+        new(EnsureRuntime, Resource.Mcp,
+            "Make sure a runtime a framework needs is installed on this PC: 'node' (Node.js, for npx servers), 'python', or 'uv' (for uvx servers). If it is missing it is installed with winget (may ask Windows for permission and take a while).",
+            Params(("runtime", "node, python or uv.")),
+            EnsureRuntimeText),
     ];
+
+    private static string UseSkillText(string name)
+    {
+        var body = Services.SkillStore.Read(name);
+        return body is null
+            ? $"[error] no skill named '{name}'. Use list_skills to see the installed skills."
+            : $"[skill: {name}]\n{body}";
+    }
+
+    private static Task<string> EnsureRuntimeText(JsonObject args, CancellationToken cancel)
+    {
+        var runtime = Tool.Arg(args, "runtime").Trim().ToLowerInvariant();
+        return runtime switch
+        {
+            "node" or "nodejs" or "npx" => Services.Frameworks.EnsureRuntimeAsync(Services.FrameworkRuntime.Node, cancel),
+            "python" or "py" => Services.Frameworks.EnsureRuntimeAsync(Services.FrameworkRuntime.Python, cancel),
+            "uv" or "uvx" => Services.Frameworks.EnsureRuntimeAsync(Services.FrameworkRuntime.Uv, cancel),
+            _ => Task.FromResult("[error] unknown runtime. Use 'node', 'python' or 'uv'."),
+        };
+    }
 
     public static Tool? Find(string name) => name == SystemInfo ? Info
         : All.FirstOrDefault(t => t.Name == name) ?? Free.FirstOrDefault(t => t.Name == name)
@@ -289,6 +348,13 @@ public static class ToolBox
         }
         var docs = DocumentIndex.Prompt(question);
         if (docs.Length > 0) parts.Add(docs);
+        // Las habilidades encendidas se le enseñan al modelo (las carga con use_skill), salvo que el
+        // recurso de extensiones esté denegado (entonces no tiene esa herramienta).
+        if (settings.PermissionFor(Resource.Mcp) != Permission.Deny)
+        {
+            var skills = Services.SkillStore.Prompt();
+            if (skills.Length > 0) parts.Add(skills);
+        }
         return string.Join("\n\n", parts);
     }
 
