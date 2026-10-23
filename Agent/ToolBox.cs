@@ -296,7 +296,8 @@ public static class ToolBox
     public const string InternetPrompt =
         "You can look things up on the internet with `web_search` (top results) and `fetch_url` (read a page). " +
         "Use them when the answer needs current, local or verifiable information (news, prices, versions, documentation, facts you are unsure of); " +
-        "answer directly from what you know otherwise. Cite the address of what you used.";
+        "answer directly from what you know otherwise. Do not answer from the search snippets alone: after web_search, open the one or two most relevant results with `fetch_url` and read them, and follow a link inside a page with `fetch_url` again when it leads to what you need, before answering. " +
+        "If a page fails or is blocked, or a search gives nothing, try a different source (another result, another search, the official site) instead of giving up. Cite the address of what you used.";
 
     /// <summary>Modo agente: todo lo que no este denegado en Ajustes, mas las libres.</summary>
     public static JsonArray Definitions(AppSettings settings)
@@ -517,22 +518,77 @@ public static class ToolBox
         var url = Tool.Arg(args, "url");
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
             throw new ArgumentException("Only http(s) addresses");
-        using var response = await Engine.Downloader.Http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancel);
+        // Cabeceras de navegador: muchas webs devuelven 403 a un cliente desconocido.
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.TryAddWithoutValidation("User-Agent", BrowserUserAgent);
+        request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        request.Headers.TryAddWithoutValidation("Accept-Language", System.Globalization.CultureInfo.CurrentUICulture.Name + ",en;q=0.7");
+        request.Headers.TryAddWithoutValidation("Accept-Encoding", "gzip, deflate, br");
+        using var response = await Engine.Downloader.Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
         var type = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
-        var bytes = await response.Content.ReadAsByteArrayAsync(cancel);
-        if (!type.StartsWith("text/") && !type.Contains("json") && !type.Contains("xml") && !type.Contains("javascript"))
+        var bytes = Decompress(await response.Content.ReadAsByteArrayAsync(cancel), response.Content.Headers.ContentEncoding);
+        if (type.Length > 0 && !type.StartsWith("text/") && !type.Contains("json") && !type.Contains("xml") && !type.Contains("javascript"))
             return $"[{(int)response.StatusCode}] {type}, {bytes.Length:N0} bytes (binary content not shown)";
         var text = Encoding.UTF8.GetString(bytes);
-        if (type.Contains("html"))
+        var isHtml = type.Contains("html") || (!type.Contains("json") && text.TrimStart().StartsWith('<'));
+        if (isHtml) text = HtmlToText(text);
+        // Bloqueada (403…) o un esqueleto que el JavaScript rellena: se reintenta con el navegador headless.
+        var blocked = (int)response.StatusCode is 401 or 403 or 429 or 451 or 503;
+        if ((blocked || (isHtml && text.Length < 300)) && HeadlessRenderer is { } render)
         {
-            text = Regex.Replace(text, @"<(script|style)[^>]*>.*?</\1>", string.Empty, RegexOptions.Singleline | RegexOptions.IgnoreCase);
-            text = Regex.Replace(text, @"<br\s*/?>|</(p|div|li|h\d|tr)>", "\n", RegexOptions.IgnoreCase);
-            text = Regex.Replace(text, "<[^>]+>", string.Empty);
-            text = System.Net.WebUtility.HtmlDecode(text);
-            text = Regex.Replace(text, @"[ \t]+", " ");
-            text = Regex.Replace(text, @"(\s*\n\s*){2,}", "\n\n").Trim();
+            try
+            {
+                if (await render(uri.ToString(), cancel) is { Length: > 0 } dom)
+                {
+                    var rendered = HtmlToText(dom);
+                    if (rendered.Length > text.Length)
+                        return "[rendered with a headless browser]\n" + Cut(rendered);
+                }
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception) { }
         }
+        if (blocked && text.Length < 300)
+            return $"[{(int)response.StatusCode}] the site refused the request" + (HeadlessRenderer is not null ? " and the headless browser could not read it either" : "; try another source") + ".";
         return $"[{(int)response.StatusCode}]\n" + Cut(text);
+    }
+
+    /// <summary>Con qué leer una página cuando el GET normal falla (navegador headless); las pruebas lo sustituyen.</summary>
+    internal static Func<string, CancellationToken, Task<string?>>? HeadlessRenderer = Services.HeadlessBrowser.RenderAsync;
+
+    /// <summary>Un User-Agent de navegador normal, para que las webs no rechacen la lectura.</summary>
+    internal const string BrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+
+    /// <summary>Descomprime el cuerpo si vino en gzip, deflate o brotli (algunas webs lo mandan aunque no se pida).</summary>
+    private static byte[] Decompress(byte[] bytes, IEnumerable<string> encodings)
+    {
+        var enc = encodings.Select(e => e.ToLowerInvariant()).ToList();
+        if (!enc.Contains("br") && !enc.Contains("gzip") && !enc.Contains("deflate")) return bytes;
+        try
+        {
+            using var input = new MemoryStream(bytes);
+            using System.IO.Stream stream = enc.Contains("br") ? new System.IO.Compression.BrotliStream(input, System.IO.Compression.CompressionMode.Decompress)
+                : enc.Contains("gzip") ? new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress)
+                : new System.IO.Compression.DeflateStream(input, System.IO.Compression.CompressionMode.Decompress);
+            using var output = new MemoryStream();
+            stream.CopyTo(output);
+            return output.ToArray();
+        }
+        catch (Exception) { return bytes; }
+    }
+
+    /// <summary>Una página HTML reducida a texto legible: fuera scripts y etiquetas, con el título delante.</summary>
+    internal static string HtmlToText(string html)
+    {
+        var title = Regex.Match(html, @"<title[^>]*>(.*?)</title>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        var text = Regex.Replace(html, @"<(script|style|noscript|svg|head)[^>]*>.*?</\1>", string.Empty, RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"<br\s*/?>|</(p|div|li|h\d|tr|section|article|header|footer)>", "\n", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, "<[^>]+>", string.Empty);
+        text = System.Net.WebUtility.HtmlDecode(text);
+        text = Regex.Replace(text, @"[ \t]+", " ");
+        text = Regex.Replace(text, @"(\s*\n\s*){2,}", "\n\n").Trim();
+        var heading = title.Success ? System.Net.WebUtility.HtmlDecode(Regex.Replace(title.Groups[1].Value, "<[^>]+>", string.Empty)).Trim() : string.Empty;
+        return heading.Length > 0 && !text.StartsWith(heading, StringComparison.Ordinal) ? heading + "\n\n" + text : text;
     }
 
     private static string DocumentsText()

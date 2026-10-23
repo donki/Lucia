@@ -213,7 +213,7 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-10-23): **514 pruebas**, todas pasan; el banco tarda **unos 50 s** (sin
+`Lucia.Tests` (xUnit, 2026-10-23): **520 pruebas**, todas pasan; el banco tarda **unos 50 s** (sin
 contar la compilación). Cobertura de líneas: **92,9 %** de lo instrumentado (se instrumenta el
 ensamblado `sOCLucia` entero) y **92,9 %** sobre toda la app (6399 de 6888 líneas ejecutables de
 C#; el 2026-10-21, 92,8 %). Enseñar a Lucia se prueba con un Python de mentira (el mismo `FakeLlama`

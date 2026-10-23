@@ -1,5 +1,31 @@
 # Changelog — sOC Lucia
 
+## 2026.10.23.1 — Leer páginas web para investigar / Reading web pages to research
+
+**Español**
+
+- **Lucia lee las páginas, no solo los resúmenes del buscador.** Al investigar, el agente abre con
+  `fetch_url` los mejores resultados y los lee, y sigue enlaces dentro de una página cuando llevan a lo
+  que busca. Si una fuente falla, prueba otra en vez de rendirse.
+- **`fetch_url` mejorado**: va con cabeceras de navegador (muchas webs ya no lo rechazan con 403),
+  descomprime gzip/deflate/brotli y saca el título y el texto legible.
+- **Repliegue a navegador headless** (como Playwright): si una web bloquea la lectura o solo trae un
+  esqueleto que rellena el JavaScript, Lucia la abre con el Edge o Chrome que ya tengas en modo
+  headless y lee el resultado. No descarga nada; si no hay navegador, lo dice y sugiere otra fuente.
+- Banco de pruebas: **520 pruebas** y **92,7 %** de toda la aplicación.
+
+**English**
+
+- **Lucia reads the pages, not just the search snippets.** When researching, the agent opens the best
+  results with `fetch_url` and reads them, and follows a link inside a page when it leads to what it
+  needs. If a source fails, it tries another instead of giving up.
+- **Improved `fetch_url`**: it sends browser headers (many sites no longer reject it with 403),
+  decompresses gzip/deflate/brotli, and pulls the title and readable text.
+- **Headless-browser fallback** (like Playwright): if a site blocks the read or only returns a skeleton
+  that JavaScript fills in, Lucia opens it with the Edge or Chrome you already have in headless mode and
+  reads the result. It downloads nothing; if there is no browser, it says so and suggests another source.
+- Test bench: **520 tests** and **92.7 %** of the whole application.
+
 ## 2026.10.23.0 — Servidores MCP: Lucia gana herramientas externas / MCP servers: Lucia gains external tools
 
 **Español**
