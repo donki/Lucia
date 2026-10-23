@@ -21,6 +21,10 @@ public class SkillsFrameworksSettingsTests : UiTest
                 Assert.Equal(Loc.Get("FrameworksTitle"), Ui.Find<TextBlock>(s, "FrameworksTitle").Text);
                 // El catálogo trae REA: su nombre sale en la lista de frameworks.
                 Assert.Contains(Ui.All<TextBlock>(Ui.Find<StackPanel>(s, "FrameworksList")), t => t.Text.Contains("REA"));
+
+                // Modelos en línea: la tarjeta se pinta y lista los proveedores (Groq entre ellos).
+                Assert.Equal(Loc.Get("OnlineTitle"), Ui.Find<TextBlock>(s, "OnlineTitle").Text);
+                Assert.Contains(Ui.All<TextBlock>(Ui.Find<StackPanel>(s, "OnlineProvidersList")), t => t.Text.Contains("Groq"));
                 s.Close();
             });
             w.ShowDialog();

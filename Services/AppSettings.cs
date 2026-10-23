@@ -96,6 +96,21 @@ public sealed class AppSettings
     /// <summary>Habilidades (skills) apagadas por su nombre; las que no estén aquí están encendidas.</summary>
     public List<string> DisabledSkills { get; set; } = [];
 
+    /// <summary>Modelos en línea (API compatibles con OpenAI) que el usuario ha añadido.</summary>
+    public List<RemoteModelRef> RemoteModels { get; set; } = [];
+
+    /// <summary>El modelo en línea activo; null = se usa la IA local (llama.cpp).</summary>
+    public RemoteModelRef? ActiveRemoteModel { get; set; }
+
+    /// <summary>Claves de los proveedores en línea, cifradas con DPAPI (proveedorId → «dpapi1:…»). Nunca en claro.</summary>
+    public Dictionary<string, string> RemoteProviderKeys { get; set; } = new();
+
+    /// <summary>Id de cuenta de los proveedores que lo piden (p. ej. Cloudflare); no es secreto.</summary>
+    public Dictionary<string, string> ProviderAccountIds { get; set; } = new();
+
+    /// <summary>El usuario ha aceptado usar modelos en línea (el texto sale del dispositivo hacia un servicio externo). Apagado por defecto.</summary>
+    public bool RemoteOptIn { get; set; }
+
     /// <summary>IA que no han podido arrancar en este PC (ruta → por que, en claro). Se borra al arrancar bien.</summary>
     public Dictionary<string, string> BrokenModels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -141,6 +156,9 @@ public sealed class AppSettings
     }
 
     public bool HasModel => !string.IsNullOrEmpty(ModelPath) && File.Exists(ModelPath);
+
+    /// <summary>Hay con qué contestar: un GGUF local o un modelo en línea activo.</summary>
+    public bool HasAnyModel => HasModel || ActiveRemoteModel is not null;
 }
 
 /// <summary>

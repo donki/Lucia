@@ -60,7 +60,7 @@ public partial class MainWindow : Window
         Loaded += (_, _) =>
         {
             Composer.Focus();
-            if (!AppSettings.Current.HasModel)
+            if (!AppSettings.Current.HasAnyModel)
                 OpenSettings();
             else
                 _ = WarmUpAsync();
@@ -114,9 +114,20 @@ public partial class MainWindow : Window
 
     private async Task WarmUpAsync()
     {
+        // Con un modelo en línea activo no se arranca el motor local (no hace falta y puede no haberlo).
+        if (AppSettings.Current.ActiveRemoteModel is not null) return;
         try { await EngineReadyAsync(CancellationToken.None); }
         catch (Exception) { /* el estado ya lo enseña la barra */ }
     }
+
+    /// <summary>
+    /// A dónde se pregunta esta vuelta: un servicio en línea (si hay modelo remoto activo) o el motor
+    /// local (arrancándolo si hace falta). Así el mismo bucle sirve para los dos.
+    /// </summary>
+    private async Task<Endpoint> ChatEndpointAsync(AppSettings settings, CancellationToken cancel)
+        => settings.ActiveRemoteModel is { } remote && Services.RemoteModels.Provider(remote.ProviderId) is not null
+            ? Services.RemoteModels.EndpointFor(remote)
+            : await EngineReadyAsync(cancel);
 
     /// <summary>
     /// La direccion del motor, arrancandolo si hace falta, siempre fuera del hilo de la interfaz:
@@ -144,6 +155,14 @@ public partial class MainWindow : Window
     {
         var engine = App.Engine;
         var settings = AppSettings.Current;
+        // Con un modelo en línea activo no hay motor local que enseñar: se muestra el modelo remoto.
+        if (settings.ActiveRemoteModel is { } remote)
+        {
+            EngineSpinner.Visibility = Visibility.Collapsed;
+            EngineProgress.Visibility = Visibility.Collapsed;
+            EngineStatus.Text = Loc.Format("EngineOnline", remote.Display);
+            return;
+        }
         var model = settings.ModelName is { Length: > 0 } name ? name : null;
         // Mientras se descarga o arranca el motor, se baja una IA o se dibuja: el arco de espera junto al estado.
         EngineSpinner.Visibility = _imageStatus is { Length: > 0 } || ModelDownloads.Current is not null || engine.State is EngineState.DownloadingEngine or EngineState.Starting
@@ -737,7 +756,7 @@ public partial class MainWindow : Window
             return;
         if (text.Length == 0)
             text = Loc.Get("AttachedOnly");
-        if (!AppSettings.Current.HasModel)
+        if (!AppSettings.Current.HasAnyModel)
         {
             OpenSettings();
             return;
@@ -873,7 +892,7 @@ public partial class MainWindow : Window
     /// <summary>Las tareas que tocan se mandan como conversaciones nuevas, una detras de otra, cuando la IA esta libre.</summary>
     private async Task RunDueTasksAsync()
     {
-        if (_answering is not null || !AppSettings.Current.HasModel) return;
+        if (_answering is not null || !AppSettings.Current.HasAnyModel) return;
         foreach (var task in Scheduler.Due(DateTimeOffset.Now))
         {
             var thread = new ChatThread { Title = "\u23F0 " + task.Title, WorkMode = true, Unattended = true, TaskId = task.Id };
@@ -936,7 +955,7 @@ public partial class MainWindow : Window
                 // pie esto no cuesta nada; si no, lo levanta otra vez (fuera del hilo de la interfaz).
                 var engineSpan = _trace?.Engine();
                 var engineState = App.Engine.State;
-                var baseUrl = await EngineReadyAsync(cancel);
+                var baseUrl = await ChatEndpointAsync(settings, cancel);
                 if (engineSpan is not null)
                 {
                     engineSpan.Set("lucia.engine_state_before", engineState.ToString()).Set("lucia.engine_ms", clock.Elapsed.TotalMilliseconds)

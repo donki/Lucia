@@ -72,6 +72,7 @@ public partial class SettingsWindow : Window
         CatalogLabel.Text = Loc.Get("CatalogLabel");
         PaintFilters();
         PaintTeach();
+        PaintOnline();
         PaintMcp();
         PaintSkills();
         PaintFrameworks();
@@ -629,6 +630,183 @@ public partial class SettingsWindow : Window
             PaintSkills();
             PaintFrameworks();
         }
+    }
+
+    // ------------------------------------------------------------------ Modelos en línea (APIs compatibles con OpenAI)
+
+    private System.Threading.CancellationTokenSource? _online;
+
+    private static string SignupText(RemoteSignup signup) => signup switch
+    {
+        RemoteSignup.NoCard => Loc.Get("SignupNoCard"),
+        RemoteSignup.Registration => Loc.Get("SignupRegistration"),
+        RemoteSignup.Phone => Loc.Get("SignupPhone"),
+        _ => Loc.Get("SignupCard"),
+    };
+
+    private void PaintOnline()
+    {
+        var s = AppSettings.Current;
+        OnlineTitle.Text = Loc.Get("OnlineTitle");
+        OnlineHint.Text = Loc.Get("OnlineHint");
+        OnlineOptIn.Content = Loc.Get("OnlineOptIn");
+        OnlineOptIn.IsChecked = s.RemoteOptIn;
+        OnlineModelsLabel.Text = Loc.Get("OnlineModelsLabel");
+        OnlineProvidersLabel.Text = Loc.Get("OnlineProvidersLabel");
+
+        OnlineModelsList.Children.Clear();
+        if (s.RemoteModels.Count == 0)
+            OnlineModelsList.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Get("OnlineNoModels") });
+        foreach (var model in s.RemoteModels.ToList())
+            OnlineModelsList.Children.Add(OnlineModelRow(model));
+
+        OnlineProvidersList.Children.Clear();
+        foreach (var provider in RemoteModels.Catalog)
+            OnlineProvidersList.Children.Add(ProviderRow(provider));
+    }
+
+    private UIElement OnlineModelRow(RemoteModelRef model)
+    {
+        var s = AppSettings.Current;
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var provider = RemoteModels.Provider(model.ProviderId);
+        var text = new StackPanel();
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold, Text = model.Display });
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{provider?.Name ?? model.ProviderId} · {model.ModelId}" });
+        grid.Children.Add(text);
+
+        var active = s.ActiveRemoteModel is { } a && a.ProviderId == model.ProviderId && a.ModelId == model.ModelId;
+        var use = new CheckBox { Style = (Style)FindResource("Check"), Content = Loc.Get("OnlineUse"), IsChecked = active, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
+        use.Click += (_, _) =>
+        {
+            if (use.IsChecked == true)
+            {
+                if (!s.RemoteOptIn) { use.IsChecked = false; OnlineSay(Loc.Get("OnlineNeedOptIn")); return; }
+                if (!RemoteModels.HasKey(model.ProviderId)) { use.IsChecked = false; OnlineSay(Loc.Get("OnlineNeedKey")); return; }
+                s.ActiveRemoteModel = model;
+            }
+            else s.ActiveRemoteModel = null;
+            s.Save();
+            (Owner as MainWindow)?.ModelChanged();
+            PaintOnline();
+        };
+        Grid.SetColumn(use, 1);
+        grid.Children.Add(use);
+
+        var delete = new Button { Style = (Style)FindResource("DangerIconButton"), Content = "", ToolTip = Loc.Get("OnlineRemove"), VerticalAlignment = VerticalAlignment.Center };
+        delete.Click += (_, _) =>
+        {
+            if (!PromptWindow.Confirm(this, Loc.Get("OnlineRemove"), Loc.Format("OnlineRemoveConfirm", model.Display))) return;
+            s.RemoteModels.RemoveAll(x => x.ProviderId == model.ProviderId && x.ModelId == model.ModelId);
+            if (active) s.ActiveRemoteModel = null;
+            s.Save();
+            if (active) (Owner as MainWindow)?.ModelChanged();
+            PaintOnline();
+        };
+        Grid.SetColumn(delete, 2);
+        grid.Children.Add(delete);
+        return grid;
+    }
+
+    private UIElement ProviderRow(RemoteProvider provider)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 6, 0, 10) };
+        panel.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold, Text = provider.Name });
+        panel.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"{SignupText(provider.Signup)} · {Loc.Get("OnlineCaveat")}", TextWrapping = TextWrapping.Wrap });
+
+        // Clave: botón para abrir la página de la clave + campo (cifrado) que se guarda al salir.
+        var keyRow = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+        var getKey = new Button { Style = (Style)FindResource("GhostIconButton"), Content = "", ToolTip = Loc.Get("OnlineGetKey") };
+        getKey.Click += (_, _) => Desktop.Current.Open(provider.KeyUrl);
+        DockPanel.SetDock(getKey, Dock.Left);
+        keyRow.Children.Add(getKey);
+        var key = new Controls.RevealPasswordBox { Password = RemoteModels.Key(provider.Id), Margin = new Thickness(6, 0, 0, 0) };
+        key.Left += (_, _) => RemoteModels.SetKey(provider.Id, key.Password);
+        keyRow.Children.Add(key);
+        panel.Children.Add(keyRow);
+
+        if (provider.NeedsAccountId)
+        {
+            var account = new TextBox { Style = (Style)FindResource("Field"), Text = RemoteModels.AccountId(provider.Id), ToolTip = Loc.Get("OnlineAccountId"), Margin = new Thickness(0, 6, 0, 0) };
+            account.LostFocus += (_, _) => RemoteModels.SetAccountId(provider.Id, account.Text);
+            panel.Children.Add(account);
+        }
+
+        // Modelo: combo editable (se llena con «ver modelos» o se escribe el id) + añadir + probar.
+        var modelBox = new ComboBox { IsEditable = true, Margin = new Thickness(0, 6, 0, 0), ToolTip = Loc.Get("OnlineModelId") };
+        var row = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var add = new Button { Style = (Style)FindResource("IconButton"), Content = "", ToolTip = Loc.Get("OnlineAddModel") };
+        add.Click += (_, _) =>
+        {
+            var id = (modelBox.Text ?? string.Empty).Trim();
+            if (id.Length == 0) { OnlineSay(Loc.Get("OnlineNeedModelId")); return; }
+            var s = AppSettings.Current;
+            if (!s.RemoteModels.Any(m => m.ProviderId == provider.Id && m.ModelId == id))
+                s.RemoteModels.Add(new RemoteModelRef { ProviderId = provider.Id, ModelId = id, Name = id });
+            s.Save();
+            PaintOnline();
+        };
+        DockPanel.SetDock(add, Dock.Right);
+        row.Children.Add(add);
+        var fetch = new Button { Style = (Style)FindResource("GhostIconButton"), Content = "", ToolTip = Loc.Get("OnlineFetchModels"), Margin = new Thickness(6, 0, 0, 0) };
+        DockPanel.SetDock(fetch, Dock.Right);
+        var test = new Button { Style = (Style)FindResource("OutlineButton"), Content = IconLabel("", Loc.Get("OnlineTest")), Margin = new Thickness(6, 0, 0, 0) };
+        DockPanel.SetDock(test, Dock.Right);
+        fetch.Click += async (_, _) => await FetchOnlineModelsAsync(provider, modelBox, fetch);
+        test.Click += async (_, _) => await TestOnlineAsync(provider, (modelBox.Text ?? string.Empty).Trim(), test);
+        row.Children.Add(fetch);
+        row.Children.Add(test);
+        row.Children.Add(modelBox);
+        panel.Children.Add(row);
+        return panel;
+    }
+
+    private async Task FetchOnlineModelsAsync(RemoteProvider provider, ComboBox box, System.Windows.Controls.Primitives.ButtonBase button)
+    {
+        _online?.Cancel();
+        _online = new System.Threading.CancellationTokenSource();
+        await RunBusyAsync(OnlineBusy, Loc.Get("OnlineFetching"),
+            () => RemoteModels.ModelsAsync(provider, _online.Token).GetAwaiter().GetResult(),
+            ids =>
+            {
+                box.ItemsSource = ids;
+                OnlineSay(ids.Count == 0 ? Loc.Get("OnlineNoModelList") : Loc.Format("OnlineModelsFound", ids.Count));
+            }, button);
+    }
+
+    private async Task TestOnlineAsync(RemoteProvider provider, string modelId, System.Windows.Controls.Primitives.ButtonBase button)
+    {
+        _online?.Cancel();
+        _online = new System.Threading.CancellationTokenSource();
+        await RunBusyAsync(OnlineBusy, Loc.Get("OnlineTesting"),
+            () => RemoteModels.TestAsync(provider, modelId, _online.Token).GetAwaiter().GetResult(),
+            result => OnlineSay(Loc.Get(result.Kind switch
+            {
+                "ok" => "OnlineTestOk",
+                "auth" => "OnlineTestAuth",
+                "limit" => "OnlineTestLimit",
+                "model" => "OnlineTestModel",
+                "account" => "OnlineTestAccount",
+                _ => "OnlineTestNetwork",
+            })), button);
+    }
+
+    private void OnlineSay(string text)
+    {
+        OnlineStatus.Text = text;
+        OnlineStatus.Visibility = Visibility.Visible;
+    }
+
+    private void OnOnlineOptIn(object sender, RoutedEventArgs e)
+    {
+        var s = AppSettings.Current;
+        s.RemoteOptIn = OnlineOptIn.IsChecked == true;
+        if (!s.RemoteOptIn && s.ActiveRemoteModel is not null) { s.ActiveRemoteModel = null; (Owner as MainWindow)?.ModelChanged(); }
+        s.Save();
+        PaintOnline();
     }
 
     private void OnTeach(object sender, RoutedEventArgs e)

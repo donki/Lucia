@@ -51,7 +51,20 @@ public sealed record ChatUsage(int? PromptTokens, int? CompletionTokens, double?
 /// </summary>
 public sealed class ChatTemplateException(string detail) : Exception(detail);
 
-/// <summary>Cliente del <c>/v1/chat/completions</c> de llama-server, en streaming (SSE), con herramientas.</summary>
+/// <summary>
+/// A dónde se pregunta: el llama-server local (solo <see cref="BaseUrl"/>) o un servicio remoto compatible
+/// con OpenAI (con su clave y el id del modelo). Todo usa el mismo transporte.
+/// </summary>
+public sealed record Endpoint(string BaseUrl, string? ApiKey = null, string ModelId = "local")
+{
+    /// <summary>El llama-server local da su raíz sin versión; la API vive en <c>/v1</c>. Los remotos ya traen su base con la versión.</summary>
+    public static implicit operator Endpoint(string baseUrl) => new(baseUrl.TrimEnd('/') + "/v1");
+
+    /// <summary>La dirección de <c>chat/completions</c> (la base ya incluye la versión, p. ej. <c>…/v1</c>).</summary>
+    public string ChatCompletionsUrl => $"{BaseUrl.TrimEnd('/')}/chat/completions";
+}
+
+/// <summary>Cliente del <c>/v1/chat/completions</c> de llama-server (y de servicios compatibles con OpenAI), en streaming (SSE), con herramientas.</summary>
 public static class ChatClient
 {
     /// <summary>Si un error del servidor es de la plantilla de chat (Jinja) y no de la red ni del modelo.</summary>
@@ -72,20 +85,20 @@ public static class ChatClient
     /// el JSON de cada trozo. La interfaz solo lee <paramref name="target"/> cuando repinta. Los
     /// errores y la cancelacion salen por la tarea devuelta.
     /// </summary>
-    public static Task PumpAsync(string baseUrl, IReadOnlyList<ChatMessage> messages, bool thinking, int maxTokens, JsonArray? tools,
+    public static Task PumpAsync(Endpoint endpoint, IReadOnlyList<ChatMessage> messages, bool thinking, int maxTokens, JsonArray? tools,
         Chat.PendingAnswer target, CancellationToken cancel)
         => Task.Run(async () =>
         {
-            await foreach (var delta in StreamAsync(baseUrl, messages, thinking, maxTokens, tools, cancel).ConfigureAwait(false))
+            await foreach (var delta in StreamAsync(endpoint, messages, thinking, maxTokens, tools, cancel).ConfigureAwait(false))
                 target.Add(delta);
         }, cancel);
 
-    public static async IAsyncEnumerable<ChatDelta> StreamAsync(string baseUrl, IEnumerable<ChatMessage> messages, bool thinking, int maxTokens, JsonArray? tools,
+    public static async IAsyncEnumerable<ChatDelta> StreamAsync(Endpoint endpoint, IEnumerable<ChatMessage> messages, bool thinking, int maxTokens, JsonArray? tools,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancel)
     {
         var body = new JsonObject
         {
-            ["model"] = "local",
+            ["model"] = endpoint.ModelId,
             ["stream"] = true,
             // Con pensamiento, el razonamiento gasta del mismo tope: se le da sitio para que quede respuesta.
             ["max_tokens"] = thinking ? maxTokens * 3 : maxTokens,
@@ -100,10 +113,12 @@ public static class ChatClient
             body["tools"] = JsonNode.Parse(tools.ToJsonString());
             body["tool_choice"] = "auto";
         }
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/v1/chat/completions")
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint.ChatCompletionsUrl)
         {
             Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
         };
+        if (!string.IsNullOrEmpty(endpoint.ApiKey))
+            request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + endpoint.ApiKey);
         using var response = await Downloader.Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
         if (!response.IsSuccessStatusCode)
         {

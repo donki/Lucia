@@ -58,6 +58,11 @@ internal static class Sandbox
         s.BrokenModels.Clear();
         s.McpServers.Clear();
         s.DisabledSkills.Clear();
+        s.RemoteModels.Clear();
+        s.ActiveRemoteModel = null;
+        s.RemoteProviderKeys.Clear();
+        s.ProviderAccountIds.Clear();
+        s.RemoteOptIn = false;
         SocLucia.Mcp.McpManager.DisconnectAll();
         try { if (Directory.Exists(SkillStore.Folder)) Directory.Delete(SkillStore.Folder, recursive: true); } catch (Exception) { }
         s.Pending = null;   // una descarga a medias de otra prueba no se retoma en esta

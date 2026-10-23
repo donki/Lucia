@@ -1,5 +1,39 @@
 # Changelog — sOC Lucia
 
+## 2026.10.23.4 — Modelos en línea / Online models
+
+**Español**
+
+- **Modelos en línea (APIs compatibles con OpenAI).** Además de la IA local, ahora puedes usar modelos
+  por internet de servicios con capa gratuita, con el mismo transporte que el motor local. Catálogo de
+  proveedores: Groq, Mistral, Cerebras, OpenRouter, SiliconFlow, NVIDIA NIM, Google AI Studio, Cohere,
+  Together, Fireworks y Cloudflare Workers AI, cada uno con su dirección base y su enlace directo para
+  **conseguir la clave**.
+- **Registro sin fricción.** En cada proveedor: un botón que abre su página de claves, un campo para
+  pegar la clave con **«Probar»** (hace una completación mínima real y dice en claro si va, si la clave
+  no vale, si estás al límite o si falla la red), la etiqueta de qué pide el registro (sin tarjeta /
+  registro / teléfono / tarjeta) y el aviso de que es un servicio externo gratuito con límites. Puedes
+  listar los modelos del proveedor o escribir el id a mano.
+- **Claves seguras y privacidad.** Las claves se guardan **cifradas con DPAPI** (nunca en claro). Usar
+  un modelo en línea es **opcional y hay que aceptarlo**: el texto **sale del dispositivo** hacia el
+  servicio externo que elijas; Lucia sigue siendo local por defecto.
+- Banco de pruebas: **559 pruebas**.
+
+**English**
+
+- **Online models (OpenAI-compatible APIs).** Alongside the local AI, you can now use models over the
+  internet from free-tier services, over the same transport as the local engine. Provider catalogue:
+  Groq, Mistral, Cerebras, OpenRouter, SiliconFlow, NVIDIA NIM, Google AI Studio, Cohere, Together,
+  Fireworks and Cloudflare Workers AI, each with its base URL and a direct **"get API key"** link.
+- **Frictionless sign-up.** Per provider: a button that opens its key page, a field to paste the key
+  with **"Test"** (a real tiny completion that reports in clear language whether it works, the key is
+  rejected, you hit the rate limit, or the network failed), the sign-up requirement label (no card /
+  sign-up / phone / card) and the free-tier caveat. You can list the provider's models or type the id.
+- **Secure keys and privacy.** Keys are stored **DPAPI-encrypted** (never in clear). Using an online
+  model is **opt-in**: the text **leaves this device** for the external service you pick; Lucia stays
+  local by default.
+- Test bench: **559 tests**.
+
 ## 2026.10.23.3 — Habilidades y frameworks para IA / Skills and AI frameworks
 
 **Español**

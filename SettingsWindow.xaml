@@ -172,6 +172,21 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Modelos en línea: APIs compatibles con OpenAI (Free-LLM); el texto sale del dispositivo (opt-in) -->
+                <Border x:Name="OnlineCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="OnlineTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="OnlineHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                        <CheckBox x:Name="OnlineOptIn" Style="{StaticResource Check}" Margin="0,0,0,8" Click="OnOnlineOptIn" />
+                        <TextBlock x:Name="OnlineModelsLabel" Style="{StaticResource FieldLabel}" Margin="0,4,0,4" />
+                        <StackPanel x:Name="OnlineModelsList" />
+                        <TextBlock x:Name="OnlineProvidersLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                        <StackPanel x:Name="OnlineProvidersList" />
+                        <c:BusyIndicator x:Name="OnlineBusy" />
+                        <TextBlock x:Name="OnlineStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                    </StackPanel>
+                </Border>
+
                 <!-- MCP: servidores de herramientas externas que amplian el agente -->
                 <Border x:Name="McpCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
                     <StackPanel>

@@ -52,19 +52,19 @@ public static class ContextCompactor
     public static int Budget(int contextTokens, int answerTokens, bool thinking, int systemTokens)
         => Math.Max(512, contextTokens - (thinking ? answerTokens * 3 : answerTokens) - systemTokens - 512);
 
-    /// <summary>Cómo se obtiene el resumen (el modelo). Las pruebas lo sustituyen.</summary>
-    public static Func<string, string?, IReadOnlyList<StoredMessage>, CancellationToken, Task<string>> Summarizer = SummarizeWithModelAsync;
+    /// <summary>Cómo se obtiene el resumen (el modelo, local o en línea). Las pruebas lo sustituyen.</summary>
+    public static Func<Endpoint, string?, IReadOnlyList<StoredMessage>, CancellationToken, Task<string>> Summarizer = SummarizeWithModelAsync;
 
     /// <summary>
     /// Comprime la conversación si hace falta: actualiza <see cref="ChatThread.Summary"/> y
     /// <see cref="ChatThread.SummarizedCount"/>. Devuelve true si comprimió (para avisarlo en el chat).
     /// </summary>
-    public static async Task<bool> CompactAsync(ChatThread thread, string baseUrl, int budgetTokens, CancellationToken cancel)
+    public static async Task<bool> CompactAsync(ChatThread thread, Endpoint endpoint, int budgetTokens, CancellationToken cancel)
     {
         var plan = PlanFor(thread.Messages, thread.Summary, thread.SummarizedCount, budgetTokens);
         if (!plan.Compact) return false;
         var fold = thread.Messages.Skip(thread.SummarizedCount).Take(plan.SummarizeUpTo - thread.SummarizedCount).ToList();
-        var summary = await Summarizer(baseUrl, thread.Summary, fold, cancel);
+        var summary = await Summarizer(endpoint, thread.Summary, fold, cancel);
         if (string.IsNullOrWhiteSpace(summary)) return false;
         thread.Summary = summary.Trim();
         thread.SummarizedCount = plan.SummarizeUpTo;
@@ -76,7 +76,7 @@ public static class ContextCompactor
         => string.IsNullOrEmpty(thread.Summary) ? string.Empty
          : "[Summary of the earlier part of this conversation, so you can continue]\n" + thread.Summary;
 
-    private static async Task<string> SummarizeWithModelAsync(string baseUrl, string? existing, IReadOnlyList<StoredMessage> messages, CancellationToken cancel)
+    private static async Task<string> SummarizeWithModelAsync(Endpoint endpoint, string? existing, IReadOnlyList<StoredMessage> messages, CancellationToken cancel)
     {
         var sb = new StringBuilder();
         if (!string.IsNullOrEmpty(existing)) sb.AppendLine("Summary so far:").AppendLine(existing).AppendLine();
@@ -95,7 +95,7 @@ public static class ContextCompactor
             new("user", sb.ToString()),
         };
         var result = new StringBuilder();
-        await foreach (var delta in ChatClient.StreamAsync(baseUrl, prompt, thinking: false, maxTokens: 600, tools: null, cancel))
+        await foreach (var delta in ChatClient.StreamAsync(endpoint, prompt, thinking: false, maxTokens: 600, tools: null, cancel))
             if (delta.Content is { Length: > 0 } c) result.Append(c);
         return result.ToString();
     }
