@@ -56,6 +56,8 @@ internal static class Sandbox
         s.Installed.Clear();
         s.Adapters.Clear();
         s.BrokenModels.Clear();
+        s.McpServers.Clear();
+        SocLucia.Mcp.McpManager.DisconnectAll();
         s.Pending = null;   // una descarga a medias de otra prueba no se retoma en esta
         s.PendingDownloads.Clear();
         s.ContextTokens = Engine.TokenLimits.ContextDefault;

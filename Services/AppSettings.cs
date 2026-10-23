@@ -87,6 +87,9 @@ public sealed class AppSettings
     /// <summary>IAs descargadas o importadas, con su nombre visible: los GGUF por si solos no dicen como se llaman.</summary>
     public List<InstalledModel> Installed { get; set; } = [];
 
+    /// <summary>Servidores MCP configurados (herramientas externas que amplían el modo agente).</summary>
+    public List<Mcp.McpServerConfig> McpServers { get; set; } = [];
+
     /// <summary>IA que no han podido arrancar en este PC (ruta → por que, en claro). Se borra al arrancar bien.</summary>
     public Dictionary<string, string> BrokenModels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 

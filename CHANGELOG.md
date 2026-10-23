@@ -1,5 +1,35 @@
 # Changelog — sOC Lucia
 
+## 2026.10.23.0 — Servidores MCP: Lucia gana herramientas externas / MCP servers: Lucia gains external tools
+
+**Español**
+
+- **MCP (Model Context Protocol).** Lucia se conecta a servidores MCP —los mismos que usan Claude y
+  VS Code— para dar al agente herramientas nuevas: la web, ficheros, bases de datos, APIs… En
+  Ajustes › Extensiones (MCP) añades un servidor con su orden (p. ej. «uvx mcp-server-fetch» o
+  «npx -y @modelcontextprotocol/server-filesystem C:/…»), Lucia lo arranca, descubre sus herramientas
+  y el agente ya las usa, con el mismo permiso y registro que las de serie. Muchos servidores se
+  instalan solos la primera vez con npx o uvx.
+- **La propia IA puede ampliarse**: en modo agente tiene herramientas para **añadir un servidor MCP**
+  (`add_mcp_server`) e **instalar un modelo** (`install_model`, del catálogo o de un repositorio GGUF
+  de Hugging Face) cuando una tarea lo necesita, siempre con tu permiso (recurso «Extensiones»).
+- Probado con un servidor real (mcp-server-fetch por uvx) y con un servidor de pruebas propio.
+- Banco de pruebas: **514 pruebas** y **92,8 %** de toda la aplicación.
+
+**English**
+
+- **MCP (Model Context Protocol).** Lucia connects to MCP servers —the same ones Claude and VS Code
+  use— to give the agent new tools: the web, files, databases, APIs… In Settings › Extensions (MCP)
+  you add a server with its command (e.g. «uvx mcp-server-fetch» or
+  «npx -y @modelcontextprotocol/server-filesystem C:/…»), Lucia starts it, discovers its tools and the
+  agent uses them, with the same permission and logging as the built-in ones. Many servers install
+  themselves the first time with npx or uvx.
+- **The AI can extend itself**: in agent mode it has tools to **add an MCP server** (`add_mcp_server`)
+  and **install a model** (`install_model`, from the catalogue or a Hugging Face GGUF repo) when a task
+  needs it, always with your permission (the «Extensions» resource).
+- Tested with a real server (mcp-server-fetch via uvx) and with a fake server of our own.
+- Test bench: **514 tests** and **92.8 %** of the whole application.
+
 ## 2026.10.22.3 — Contexto ajustable encima del chat / Context adjustable above the chat
 
 **Español**

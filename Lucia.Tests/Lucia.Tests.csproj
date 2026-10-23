@@ -41,6 +41,9 @@
     <Compile Remove="FakeLlama\**" />
     <None Remove="FakeLlama\**" />
     <ProjectReference Include="FakeLlama\FakeLlama.csproj" />
+    <Compile Remove="FakeMcp\**" />
+    <None Remove="FakeMcp\**" />
+    <ProjectReference Include="FakeMcp\FakeMcp.csproj" />
   </ItemGroup>
 
 </Project>

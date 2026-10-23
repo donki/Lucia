@@ -135,6 +135,18 @@ desde cero, 12 ejemplos y el adaptador cargado por llama-server respondiendo lo 
 `FineTune/lucia_train.py` (va dentro del exe); su salida va a `logs\finetune.log`. Para probar sin
 ratón (Debug): `sOCLucia.exe --teach --teach-run ejemplos.csv` con `SOC_LUCIA_ROOT` en un arenero.
 
+## Extensiones: MCP y autoampliación
+
+Ajustes › **Extensiones (MCP)** conecta Lucia a servidores **MCP (Model Context Protocol)** —el estándar
+abierto que usan Claude Desktop y VS Code— para ampliar el modo agente con herramientas externas (web,
+ficheros, bases de datos, APIs). Se añade un servidor con su orden (`uvx mcp-server-fetch`,
+`npx -y @modelcontextprotocol/server-filesystem <carpeta>`); Lucia lo arranca como proceso hijo
+(`Mcp/McpClient.cs`, JSON-RPC 2.0 por stdio), descubre sus herramientas (`tools/list`) y las envuelve
+como herramientas normales (`Mcp/McpManager.cs`, nombre `mcp__servidor__herramienta`, recurso
+`Resource.Mcp`), así que pasan por el mismo permiso, registro (`logs\mcp.log`) y burbuja. Los servidores
+se instalan solos con npx/uvx la primera vez. La propia IA puede **añadir un servidor** (`add_mcp_server`)
+o **instalar un modelo** (`install_model`) en modo agente, con permiso del usuario.
+
 ## MLflow (opcional, apagado por defecto)
 
 Ajustes › MLflow manda cada interacción a un servidor MLflow (dirección, experimento —se crea si no
@@ -175,6 +187,7 @@ el token que se muestra en Ajustes.
 - `App.xaml`: sistema visual sOCratic (paleta índigo, tarjetas, botones con icono); `Services/ThemeManager.cs` sigue al tema de Windows.
 - `MainWindow`: conversaciones y chat. `SettingsWindow`: la IA (catálogo, importar), instrucciones, razonamiento, letra, puerta de editores, idioma, diagnóstico. `AboutWindow`: la «Acerca de» del catálogo. `PromptWindow`: los diálogos pequeños.
 - `Engine/`: `EnginePin` (versión fijada de llama.cpp y sus SHA), `EngineHost` (descarga, arranque, salud, parada; `--mmproj` si el modelo tiene visión), `ModelCatalog` (catálogo, elección del cuantizado, descarga; `PickMmprojAsync`/`DownloadMmprojAsync` para la parte de visión), `ChatClient` (SSE; imágenes como partes `image_url`), `Downloader`, `ImageEngine` (stable-diffusion.cpp fijado con SHA, modelo SD 1.5 y generación con `sd-cli`).
+- `Mcp/`: soporte MCP. `McpClient` (cliente stdio JSON-RPC), `McpServers` (configuración y `McpManager`, que conecta los servidores y envuelve sus herramientas).
 - `FineTune/`: Enseñar a Lucia. `FineTunePin` (uv, Python, PyTorch y bibliotecas fijadas), `PythonEnv` (el entorno aislado y los convertidores de llama.cpp), `TrainingData` (ejemplos: conversaciones, CSV, JSONL, revisión), `BaseModels` (modelo original en safetensors, si cabe, descarga), `FineTuneRunner` (lanza `lucia_train.py` y lee su progreso; convierte modelos), `Adapters` (los LoRA y cuál está en uso). `FineTuneWindow`: el asistente.
 - `Services/DocumentIndex.cs`: la carpeta de documentos (trozos por palabras; PDF con PdfPig, .docx a mano).
 - `App.xaml.cs`: arranque, instancia única y el gestor global de errores (un fallo inesperado se registra en `logs\engine.log`, se avisa y la aplicación sigue).
@@ -200,7 +213,7 @@ Requisitos: .NET 10 SDK. Para el MSIX, el SDK de Windows (MakeAppx). En Debug, `
 
 ## Pruebas
 
-`Lucia.Tests` (xUnit, 2026-10-22): **498 pruebas**, todas pasan; el banco tarda **unos 50 s** (sin
+`Lucia.Tests` (xUnit, 2026-10-23): **514 pruebas**, todas pasan; el banco tarda **unos 50 s** (sin
 contar la compilación). Cobertura de líneas: **92,9 %** de lo instrumentado (se instrumenta el
 ensamblado `sOCLucia` entero) y **92,9 %** sobre toda la app (6399 de 6888 líneas ejecutables de
 C#; el 2026-10-21, 92,8 %). Enseñar a Lucia se prueba con un Python de mentira (el mismo `FakeLlama`

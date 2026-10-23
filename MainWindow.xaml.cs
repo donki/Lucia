@@ -889,6 +889,8 @@ public partial class MainWindow : Window
     private async Task AnswerLoopAsync(ChatThread thread, CancellationToken cancel)
     {
         var settings = AppSettings.Current;
+        // Conecta los servidores MCP encendidos para que sus herramientas estén en la lista (no es fatal si uno falla).
+        try { await Mcp.McpManager.EnsureAsync(settings, cancel); } catch (OperationCanceledException) { throw; } catch (Exception) { }
         JsonArray? tools = thread.WorkMode ? ToolBox.Definitions(settings) : ToolBox.QuestionDefinitions(settings);
         var question = thread.Messages.LastOrDefault(m => m.Role == "user")?.Content ?? string.Empty;
         string? context = null;

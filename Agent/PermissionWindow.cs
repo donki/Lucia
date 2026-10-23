@@ -92,6 +92,7 @@ public sealed class PermissionWindow : Window
         Resource.Internet => "",
         Resource.Clipboard => "",
         Resource.Apps => "",
+        Resource.Mcp => "",
         _ => "",
     };
 

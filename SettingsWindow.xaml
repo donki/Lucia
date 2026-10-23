@@ -172,6 +172,25 @@
                     </StackPanel>
                 </Border>
 
+                <!-- MCP: servidores de herramientas externas que amplian el agente -->
+                <Border x:Name="McpCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock x:Name="McpTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                        <TextBlock x:Name="McpHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <StackPanel x:Name="McpList" />
+                        <TextBlock x:Name="McpAddLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                        <TextBox x:Name="McpNameBox" Style="{StaticResource Field}" Margin="0,0,0,6" />
+                        <DockPanel>
+                            <Button x:Name="McpAddButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" Margin="6,0,0,0" Click="OnAddMcp" />
+                            <TextBox x:Name="McpCommandBox" Style="{StaticResource Field}" FontFamily="Cascadia Mono, Consolas" FontSize="12" />
+                        </DockPanel>
+                        <TextBlock x:Name="McpExamples" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                        <c:BusyIndicator x:Name="McpBusy" />
+                        <TextBlock x:Name="McpStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                        <Button x:Name="McpLogButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnOpenMcpLog" />
+                    </StackPanel>
+                </Border>
+
                 <!-- MLflow: cada interaccion como traza de GenAI (o ejecuciones en servidores viejos); apagado por defecto -->
                 <Border x:Name="MlflowCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
                     <StackPanel>

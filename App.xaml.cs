@@ -276,6 +276,7 @@ public partial class App : Application
         Watchdog?.Dispose();
         Services.Mlflow.MlflowTelemetry.Current.Dispose();
         Door.Dispose();
+        Mcp.McpManager.DisconnectAll();
         Engine.Dispose();
     }
 }

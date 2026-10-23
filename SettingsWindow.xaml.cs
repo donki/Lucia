@@ -72,6 +72,7 @@ public partial class SettingsWindow : Window
         CatalogLabel.Text = Loc.Get("CatalogLabel");
         PaintFilters();
         PaintTeach();
+        PaintMcp();
         SearchLabel.Text = Loc.Get("SearchHf");
         SearchBox.ToolTip = SearchButton.ToolTip = Loc.Get("SearchHfTip");
         if (_hits is null) SearchHint.Text = Loc.Get("SearchHfHint");
@@ -365,6 +366,113 @@ public partial class SettingsWindow : Window
     // ------------------------------------------------------------------ Enseñar a Lucia y convertir modelos
 
     private CancellationTokenSource? _convert;
+
+    // ------------------------------------------------------------------ MCP (herramientas externas)
+
+    private System.Threading.CancellationTokenSource? _mcp;
+
+    private void PaintMcp()
+    {
+        McpTitle.Text = Loc.Get("McpTitle");
+        McpHint.Text = Loc.Get("McpHint");
+        McpAddLabel.Text = Loc.Get("McpAddLabel");
+        McpNameBox.Text = McpNameBox.Text;   // se conserva
+        if (string.IsNullOrEmpty(McpNameBox.Tag as string)) { McpNameBox.ToolTip = Loc.Get("McpNamePlaceholder"); McpCommandBox.ToolTip = Loc.Get("McpCommandPlaceholder"); }
+        McpAddButton.ToolTip = Loc.Get("McpAdd");
+        McpExamples.Text = Loc.Get("McpExamples");
+        McpLogButton.Content = IconLabel("", Loc.Get("McpOpenLog"));
+        var servers = AppSettings.Current.McpServers;
+        McpList.Children.Clear();
+        if (servers.Count == 0)
+            McpList.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Get("McpNoServers") });
+        foreach (var server in servers.ToList())
+            McpList.Children.Add(McpRow(server));
+    }
+
+    private UIElement McpRow(Mcp.McpServerConfig server)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var text = new StackPanel();
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), FontWeight = FontWeights.SemiBold, Text = server.Name });
+        text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = server.CommandLine, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis });
+        var conn = Mcp.McpManager.ConnectionOf(server.Name);
+        if (conn is not null)
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Format("McpConnected", conn.Tools.Count) + ": " + string.Join(", ", conn.Tools.Select(t => t.Name)), Foreground = (Brush)FindResource("Success"), TextWrapping = TextWrapping.Wrap });
+        else if (server.Enabled)
+            text.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Get("McpNotConnected"), Foreground = (Brush)FindResource("Danger") });
+        grid.Children.Add(text);
+        var on = new CheckBox { Style = (Style)FindResource("Check"), Content = Loc.Get("McpEnabled"), IsChecked = server.Enabled, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
+        on.Click += async (_, _) => { server.Enabled = on.IsChecked == true; AppSettings.Current.Save(); if (!server.Enabled) Mcp.McpManager.Disconnect(server.Name); await ConnectMcpAsync(); };
+        Grid.SetColumn(on, 1);
+        grid.Children.Add(on);
+        var delete = new Button { Style = (Style)FindResource("DangerIconButton"), Content = "", ToolTip = Loc.Get("McpDelete"), VerticalAlignment = VerticalAlignment.Center };
+        delete.Click += (_, _) =>
+        {
+            if (!PromptWindow.Confirm(this, Loc.Get("McpDelete"), Loc.Format("McpDeleteConfirm", server.Name))) return;
+            AppSettings.Current.McpServers.RemoveAll(x => x.Name == server.Name);
+            AppSettings.Current.Save();
+            Mcp.McpManager.Disconnect(server.Name);
+            PaintMcp();
+        };
+        Grid.SetColumn(delete, 2);
+        grid.Children.Add(delete);
+        return grid;
+    }
+
+    private async void OnAddMcp(object sender, RoutedEventArgs e)
+    {
+        var name = McpNameBox.Text.Trim();
+        var command = McpCommandBox.Text.Trim();
+        if (name.Length == 0 || command.Length == 0) { McpStatus.Text = Loc.Get("McpNeedNameCommand"); McpStatus.Visibility = Visibility.Visible; return; }
+        var (cmd, args) = Mcp.McpServerConfig.ParseCommandLine(command);
+        var config = new Mcp.McpServerConfig { Name = name, Command = cmd, Args = args, Enabled = true };
+        McpStatus.Visibility = Visibility.Collapsed;
+        McpBusy.Start(Loc.Format("McpConnecting", name));
+        McpAddButton.IsEnabled = false;
+        _mcp?.Cancel();
+        _mcp = new System.Threading.CancellationTokenSource();
+        try
+        {
+            var (info, tools) = await Mcp.McpManager.TestAsync(config, _mcp.Token);
+            AppSettings.Current.McpServers.RemoveAll(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            AppSettings.Current.McpServers.Add(config);
+            AppSettings.Current.Save();
+            await Mcp.McpManager.EnsureAsync(AppSettings.Current, System.Threading.CancellationToken.None);
+            McpNameBox.Clear();
+            McpCommandBox.Clear();
+            McpStatus.Text = Loc.Format("McpAddOk", info.Name, tools.Count);
+            McpStatus.Visibility = Visibility.Visible;
+            (Owner as MainWindow)?.ModelChanged();
+        }
+        catch (Exception ex)
+        {
+            McpStatus.Text = Loc.Format("McpAddFail", ex.Message);
+            McpStatus.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            McpBusy.Stop();
+            McpAddButton.IsEnabled = true;
+            PaintMcp();
+        }
+    }
+
+    private async Task ConnectMcpAsync()
+    {
+        McpBusy.Start(Loc.Get("McpConnectingAll"));
+        try { await Mcp.McpManager.EnsureAsync(AppSettings.Current, System.Threading.CancellationToken.None); }
+        catch (Exception) { }
+        finally { McpBusy.Stop(); PaintMcp(); }
+    }
+
+    private void OnOpenMcpLog(object sender, RoutedEventArgs e)
+    {
+        if (File.Exists(Mcp.McpClient.LogPath)) Desktop.Current.Open(Mcp.McpClient.LogPath);
+        else PromptWindow.Alert(this, Loc.Get("McpTitle"), Loc.Get("McpNoLog"));
+    }
 
     private void OnTeach(object sender, RoutedEventArgs e)
     {

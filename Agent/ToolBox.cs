@@ -9,7 +9,7 @@ using SocLucia.Services;
 namespace SocLucia.Agent;
 
 /// <summary>Un tipo de recurso del PC. Cada herramienta pertenece a uno y los permisos se dan por recurso.</summary>
-public enum Resource { Commands, FilesRead, FilesWrite, Internet, Clipboard, Apps, Free }
+public enum Resource { Commands, FilesRead, FilesWrite, Internet, Clipboard, Apps, Free, Mcp }
 
 /// <summary>Que hacer cuando la IA quiere usar un recurso: preguntar, dejar siempre o no ofrecerselo.</summary>
 public enum Permission { Ask, Allow, Deny }
@@ -26,10 +26,20 @@ public sealed record Tool(string Name, Resource Resource, string Description, Js
         Resource.Apps => Arg(args, "target"),
         Resource.Clipboard => Name == ToolBox.WriteClipboard ? Arg(args, "text") : string.Empty,
         Resource.Free => Name == ToolBox.Remember ? Arg(args, "fact") : Name == ToolBox.ScheduleTask ? Arg(args, "title") + " · " + Arg(args, "when") : Name == ToolBox.DeleteTask ? Arg(args, "id") : Arg(args, "name"),
+        Resource.Mcp => Name == ToolBox.AddMcpServer ? Arg(args, "name") + " · " + Arg(args, "command") : Name == ToolBox.InstallModel ? Arg(args, "model") : CompactArgs(args),
         _ => string.Empty,
     };
 
     internal static string Arg(JsonObject args, string name) => args[name]?.GetValue<string>() ?? string.Empty;
+
+    /// <summary>Un resumen corto de los argumentos de una herramienta MCP (para el permiso y la burbuja).</summary>
+    internal static string CompactArgs(JsonObject args)
+    {
+        var clone = args.DeepClone().AsObject();
+        clone.Remove("reason");
+        var text = clone.ToJsonString();
+        return text.Length > 160 ? text[..160] + "…" : text == "{}" ? string.Empty : text;
+    }
 }
 
 /// <summary>
@@ -59,6 +69,9 @@ public static class ToolBox
     public const string ListTasks = "list_tasks";
     public const string DeleteTask = "delete_task";
     public const string GenerateImage = "generate_image";
+    public const string AddMcpServer = "add_mcp_server";
+    public const string ListMcpServers = "list_mcp_servers";
+    public const string InstallModel = "install_model";
 
     private const int MaxChars = 12_000;
 
@@ -171,7 +184,85 @@ public static class ToolBox
     /// <summary>Progreso de la descarga del motor o del modelo de imagenes (la ventana lo enseña en la barra de estado).</summary>
     public static IProgress<Engine.Downloader.Progress>? ImageProgress { get; set; }
 
-    public static Tool? Find(string name) => name == SystemInfo ? Info : All.FirstOrDefault(t => t.Name == name) ?? Free.FirstOrDefault(t => t.Name == name);
+    private static string McpServersText()
+    {
+        var servers = AppSettings.Current.McpServers;
+        var sb = new StringBuilder();
+        if (servers.Count == 0) sb.AppendLine("No MCP servers configured yet.");
+        foreach (var server in servers)
+        {
+            var conn = Mcp.McpManager.ConnectionOf(server.Name);
+            sb.AppendLine($"- {server.Name} ({(server.Enabled ? "on" : "off")}): {server.CommandLine}");
+            if (conn is not null) sb.AppendLine("   tools: " + string.Join(", ", conn.Tools.Select(t => t.Name)));
+        }
+        sb.AppendLine("To add one: add_mcp_server with a name and the command line (e.g. 'uvx mcp-server-fetch' or 'npx -y @modelcontextprotocol/server-filesystem <folder>').");
+        return sb.ToString().Trim();
+    }
+
+    private static async Task<string> AddMcpServerAsync(JsonObject args, CancellationToken cancel)
+    {
+        var name = Tool.Arg(args, "name").Trim();
+        var commandLine = Tool.Arg(args, "command").Trim();
+        if (name.Length == 0 || commandLine.Length == 0) return "[error] name and command are required";
+        var (command, parsed) = Mcp.McpServerConfig.ParseCommandLine(commandLine);
+        var config = new Mcp.McpServerConfig { Name = name, Command = command, Args = parsed, Enabled = true };
+        try
+        {
+            var (info, tools) = await Mcp.McpManager.TestAsync(config, cancel);
+            var s = AppSettings.Current;
+            s.McpServers.RemoveAll(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            s.McpServers.Add(config);
+            s.Save();
+            await Mcp.McpManager.EnsureAsync(s, cancel);
+            return tools.Count == 0
+                ? $"MCP server '{name}' connected ({info.Name} {info.Version}) but it offers no tools."
+                : $"MCP server '{name}' connected ({info.Name} {info.Version}). New tools: " + string.Join(", ", tools.Select(t => Mcp.McpManager.ToolName(name, t.Name)));
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            return "[error] could not start the MCP server: " + ex.Message + ". Check the command (npx needs Node.js; uvx needs uv).";
+        }
+    }
+
+    private static string InstallModelText(string query)
+    {
+        query = query.Trim();
+        if (query.Length == 0) return "[error] model is required";
+        var catalog = Engine.ModelCatalog.All.FirstOrDefault(m => m.Name.Equals(query, StringComparison.OrdinalIgnoreCase) || m.Repo.Equals(query, StringComparison.OrdinalIgnoreCase));
+        if (catalog is null && !query.Contains('/'))
+            return "[error] unknown model. Give a catalog name (Qwen3.5 4B, Gemma 4 12B, Phi-4 Mini…) or a Hugging Face GGUF repo id like unsloth/Qwen3.5-4B-GGUF.";
+        if (Engine.ModelDownloads.IsDownloading(catalog?.Repo ?? query))
+            return "That model is already downloading.";
+        var model = catalog ?? new Engine.CatalogModel(Engine.HuggingFace.NameFor(query), query, 0, "?", "CatalogHf");
+        Engine.ModelDownloads.Start(model);
+        var size = model.ApproxBytes > 0 ? $" (about {model.ApproxBytes / (1024 * 1024 * 1024.0):0.#} GB)" : string.Empty;
+        return $"Downloading {model.Name}{size} in the background. It will appear in the installed AIs when done; the user can switch to it then.";
+    }
+
+    /// <summary>
+    /// Herramientas para que la propia IA amplíe Lucia: añadir un servidor MCP (gana sus herramientas) o
+    /// instalar un modelo. Son del recurso <see cref="Resource.Mcp"/>, así que el usuario las aprueba igual.
+    /// </summary>
+    public static readonly Tool[] Manage =
+    [
+        new(ListMcpServers, Resource.Mcp,
+            "List the MCP servers configured in Lucia and the tools each one gives, plus how to add more. Use it before add_mcp_server to avoid duplicates.",
+            Params(),
+            (_, _) => Task.FromResult(McpServersText())),
+        new(AddMcpServer, Resource.Mcp,
+            "Add an MCP (Model Context Protocol) server to Lucia and connect to it, so you gain its tools for the rest of the conversation. MCP servers extend Lucia with new abilities (files, databases, web, APIs). Most install themselves the first time with npx or uvx.",
+            Params(("name", "A short name for the server, e.g. filesystem."), ("command", "The command line that runs the server, e.g. 'npx -y @modelcontextprotocol/server-filesystem C:/Users/me' or 'uvx mcp-server-fetch'.")),
+            AddMcpServerAsync),
+        new(InstallModel, Resource.Mcp,
+            "Download and install an AI model so it is available in Lucia. Give a catalog name (Qwen3.5 4B, Gemma 4 12B…) or a Hugging Face GGUF repository id (e.g. unsloth/Qwen3.5-4B-GGUF). It downloads in the background; tell the user it may take a while and how big it is.",
+            Params(("model", "Catalog name or Hugging Face repo id.")),
+            (a, _) => Task.FromResult(InstallModelText(Tool.Arg(a, "model")))),
+    ];
+
+    public static Tool? Find(string name) => name == SystemInfo ? Info
+        : All.FirstOrDefault(t => t.Name == name) ?? Free.FirstOrDefault(t => t.Name == name)
+          ?? Manage.FirstOrDefault(t => t.Name == name) ?? Mcp.McpManager.Find(name);
 
     /// <summary>Modo preguntas: las mismas herramientas que el agente (con sus permisos); cambia la consigna, no el alcance.</summary>
     public static JsonArray QuestionDefinitions(AppSettings settings) => Definitions(settings);
@@ -209,7 +300,10 @@ public static class ToolBox
 
     /// <summary>Modo agente: todo lo que no este denegado en Ajustes, mas las libres.</summary>
     public static JsonArray Definitions(AppSettings settings)
-        => Definitions(settings, All.Where(t => settings.PermissionFor(t.Resource) != Permission.Deny).Append(Info).Concat(FreeTools(settings)));
+        => Definitions(settings, All.Where(t => settings.PermissionFor(t.Resource) != Permission.Deny).Append(Info).Concat(FreeTools(settings)).Concat(ManageTools(settings)).Concat(Mcp.McpManager.Tools(settings)));
+
+    /// <summary>Las herramientas con las que la IA amplía Lucia, salvo que el recurso MCP esté denegado.</summary>
+    private static IEnumerable<Tool> ManageTools(AppSettings settings) => settings.PermissionFor(Resource.Mcp) == Permission.Deny ? [] : Manage;
 
     private static JsonArray Definitions(AppSettings settings, IEnumerable<Tool> tools)
     {
