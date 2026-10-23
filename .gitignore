@@ -5,3 +5,6 @@ obj/
 vscode/*.vsix
 vscode/node_modules/
 cov/
+
+# Secretos OAuth locales (reutilizan los de RC Manager; nunca al repositorio)
+oauth.local.props

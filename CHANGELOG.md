@@ -1,5 +1,33 @@
 # Changelog — sOC Lucia
 
+## 2026.10.23.6 — Cuenta y sincronización en la nube / Account & cloud sync
+
+**Español**
+
+- **Entra con Google o Microsoft** (Ajustes › Más opciones › Cuenta/Sincronización) con el navegador del
+  sistema (OAuth 2.0 + PKCE, vuelta a `127.0.0.1`). Reutiliza el registro de sOC Remote Connections
+  Manager: no hay que registrar nada nuevo.
+- **Guarda la configuración y la lista de modelos en TU PROPIA nube** (la carpeta privada de la app en
+  tu Google Drive —`appDataFolder`— o tu OneDrive —carpeta de la app—) y **restaura en otro PC**. No se
+  suben los pesos de las IA, solo la **lista**: al restaurar, Lucia ofrece **descargar las que falten**.
+- **Privacidad y claves.** Es opcional y va claramente avisado (los datos salen a tu cuenta externa).
+  Las **claves de API no salen** salvo que marques «incluir las claves», y entonces el perfil entero se
+  **cifra con una frase tuya** (AES-256-GCM). Los tokens de sesión se guardan cifrados con DPAPI en este PC.
+- Banco de pruebas: **568 pruebas**.
+
+**English**
+
+- **Sign in with Google or Microsoft** (Settings › More options › Account/Sync) via the system browser
+  (OAuth 2.0 + PKCE, loopback to `127.0.0.1`). Reuses sOC Remote Connections Manager's registration — no
+  new registration needed.
+- **Save the configuration and the model list to YOUR OWN cloud** (the app's private folder in your
+  Google Drive `appDataFolder` or your OneDrive app folder) and **restore on another PC**. The AI
+  weights are not uploaded, only the **list**: on restore Lucia offers to **download the missing ones**.
+- **Privacy and keys.** It is opt-in and clearly labeled (data goes to your external account). **API
+  keys are not uploaded** unless you tick "include the keys", and then the whole profile is **encrypted
+  with your passphrase** (AES-256-GCM). Session tokens are DPAPI-encrypted on this PC.
+- Test bench: **568 tests**.
+
 ## 2026.10.23.5 — Ajustes por pestañas / Tabbed settings
 
 **Español**

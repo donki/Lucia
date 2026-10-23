@@ -1,0 +1,43 @@
+<Project>
+  <!--
+    Identificadores de los clientes OAuth (Google Drive y OneDrive) para la cuenta/sincronización.
+    REUTILIZAN el registro de sOC Remote Connections Manager (la misma app de Entra y el mismo cliente
+    de escritorio de Google): los valores reales viven en el oauth.local.props de RC Manager (ignorado
+    por git) o en variables de entorno, nunca en este repositorio. De ahí se genera una clase de
+    constantes en obj/. Sin valores, la compilación no se rompe: la sincronización en la nube
+    sencillamente no se ofrece en los ajustes.
+  -->
+  <Import Project="$(MSBuildThisFileDirectory)..\RCManager\oauth.local.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\RCManager\oauth.local.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)oauth.local.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)oauth.local.props')" />
+
+  <PropertyGroup>
+    <LuciaMicrosoftClientId Condition="'$(LuciaMicrosoftClientId)' == ''">$(RcMicrosoftClientId)</LuciaMicrosoftClientId>
+    <LuciaMicrosoftClientId Condition="'$(LuciaMicrosoftClientId)' == ''">$(RC_MS_CLIENT_ID)</LuciaMicrosoftClientId>
+    <LuciaGoogleClientId Condition="'$(LuciaGoogleClientId)' == ''">$(RcGoogleClientId)</LuciaGoogleClientId>
+    <LuciaGoogleClientId Condition="'$(LuciaGoogleClientId)' == ''">$(RC_GOOGLE_CLIENT_ID)</LuciaGoogleClientId>
+    <LuciaGoogleClientSecret Condition="'$(LuciaGoogleClientSecret)' == ''">$(RcGoogleClientSecret)</LuciaGoogleClientSecret>
+    <LuciaGoogleClientSecret Condition="'$(LuciaGoogleClientSecret)' == ''">$(RC_GOOGLE_CLIENT_SECRET)</LuciaGoogleClientSecret>
+  </PropertyGroup>
+
+  <!-- Se rehace siempre (WriteOnlyWhenDifferent): cambiar un identificador no invalidaba nada con
+       Inputs/Outputs y se seguía compilando con el anterior (lección de Task Manager / RC Manager). -->
+  <Target Name="GenerateOAuthSecrets" BeforeTargets="BeforeCompile;CoreCompile">
+    <ItemGroup>
+      <LuciaOAuthLine Include="// Generado por oauth.props. No editar ni subir al repositorio." />
+      <LuciaOAuthLine Include="namespace SocLucia.Services%3B" />
+      <LuciaOAuthLine Include="public static class OAuthSecrets" />
+      <LuciaOAuthLine Include="{" />
+      <LuciaOAuthLine Include="    public const string MicrosoftClientId = &quot;$(LuciaMicrosoftClientId)&quot;%3B" />
+      <LuciaOAuthLine Include="    public const string GoogleClientId = &quot;$(LuciaGoogleClientId)&quot;%3B" />
+      <LuciaOAuthLine Include="    public const string GoogleClientSecret = &quot;$(LuciaGoogleClientSecret)&quot;%3B" />
+      <LuciaOAuthLine Include="}" />
+    </ItemGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <WriteLinesToFile File="$(IntermediateOutputPath)OAuthSecrets.g.cs" Lines="@(LuciaOAuthLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)OAuthSecrets.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

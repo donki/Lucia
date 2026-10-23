@@ -111,6 +111,39 @@ public sealed class AppSettings
     /// <summary>El usuario ha aceptado usar modelos en línea (el texto sale del dispositivo hacia un servicio externo). Apagado por defecto.</summary>
     public bool RemoteOptIn { get; set; }
 
+    // ---- Cuenta / sincronización en la nube del usuario (Google Drive u OneDrive) ----
+
+    /// <summary>Dónde se guarda el perfil en la nube (Local = no se sincroniza).</summary>
+    public CloudStorageMode CloudStorage { get; set; } = CloudStorageMode.Local;
+
+    /// <summary>Tokens OAuth serializados y protegidos con DPAPI (ligados a este PC).</summary>
+    public string CloudTokensProtected { get; set; } = string.Empty;
+
+    /// <summary>Correo de la cuenta con la que se entró (solo para enseñarlo).</summary>
+    public string CloudAccountEmail { get; set; } = string.Empty;
+
+    /// <summary>Frase de cifrado del perfil, protegida con DPAPI, para no pedirla en cada guardado (opcional).</summary>
+    public string CloudPassphraseProtected { get; set; } = string.Empty;
+
+    /// <summary>Incluir las claves de API (cifradas con la frase) al guardar el perfil. Apagado por defecto.</summary>
+    public bool CloudIncludeKeys { get; set; }
+
+    /// <summary>Los tokens OAuth, descifrados; null si no hay sesión.</summary>
+    [JsonIgnore]
+    public OAuthTokens? CloudTokens
+    {
+        get { var json = Secrets.Unprotect(CloudTokensProtected); return json.Length == 0 ? null : JsonSerializer.Deserialize<OAuthTokens>(json); }
+        set => CloudTokensProtected = value is null ? string.Empty : Secrets.Protect(JsonSerializer.Serialize(value));
+    }
+
+    /// <summary>La frase de cifrado del perfil, descifrada.</summary>
+    [JsonIgnore]
+    public string CloudPassphrase
+    {
+        get => Secrets.Unprotect(CloudPassphraseProtected);
+        set => CloudPassphraseProtected = string.IsNullOrEmpty(value) ? string.Empty : Secrets.Protect(value);
+    }
+
     /// <summary>IA que no han podido arrancar en este PC (ruta → por que, en claro). Se borra al arrancar bien.</summary>
     public Dictionary<string, string> BrokenModels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 

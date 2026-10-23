@@ -24,7 +24,7 @@ public partial class SettingsWindow : Window
         Loc.LanguageChanged += ApplyTexts;
         ModelDownloads.Changed += PaintDownload;
         ModelDownloads.Finished += OnDownloadFinished;
-        Closed += (_, _) => { Loc.LanguageChanged -= ApplyTexts; ModelDownloads.Changed -= PaintDownload; ModelDownloads.Finished -= OnDownloadFinished; _search?.Cancel(); };
+        Closed += (_, _) => { Loc.LanguageChanged -= ApplyTexts; ModelDownloads.Changed -= PaintDownload; ModelDownloads.Finished -= OnDownloadFinished; _search?.Cancel(); _cloud?.Dispose(); };
         ApplyTexts();
         PaintDownload();
     }
@@ -147,7 +147,141 @@ public partial class SettingsWindow : Window
         LogsHint.Text = Loc.Get("LogsHint");
         CopyLogsButton.Content = IconLabel("\uE8C8", Loc.Get("CopyLogs"));
         OpenLogsFolderButton.Content = IconLabel("\uE838", Loc.Get("OpenLogsFolder"));
+        PaintAccount();
         PaintTabs();
+    }
+
+    // ------------------------------------------------------------------ cuenta / sincronizaci\u00F3n en la nube
+
+    private CloudSync? _cloud;
+    private CloudSync Cloud => _cloud ??= new CloudSync(AppSettings.Current);
+    private System.Threading.CancellationTokenSource? _cloudCancel;
+    private IReadOnlyList<CloudModelEntry> _missingModels = [];
+
+    private void PaintAccount()
+    {
+        var s = AppSettings.Current;
+        AccountTitle.Text = Loc.Get("AccountTitle");
+        AccountHint.Text = Loc.Get("AccountHint");
+        var signedIn = s.CloudStorage != CloudStorageMode.Local;
+        AccountStatus.Text = signedIn
+            ? Loc.Format("AccountSignedIn", s.CloudAccountEmail, s.CloudStorage == CloudStorageMode.GoogleDrive ? "Google Drive" : "OneDrive")
+            : Loc.Get("AccountNotSignedIn");
+        GoogleButton.Content = IconLabel("\uE774", Loc.Get("AccountGoogle"));
+        MicrosoftButton.Content = IconLabel("\uE774", Loc.Get("AccountMicrosoft"));
+        GoogleButton.IsEnabled = CloudSync.IsAvailable(CloudStorageMode.GoogleDrive);
+        MicrosoftButton.IsEnabled = CloudSync.IsAvailable(CloudStorageMode.OneDrive);
+        SignOutButton.Content = IconLabel("\uE7E8", Loc.Get("AccountSignOut"));
+        SignOutButton.Visibility = signedIn ? Visibility.Visible : Visibility.Collapsed;
+        AccountPassphraseLabel.Text = Loc.Get("AccountPassphrase");
+        AccountPassphraseBox.Password = s.CloudPassphrase;
+        AccountIncludeKeys.Content = Loc.Get("AccountIncludeKeys");
+        AccountIncludeKeys.IsChecked = s.CloudIncludeKeys;
+        CloudSaveButton.Content = IconLabel("\uE898", Loc.Get("AccountSave"));
+        CloudRestoreButton.Content = IconLabel("\uE896", Loc.Get("AccountRestore"));
+        CloudSaveButton.IsEnabled = CloudRestoreButton.IsEnabled = signedIn;
+        DownloadMissingButton.Content = IconLabel("\uE896", Loc.Get("AccountDownloadMissing"));
+    }
+
+    private void OnPassphraseChanged(object sender, RoutedEventArgs e)
+    {
+        AppSettings.Current.CloudPassphrase = AccountPassphraseBox.Password;
+        AppSettings.Current.Save();
+    }
+
+    private void OnIncludeKeysChanged(object sender, RoutedEventArgs e)
+    {
+        AppSettings.Current.CloudIncludeKeys = AccountIncludeKeys.IsChecked == true;
+        AppSettings.Current.Save();
+    }
+
+    private async void OnSignInGoogle(object sender, RoutedEventArgs e) => await SignInAsync(CloudStorageMode.GoogleDrive);
+    private async void OnSignInMicrosoft(object sender, RoutedEventArgs e) => await SignInAsync(CloudStorageMode.OneDrive);
+
+    private async Task SignInAsync(CloudStorageMode mode)
+    {
+        CloudStatus.Visibility = Visibility.Collapsed;
+        CloudBusy.Start(Loc.Get("AccountSigningIn"));
+        _cloudCancel?.Cancel();
+        _cloudCancel = new System.Threading.CancellationTokenSource();
+        try
+        {
+            var email = await Cloud.SignInAsync(mode, _cloudCancel.Token);
+            CloudSay(Loc.Format("AccountSignedIn", email, mode == CloudStorageMode.GoogleDrive ? "Google Drive" : "OneDrive"));
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { CloudSay(Loc.Format("AccountFailed", ex.Message)); }
+        finally { CloudBusy.Stop(); PaintAccount(); }
+    }
+
+    private void OnSignOut(object sender, RoutedEventArgs e)
+    {
+        Cloud.SignOut();
+        PaintAccount();
+    }
+
+    private async void OnCloudSave(object sender, RoutedEventArgs e)
+    {
+        var s = AppSettings.Current;
+        var includeKeys = AccountIncludeKeys.IsChecked == true;
+        if (includeKeys && AccountPassphraseBox.Password.Length == 0) { CloudSay(Loc.Get("CloudNeedKeysPassphrase")); return; }
+        CloudBusy.Start(Loc.Get("AccountSaving"));
+        _cloudCancel?.Cancel();
+        _cloudCancel = new System.Threading.CancellationTokenSource();
+        try
+        {
+            await Cloud.SaveAsync(includeKeys, AccountPassphraseBox.Password, _cloudCancel.Token);
+            CloudSay(Loc.Get("AccountSaved"));
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { CloudSay(Loc.Format("AccountFailed", ex.Message)); }
+        finally { CloudBusy.Stop(); }
+    }
+
+    private async void OnCloudRestore(object sender, RoutedEventArgs e)
+    {
+        CloudBusy.Start(Loc.Get("AccountRestoring"));
+        _cloudCancel?.Cancel();
+        _cloudCancel = new System.Threading.CancellationTokenSource();
+        MissingModelsList.Children.Clear();
+        DownloadMissingButton.Visibility = Visibility.Collapsed;
+        try
+        {
+            var result = await Cloud.RestoreAsync(AccountPassphraseBox.Password, _cloudCancel.Token);
+            switch (result.Kind)
+            {
+                case "none": CloudSay(Loc.Get("AccountRestoreNone")); break;
+                case "needs_passphrase": CloudSay(Loc.Get("CloudNeedKeysPassphrase")); break;
+                case "wrong_passphrase": CloudSay(Loc.Get("AccountWrongPassphrase")); break;
+                case "ok":
+                    _missingModels = result.Missing ?? [];
+                    CloudSay(Loc.Format("AccountRestored", (result.Profile?.Models.Count ?? 0), _missingModels.Count));
+                    foreach (var m in _missingModels)
+                        MissingModelsList.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = $"\u00B7 {m.Name} ({m.Repo})" });
+                    DownloadMissingButton.Visibility = _missingModels.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    Loc.Use(AppSettings.Current.Language ?? Loc.Language);
+                    ApplyTexts();
+                    (Owner as MainWindow)?.ModelChanged();
+                    break;
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { CloudSay(Loc.Format("AccountFailed", ex.Message)); }
+        finally { CloudBusy.Stop(); }
+    }
+
+    private void OnDownloadMissing(object sender, RoutedEventArgs e)
+    {
+        var n = CloudSync.DownloadMissing(_missingModels);
+        CloudSay(Loc.Format("AccountDownloading", n));
+        DownloadMissingButton.Visibility = Visibility.Collapsed;
+        (Owner as MainWindow)?.ModelChanged();
+    }
+
+    private void CloudSay(string text)
+    {
+        CloudStatus.Text = text;
+        CloudStatus.Visibility = Visibility.Visible;
     }
 
     // ------------------------------------------------------------------ pesta\u00F1as y buscador de ajustes
@@ -182,6 +316,7 @@ public partial class SettingsWindow : Window
         Add(TasksTitle, TabConfig, CardTasks, "tarea programada schedule");
         Add(MemoryTitle, TabConfig, CardMemory, "memoria memory");
         Add(WindowsTitle, TabConfig, CardWindows, "bandeja arranque tray startup");
+        Add(AccountTitle, TabMore, CardAccount, "cuenta sincronizacion sync nube cloud google microsoft account");
         Add(LimitsTitle, TabMore, CardContext, "contexto context tokens respuesta");
         Add(WorkTitle, TabMore, CardWork, "permisos permissions agente trabajo");
         Add(MlflowTitle, TabMore, MlflowCard, "mlflow trazas");

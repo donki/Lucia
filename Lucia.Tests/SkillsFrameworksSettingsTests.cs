@@ -30,6 +30,8 @@ public class SkillsFrameworksSettingsTests : UiTest
                 var tabs = Ui.Find<System.Windows.Controls.TabControl>(s, "Tabs");
                 Assert.Equal(7, tabs.Items.Count);
                 Assert.Equal(Loc.Get("TabFrameworks"), Ui.Find<System.Windows.Controls.TabItem>(s, "TabFrameworks").Header);
+                // Cuenta/Sincronización vive en «Más opciones».
+                Assert.Equal(Loc.Get("AccountTitle"), Ui.Find<TextBlock>(s, "AccountTitle").Text);
 
                 // El buscador salta a la pestaña del ajuste: «mcp» → Frameworks.
                 Ui.Find<TextBox>(s, "SettingsSearchBox").Text = "mcp";

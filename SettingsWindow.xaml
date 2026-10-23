@@ -336,6 +336,31 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="0,8,10,0">
 
+                        <!-- Cuenta / sincronización: entrar con Google o Microsoft y guardar/restaurar el perfil en su nube -->
+                        <Border x:Name="CardAccount" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="AccountTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="AccountHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <TextBlock x:Name="AccountStatus" Style="{StaticResource BodyText}" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                <WrapPanel>
+                                    <Button x:Name="GoogleButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnSignInGoogle" />
+                                    <Button x:Name="MicrosoftButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnSignInMicrosoft" />
+                                    <Button x:Name="SignOutButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnSignOut" />
+                                </WrapPanel>
+                                <TextBlock x:Name="AccountPassphraseLabel" Style="{StaticResource FieldLabel}" Margin="0,8,0,4" />
+                                <c:RevealPasswordBox x:Name="AccountPassphraseBox" Left="OnPassphraseChanged" />
+                                <CheckBox x:Name="AccountIncludeKeys" Style="{StaticResource Check}" Margin="0,8,0,0" Click="OnIncludeKeysChanged" />
+                                <WrapPanel Margin="0,10,0,0">
+                                    <Button x:Name="CloudSaveButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnCloudSave" />
+                                    <Button x:Name="CloudRestoreButton" Style="{StaticResource OutlineButton}" Margin="0,0,8,8" Click="OnCloudRestore" />
+                                </WrapPanel>
+                                <c:BusyIndicator x:Name="CloudBusy" />
+                                <TextBlock x:Name="CloudStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                                <StackPanel x:Name="MissingModelsList" Margin="0,6,0,0" />
+                                <Button x:Name="DownloadMissingButton" Style="{StaticResource OutlineButton}" HorizontalAlignment="Left" Margin="0,6,0,0" Click="OnDownloadMissing" Visibility="Collapsed" />
+                            </StackPanel>
+                        </Border>
+
                         <!-- Respuestas y contexto: tokens por respuesta y memoria de la conversacion -->
                         <Border x:Name="CardContext" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
                             <StackPanel>

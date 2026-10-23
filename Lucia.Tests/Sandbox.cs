@@ -63,6 +63,11 @@ internal static class Sandbox
         s.RemoteProviderKeys.Clear();
         s.ProviderAccountIds.Clear();
         s.RemoteOptIn = false;
+        s.CloudStorage = CloudStorageMode.Local;
+        s.CloudTokensProtected = string.Empty;
+        s.CloudPassphraseProtected = string.Empty;
+        s.CloudAccountEmail = string.Empty;
+        s.CloudIncludeKeys = false;
         SocLucia.Mcp.McpManager.DisconnectAll();
         try { if (Directory.Exists(SkillStore.Folder)) Directory.Delete(SkillStore.Folder, recursive: true); } catch (Exception) { }
         s.Pending = null;   // una descarga a medias de otra prueba no se retoma en esta

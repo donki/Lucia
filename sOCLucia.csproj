@@ -9,9 +9,9 @@
     <RootNamespace>SocLucia</RootNamespace>
     <AssemblyName>sOCLucia</AssemblyName>
     <ApplicationTitle>sOC Lucia</ApplicationTitle>
-    <Version>2026.10.23.5</Version>
-    <AssemblyVersion>2026.10.23.5</AssemblyVersion>
-    <FileVersion>2026.10.23.5</FileVersion>
+    <Version>2026.10.23.6</Version>
+    <AssemblyVersion>2026.10.23.6</AssemblyVersion>
+    <FileVersion>2026.10.23.6</FileVersion>
     <Product>sOC Lucia</Product>
     <Company>Socratic</Company>
     <Copyright>Copyright © 2026 Socratic</Copyright>
@@ -44,5 +44,8 @@
   <ItemGroup>
     <PackageReference Include="PdfPig" Version="0.1.16" />
   </ItemGroup>
+
+  <!-- Identificadores OAuth (reutilizan los de RC Manager) → genera SocLucia.Services.OAuthSecrets. -->
+  <Import Project="oauth.props" />
 
 </Project>
