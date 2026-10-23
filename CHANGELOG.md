@@ -1,5 +1,31 @@
 # Changelog — sOC Lucia
 
+## 2026.10.23.7 — Multi-modelo / Multi-model
+
+**Español**
+
+- **Varios modelos cooperando** (Ajustes › Modelos en línea › Multi-modelo). Eliges varios modelos
+  —locales y/o en línea— y una **estrategia**, y responden en equipo hacia el objetivo:
+  - **En cadena**: uno redacta y cada siguiente lo mejora/critica.
+  - **Debate**: uno propone, otro revisa y el primero corrige con la crítica.
+  - **El mejor de varios**: todos responden y un juez elige y funde lo mejor.
+  - **Reserva**: se prueba uno tras otro; el siguiente solo si el anterior falla o está al límite.
+  - Cada paso puede ir a cualquier modelo local o en línea (mismo transporte). En este modo la
+    respuesta se hace entre todos y no se usan herramientas. Apagado por defecto.
+- Banco de pruebas: **575 pruebas**.
+
+**English**
+
+- **Several models cooperating** (Settings › Online models › Multi-model). Pick several models —local
+  and/or online— and a **strategy**, and they answer as a team toward the goal:
+  - **Pipeline**: one drafts, each next one refines/critiques it.
+  - **Debate**: one proposes, another reviews, the first corrects with the critique.
+  - **Best-of**: all answer and a judge picks and merges the best.
+  - **Fallback**: try one after another; the next only if the previous fails or hits its limit.
+  - Each step can go to any local or online model (same transport). In this mode the answer is made
+    cooperatively and tools are not used. Off by default.
+- Test bench: **575 tests**.
+
 ## 2026.10.23.6 — Cuenta y sincronización en la nube / Account & cloud sync
 
 **Español**

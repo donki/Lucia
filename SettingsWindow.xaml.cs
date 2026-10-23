@@ -73,6 +73,7 @@ public partial class SettingsWindow : Window
         PaintFilters();
         PaintTeach();
         PaintOnline();
+        PaintMulti();
         PaintMcp();
         PaintSkills();
         PaintFrameworks();
@@ -306,6 +307,7 @@ public partial class SettingsWindow : Window
         Add(ModelTitle, TabLocal, CardLocalModels, "modelo local gguf llama");
         Add(TeachTitle, TabLocal, TeachCard, "fine-tuning entrenar");
         Add(OnlineTitle, TabOnline, OnlineCard, "api openai groq mistral clave key");
+        Add(MultiTitle, TabOnline, MultiCard, "multi modelo combinar pipeline debate votar reserva");
         Add(FrameworksTitle, TabFrameworks, FrameworksCard, "rea node python uv");
         Add(McpTitle, TabFrameworks, McpCard, "mcp servidor server");
         Add(SkillsTitle, TabSkills, SkillsCard, "habilidad skill");
@@ -1001,6 +1003,99 @@ public partial class SettingsWindow : Window
         if (!s.RemoteOptIn && s.ActiveRemoteModel is not null) { s.ActiveRemoteModel = null; (Owner as MainWindow)?.ModelChanged(); }
         s.Save();
         PaintOnline();
+    }
+
+    // ------------------------------------------------------------------ multi-modelo
+
+    private bool _loadingMulti;
+    private readonly List<MultiModelMember> _multiCandidates = new();
+
+    private static readonly MultiModelStrategy[] MultiStrategies =
+        [MultiModelStrategy.Pipeline, MultiModelStrategy.Debate, MultiModelStrategy.BestOf, MultiModelStrategy.Fallback];
+
+    private static string MultiStrategyText(MultiModelStrategy s) => s switch
+    {
+        MultiModelStrategy.Pipeline => Loc.Get("MultiStrategyPipeline"),
+        MultiModelStrategy.Debate => Loc.Get("MultiStrategyDebate"),
+        MultiModelStrategy.BestOf => Loc.Get("MultiStrategyBestOf"),
+        _ => Loc.Get("MultiStrategyFallback"),
+    };
+
+    private static bool SameMember(MultiModelMember a, MultiModelMember b) =>
+        a.Remote == b.Remote && (!a.Remote || (string.Equals(a.ProviderId, b.ProviderId, StringComparison.OrdinalIgnoreCase) && a.ModelId == b.ModelId));
+
+    private void PaintMulti()
+    {
+        var s = AppSettings.Current;
+        _loadingMulti = true;
+        MultiTitle.Text = Loc.Get("MultiTitle");
+        MultiHint.Text = Loc.Get("MultiHint");
+        MultiEnable.Content = Loc.Get("MultiEnable");
+        MultiEnable.IsChecked = s.MultiModelEnabled;
+        MultiStrategyLabel.Text = Loc.Get("MultiStrategyLabel");
+        MultiMembersLabel.Text = Loc.Get("MultiMembersLabel");
+        MultiAddButton.ToolTip = Loc.Get("MultiAdd");
+
+        MultiStrategyCombo.ItemsSource = MultiStrategies.Select(MultiStrategyText).ToList();
+        MultiStrategyCombo.SelectedIndex = Array.IndexOf(MultiStrategies, s.MultiModelStrategy);
+
+        MultiMembersList.Children.Clear();
+        if (s.MultiModelMembers.Count == 0)
+            MultiMembersList.Children.Add(new TextBlock { Style = (Style)FindResource("HintText"), Text = Loc.Get("MultiNoMembers") });
+        foreach (var member in s.MultiModelMembers.ToList())
+            MultiMembersList.Children.Add(MultiMemberRow(member));
+
+        // Candidatos para añadir: el modelo local (si hay) y cada modelo en línea que no sea ya miembro.
+        _multiCandidates.Clear();
+        if (s.HasModel) _multiCandidates.Add(new MultiModelMember { Remote = false, Name = Loc.Get("MultiLocal") });
+        foreach (var r in s.RemoteModels)
+            _multiCandidates.Add(new MultiModelMember { Remote = true, ProviderId = r.ProviderId, ModelId = r.ModelId, Name = r.Display });
+        _multiCandidates.RemoveAll(c => s.MultiModelMembers.Any(m => SameMember(m, c)));
+        MultiAddCombo.ItemsSource = _multiCandidates.Select(c => c.Display).ToList();
+        if (_multiCandidates.Count > 0) MultiAddCombo.SelectedIndex = 0;
+        MultiAddButton.IsEnabled = _multiCandidates.Count > 0;
+        _loadingMulti = false;
+    }
+
+    private UIElement MultiMemberRow(MultiModelMember member)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 3, 0, 3) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(new TextBlock { Style = (Style)FindResource("BodyText"), Text = member.Display, VerticalAlignment = VerticalAlignment.Center });
+        var delete = new Button { Style = (Style)FindResource("DangerIconButton"), Content = "", ToolTip = Loc.Get("MultiRemove"), VerticalAlignment = VerticalAlignment.Center };
+        delete.Click += (_, _) =>
+        {
+            AppSettings.Current.MultiModelMembers.RemoveAll(m => SameMember(m, member));
+            AppSettings.Current.Save();
+            PaintMulti();
+        };
+        Grid.SetColumn(delete, 1);
+        grid.Children.Add(delete);
+        return grid;
+    }
+
+    private void OnMultiEnableChanged(object sender, RoutedEventArgs e)
+    {
+        AppSettings.Current.MultiModelEnabled = MultiEnable.IsChecked == true;
+        AppSettings.Current.Save();
+        (Owner as MainWindow)?.ModelChanged();
+    }
+
+    private void OnMultiStrategyChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_loadingMulti || MultiStrategyCombo.SelectedIndex < 0) return;
+        AppSettings.Current.MultiModelStrategy = MultiStrategies[MultiStrategyCombo.SelectedIndex];
+        AppSettings.Current.Save();
+    }
+
+    private void OnAddMultiMember(object sender, RoutedEventArgs e)
+    {
+        var i = MultiAddCombo.SelectedIndex;
+        if (i < 0 || i >= _multiCandidates.Count) return;
+        AppSettings.Current.MultiModelMembers.Add(_multiCandidates[i]);
+        AppSettings.Current.Save();
+        PaintMulti();
     }
 
     private void OnTeach(object sender, RoutedEventArgs e)

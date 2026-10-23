@@ -25,6 +25,9 @@ public class SkillsFrameworksSettingsTests : UiTest
                 // Modelos en línea: la tarjeta se pinta y lista los proveedores (Groq entre ellos).
                 Assert.Equal(Loc.Get("OnlineTitle"), Ui.Find<TextBlock>(s, "OnlineTitle").Text);
                 Assert.Contains(Ui.All<TextBlock>(Ui.Find<StackPanel>(s, "OnlineProvidersList")), t => t.Text.Contains("Groq"));
+                // Multi-modelo: su tarjeta y las 4 estrategias en el desplegable.
+                Assert.Equal(Loc.Get("MultiTitle"), Ui.Find<TextBlock>(s, "MultiTitle").Text);
+                Assert.Equal(4, Ui.Find<System.Windows.Controls.ComboBox>(s, "MultiStrategyCombo").Items.Count);
 
                 // Ajustes por pestañas: las 7 con su texto localizado.
                 var tabs = Ui.Find<System.Windows.Controls.TabControl>(s, "Tabs");

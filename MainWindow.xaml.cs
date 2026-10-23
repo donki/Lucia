@@ -129,6 +129,36 @@ public partial class MainWindow : Window
             ? Services.RemoteModels.EndpointFor(remote)
             : await EngineReadyAsync(cancel);
 
+    /// <summary>Corre el modo multi-modelo y deja la respuesta final en <paramref name="live"/> (como haría el stream normal).</summary>
+    private Task RunMultiModelAsync(AppSettings settings, IReadOnlyList<ChatMessage> messages, PendingAnswer live, CancellationToken cancel)
+        => Task.Run(async () =>
+        {
+            var result = await MultiModel.RunAsync(settings.MultiModelMembers, settings.MultiModelStrategy, messages, AskMemberAsync, cancel);
+            live.Add(new ChatDelta(result.Text, null));
+            live.Add(new ChatDelta(null, null, null, "stop", null));
+        }, cancel);
+
+    /// <summary>Pregunta a un miembro del conjunto: su destino es el proveedor en línea o el motor local.</summary>
+    private async Task<string> AskMemberAsync(MultiModelMember member, IReadOnlyList<ChatMessage> messages, CancellationToken cancel)
+    {
+        var settings = AppSettings.Current;
+        Endpoint endpoint = member.Remote && Services.RemoteModels.Provider(member.ProviderId) is not null
+            ? Services.RemoteModels.EndpointFor(new Services.RemoteModelRef { ProviderId = member.ProviderId, ModelId = member.ModelId })
+            : await EngineReadyAsync(cancel);
+        var sb = new System.Text.StringBuilder();
+        await foreach (var delta in ChatClient.StreamAsync(endpoint, messages, thinking: false, TokenLimits.Answer(settings), tools: null, cancel))
+            if (delta.Content is { Length: > 0 } c) sb.Append(c);
+        return sb.ToString();
+    }
+
+    private static string MultiStrategyName(MultiModelStrategy strategy) => strategy switch
+    {
+        MultiModelStrategy.Pipeline => Loc.Get("MultiStrategyPipeline"),
+        MultiModelStrategy.Debate => Loc.Get("MultiStrategyDebate"),
+        MultiModelStrategy.BestOf => Loc.Get("MultiStrategyBestOf"),
+        _ => Loc.Get("MultiStrategyFallback"),
+    };
+
     /// <summary>
     /// La direccion del motor, arrancandolo si hace falta, siempre fuera del hilo de la interfaz:
     /// descomprimir el motor, lanzar llama-server, matar el anterior y esperar a que cargue el
@@ -995,11 +1025,17 @@ public partial class MainWindow : Window
                 DiagLog.SetPhase("esperando el primer trozo de la IA");
                 live.Advance(AnswerPhase.Waiting);
                 var llm = _trace?.Llm(round + 1, messages.Count, settings.Thinking);
+                // Modo multi-modelo: varios modelos cooperan (pipeline, debate, best-of, reserva) para dar
+                // la respuesta; en este modo no se usan herramientas. Apagado por defecto: el flujo normal no cambia.
+                var multi = settings.MultiModelEnabled && settings.MultiModelMembers.Count > 0;
                 try
                 {
-                    await FollowAsync(bubble, live, ChatClient.PumpAsync(baseUrl, messages, settings.Thinking, TokenLimits.Answer(settings), tools, live, cancel));
+                    Task pump = multi
+                        ? RunMultiModelAsync(settings, messages, live, cancel)
+                        : ChatClient.PumpAsync(baseUrl, messages, settings.Thinking, TokenLimits.Answer(settings), tools, live, cancel);
+                    await FollowAsync(bubble, live, pump);
                 }
-                catch (ChatTemplateException tplEx) when (tools is { Count: > 0 })
+                catch (ChatTemplateException tplEx) when (!multi && tools is { Count: > 0 })
                 {
                     // El modelo rechazo la conversacion por su plantilla: red de seguridad: se reintenta una vez
                     // sin herramientas (por si son lo que la confunde). Si vuelve a fallar, sube y se avisa en claro.
@@ -1014,6 +1050,9 @@ public partial class MainWindow : Window
                 answer.Reasoning = got.Reasoning?.Trim();
                 calls = got.Calls;
                 finish = got.Finish;
+                if (multi)
+                    Messages.Children.Add(ToolBubble(Resource.Free, Loc.Get("MultiModelBubbleTitle"),
+                        Loc.Format("MultiModelBubble", MultiStrategyName(settings.MultiModelStrategy), string.Join(", ", settings.MultiModelMembers.Select(m => m.Display)))));
                 LogPiece(live, clock);
                 AddToTrace(live);
                 if (llm is not null) _trace!.EndLlm(llm, live.FirstPieceDelay?.TotalMilliseconds, live.Usage, answer.Content, answer.Reasoning?.Length ?? 0, calls?.Count ?? 0, finish, true, null);

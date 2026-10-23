@@ -132,6 +132,23 @@
                                 <TextBlock x:Name="OnlineStatus" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
                             </StackPanel>
                         </Border>
+
+                        <!-- Multi-modelo: varios modelos (locales y/o en línea) cooperan para responder -->
+                        <Border x:Name="MultiCard" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20,16">
+                            <StackPanel>
+                                <TextBlock x:Name="MultiTitle" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
+                                <TextBlock x:Name="MultiHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <CheckBox x:Name="MultiEnable" Style="{StaticResource Check}" Margin="0,0,0,8" Click="OnMultiEnableChanged" />
+                                <TextBlock x:Name="MultiStrategyLabel" Style="{StaticResource FieldLabel}" Margin="0,4,0,4" />
+                                <ComboBox x:Name="MultiStrategyCombo" Style="{StaticResource DeviceCombo}" SelectionChanged="OnMultiStrategyChanged" />
+                                <TextBlock x:Name="MultiMembersLabel" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                                <StackPanel x:Name="MultiMembersList" />
+                                <DockPanel Margin="0,6,0,0">
+                                    <Button x:Name="MultiAddButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" Margin="6,0,0,0" Click="OnAddMultiMember" />
+                                    <ComboBox x:Name="MultiAddCombo" Style="{StaticResource DeviceCombo}" />
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

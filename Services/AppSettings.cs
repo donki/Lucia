@@ -111,6 +111,15 @@ public sealed class AppSettings
     /// <summary>El usuario ha aceptado usar modelos en línea (el texto sale del dispositivo hacia un servicio externo). Apagado por defecto.</summary>
     public bool RemoteOptIn { get; set; }
 
+    /// <summary>Modo multi-modelo: varios modelos cooperan para responder. Apagado por defecto.</summary>
+    public bool MultiModelEnabled { get; set; }
+
+    /// <summary>La estrategia del modo multi-modelo (Pipeline, Debate, BestOf, Fallback).</summary>
+    public Agent.MultiModelStrategy MultiModelStrategy { get; set; } = Agent.MultiModelStrategy.Pipeline;
+
+    /// <summary>Los modelos que participan en el modo multi-modelo (locales y/o en línea).</summary>
+    public List<Agent.MultiModelMember> MultiModelMembers { get; set; } = [];
+
     // ---- Cuenta / sincronización en la nube del usuario (Google Drive u OneDrive) ----
 
     /// <summary>Dónde se guarda el perfil en la nube (Local = no se sincroniza).</summary>
