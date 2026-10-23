@@ -40,6 +40,10 @@ public sealed class ChatThread
     public bool WorkMode { get; set; }
     /// <summary>El usuario quito la confirmacion para esta conversacion.</summary>
     public bool AutoApprove { get; set; }
+    /// <summary>Resumen de los primeros mensajes cuando la conversacion se comprimio para no pasarse del contexto.</summary>
+    public string? Summary { get; set; }
+    /// <summary>Cuantos mensajes del principio cubre <see cref="Summary"/> (no se mandan al modelo tal cual).</summary>
+    public int SummarizedCount { get; set; }
     /// <summary>Recursos (Agent.Resource) que el usuario dejo de confirmar en esta conversacion.</summary>
     public List<string> Approved { get; set; } = [];
     /// <summary>Ejecucion desatendida (tarea programada): las herramientas que piden permiso se rechazan.</summary>

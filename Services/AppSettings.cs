@@ -28,6 +28,9 @@ public sealed class AppSettings
     /// <summary>Que Lucia elija sola el contexto de los limites de la IA (por defecto si). Si no, manda <see cref="ContextTokens"/>.</summary>
     public bool AutoContext { get; set; } = true;
 
+    /// <summary>Al llenarse el contexto, resumir los mensajes antiguos con el propio modelo y seguir (por defecto si).</summary>
+    public bool CompactContext { get; set; } = true;
+
     /// <summary>Longitud maxima de una respuesta, en tokens.</summary>
     public int MaxAnswerTokens { get; set; } = 2048;
 

@@ -260,6 +260,8 @@ public partial class MainWindow : Window
     /// <summary>Abre una conversacion nueva (p. ej. para probar la IA recien enseñada).</summary>
     public void NewConversation() => OnNewChat(this, new RoutedEventArgs());
 
+    internal void OpenThreadForTest(string id) => ShowThread(_threads.FirstOrDefault(t => t.Id == id));
+
     private void OnNewChat(object sender, RoutedEventArgs e)
     {
         _answering?.Cancel();
@@ -333,6 +335,9 @@ public partial class MainWindow : Window
             ContextValueText.Text = Loc.Format("ContextValue", value);
             ContextButtonText.Text = ContextShort(value) + (s.AutoContext ? " " + Loc.Get("ContextAutoShort") : string.Empty);
             ContextButton.ToolTip = Loc.Format("ContextButtonTip", range.Min, range.Max);
+            ContextCompactCheck.Content = Loc.Get("AutoCompact");
+            ContextCompactCheck.IsChecked = s.CompactContext;
+            ContextCompactCheck.ToolTip = Loc.Get("AutoCompactHint");
             ContextPopupHint.Text = (range.Trained is { } tr ? Loc.Format("ContextTrainedShort", tr) : Loc.Get("ContextUnknownModel")) + ". " + Loc.Get("ContextRestart");
         }
         finally { _paintingContext = false; }
@@ -346,6 +351,13 @@ public partial class MainWindow : Window
         s.Save();
         DiagLog.Write("chat", $"contexto automatico: {(s.AutoContext ? "si" : "no")} (en uso al reiniciar: {Engine.TokenLimits.Context(s)})");
         PaintContext();
+    }
+
+    private void OnContextCompact(object sender, RoutedEventArgs e)
+    {
+        if (_paintingContext) return;
+        AppSettings.Current.CompactContext = ContextCompactCheck.IsChecked == true;
+        AppSettings.Current.Save();
     }
 
     private void OnContextSlider(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -941,11 +953,25 @@ public partial class MainWindow : Window
                     context = await Task.Run(() => ToolBox.ContextPrompt(settings, question), cancel);
                     if (docsSpan is not null) _trace!.Documents(docsSpan, context);
                 }
-                // Los ultimos mensajes, siempre con la ultima pregunta dentro: sin ella, la plantilla de algunos
-                // modelos (Qwen3) rechaza la conversacion con un 500. Copia: la conversacion puede crecer mientras.
-                var history = ConversationWindow.Select(thread.Messages);
                 var system = SystemPrompt(settings, thread.WorkMode, context);
-                var messages = await Task.Run(() => MessagesFor(system, history), cancel);
+                // Al llenarse el contexto, se resumen los mensajes antiguos con el propio modelo y se sigue.
+                if (settings.CompactContext)
+                {
+                    var budget = ContextCompactor.Budget(TokenLimits.Context(settings), TokenLimits.Answer(settings), settings.Thinking, ContextCompactor.Tokens(system));
+                    if (await ContextCompactor.CompactAsync(thread, baseUrl, budget, cancel))
+                    {
+                        ThreadStore.Save(thread);
+                        DiagLog.Write("chat", $"contexto comprimido: {thread.SummarizedCount} mensajes resumidos ({ContextCompactor.Tokens(thread.Summary)} tokens de resumen)");
+                        Messages.Children.Add(ToolBubble(Resource.Free, Loc.Get("ContextCompactedTitle"), Loc.Get("ContextCompacted")));
+                        ScrollToEnd();
+                    }
+                }
+                // Lo viejo resumido va en el sistema; al modelo se le manda la cola sin resumir, siempre con la
+                // ultima pregunta dentro (sin ella, la plantilla de algunos modelos, Qwen3, rechaza con un 500).
+                var summaryBlock = ContextCompactor.SummaryBlock(thread);
+                var fullSystem = summaryBlock.Length > 0 ? system + "\n\n" + summaryBlock : system;
+                var history = ConversationWindow.Select(thread.Messages.Skip(thread.SummarizedCount).ToList());
+                var messages = await Task.Run(() => MessagesFor(fullSystem, history), cancel);
                 DiagLog.Write("chat", $"pregunta preparada a los {clock.ElapsedMilliseconds} ms: {messages.Count} mensajes, {messages.Sum(m => m.Content.Length)} caracteres, {messages.Sum(m => m.Images?.Count ?? 0)} imagenes");
                 DiagLog.SetPhase("esperando el primer trozo de la IA");
                 live.Advance(AnswerPhase.Waiting);

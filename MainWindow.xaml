@@ -130,6 +130,7 @@
                                 <TextBlock x:Name="ContextMinText" DockPanel.Dock="Left" Style="{StaticResource HintText}" />
                                 <TextBlock x:Name="ContextMaxText" DockPanel.Dock="Right" Style="{StaticResource HintText}" HorizontalAlignment="Right" />
                             </DockPanel>
+                            <CheckBox x:Name="ContextCompactCheck" Style="{StaticResource Check}" Margin="0,10,0,0" Click="OnContextCompact" />
                             <TextBlock x:Name="ContextPopupHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,8,0,0" />
                         </StackPanel>
                     </Border>

@@ -1,5 +1,25 @@
 # Changelog — sOC Lucia
 
+## 2026.10.23.2 — Comprimir el contexto para seguir / Compressing the context to keep going
+
+**Español**
+
+- **Al llenarse el contexto, Lucia lo comprime y sigue.** En una conversación larga o una tarea de
+  agente con muchas vueltas, cuando se acerca al límite de contexto de la IA, resume con el propio
+  modelo los mensajes antiguos y continúa con ese resumen más los últimos mensajes tal cual, sin perder
+  el hilo ni chocar con el límite. Lo avisa en el chat y el resumen se guarda con la conversación.
+- Se puede desactivar en el control de contexto (junto a «Pensar»): «Comprimir el contexto al llenarse».
+- Banco de pruebas: **528 pruebas** y **92,5 %** de toda la aplicación.
+
+**English**
+
+- **When the context fills up, Lucia compresses it and carries on.** In a long conversation or an agent
+  task with many rounds, as it nears the AI's context limit it summarises the older messages with the
+  model itself and continues with that summary plus the latest messages verbatim, without losing the
+  thread or hitting the limit. It says so in the chat and the summary is saved with the conversation.
+- It can be turned off in the context control (next to «Think»): «Compress the context when it fills up».
+- Test bench: **528 tests** and **92.5 %** of the whole application.
+
 ## 2026.10.23.1 — Leer páginas web para investigar / Reading web pages to research
 
 **Español**

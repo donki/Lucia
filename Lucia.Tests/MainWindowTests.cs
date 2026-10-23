@@ -372,6 +372,51 @@ public sealed class MainWindowTests : UiTest
     }
 
     [Fact]
+    public void ContextoLargo_SeComprimeConElModelo_YSigue()
+    {
+        // Una conversacion ya larga y un contexto pequeño: el siguiente turno debe comprimir.
+        var thread = new SocLucia.Chat.ChatThread { Title = "Larga" };
+        for (var i = 0; i < 12; i++)
+        {
+            thread.Messages.Add(new StoredMessage { Role = "user", Content = $"pregunta {i} " + new string('a', 400) });
+            thread.Messages.Add(new StoredMessage { Role = "assistant", Content = $"respuesta {i} " + new string('b', 400) });
+        }
+        SocLucia.Chat.ThreadStore.Save(thread);
+        AppSettings.Current.AutoContext = false;
+        AppSettings.Current.ContextTokens = TokenLimits.ContextMin;   // 2048: la charla no cabe → comprime
+        AppSettings.Current.CompactContext = true;
+        var original = SocLucia.Chat.ContextCompactor.Summarizer;
+        SocLucia.Chat.ContextCompactor.Summarizer = (_, _, _, _) => Task.FromResult("RESUMEN DE LO ANTERIOR");
+        try
+        {
+            Net.Answers.Enqueue(new FakeHttp.Answer("Sigo con lo que me dices."));
+            Ui.Run(() =>
+            {
+                var w = Open();
+                w.OpenThreadForTest(thread.Id);
+                Ask(w, "¿seguimos?");
+                Assert.Contains(Loc.Get("ContextCompacted"), Bubbles(w));
+            });
+            var saved = SocLucia.Chat.ThreadStore.LoadAll().First(t => t.Id == thread.Id);
+            Assert.Equal("RESUMEN DE LO ANTERIOR", saved.Summary);
+            Assert.True(saved.SummarizedCount > 0);
+            // La ultima peticion lleva el resumen en el sistema y NO los primeros mensajes resumidos
+            var request = Net.ChatRequests.Last();
+            var msgs = request["messages"]!.AsArray();
+            Assert.Contains("RESUMEN DE LO ANTERIOR", msgs.First()!["content"]!.GetValue<string>());
+            var allText = string.Concat(msgs.Select(m => m!["content"]?.GetValue<string>() ?? ""));
+            Assert.DoesNotContain("pregunta 0 ", allText);   // lo viejo ya no va literal
+            Assert.Contains("¿seguimos?", allText);           // la pregunta actual sí
+        }
+        finally
+        {
+            SocLucia.Chat.ContextCompactor.Summarizer = original;
+            AppSettings.Current.ContextTokens = TokenLimits.ContextDefault;
+            AppSettings.Current.AutoContext = true;
+        }
+    }
+
+    [Fact]
     public void BorrarTodasLasConversaciones_ConConfirmacion()
     {
         foreach (var old in ThreadStore.LoadAll()) ThreadStore.Delete(old);
